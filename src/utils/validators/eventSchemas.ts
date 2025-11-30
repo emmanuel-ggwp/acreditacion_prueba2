@@ -1,0 +1,41 @@
+
+import { z } from 'zod';
+
+export const eventSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string().min(3, 'Event name must be at least 3 characters'),
+  description: z.string().optional(),
+  location: z.string().optional(),
+  maxCapacity: z.number().int().positive().nullable(),
+  allowGuests: z.boolean().default(true),
+  maxGuestsPerParticipant: z.number().int().min(0).default(0),
+  isActive: z.boolean().default(true),
+  createdBy: z.string().uuid(),
+});
+
+export const createEventSchema = eventSchema.omit({ id: true, isActive: true, createdBy: true });
+export const updateEventSchema = createEventSchema.partial();
+
+export const scheduleSchema = z.object({
+  id: z.string().uuid(),
+  eventId: z.string().uuid(),
+  scheduleName: z.string().min(3, 'Schedule name must be at least 3 characters'),
+  startDateTime: z.string().datetime('Invalid start date format'),
+  endDateTime: z.string().datetime('Invalid end date format'),
+  maxCapacity: z.number().int().positive().nullable(),
+  isActive: z.boolean().default(true),
+}).refine(data => new Date(data.endDateTime) > new Date(data.startDateTime), {
+  message: 'End date must be after start date',
+  path: ['endDateTime'],
+});
+
+export const createScheduleSchema = scheduleSchema.omit({ id: true, isActive: true });
+export const updateScheduleSchema = createScheduleSchema.partial();
+
+export const eventFilterSchema = z.object({
+  isActive: z.string().transform(val => val === 'true').optional(),
+  createdBy: z.string().uuid().optional(),
+  page: z.string().transform(val => parseInt(val, 10)).optional(),
+  limit: z.string().transform(val => parseInt(val, 10)).optional(),
+});
+

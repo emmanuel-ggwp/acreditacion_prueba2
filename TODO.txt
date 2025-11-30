@@ -1,0 +1,96 @@
+# TODO List
+
+This file contains a list of errors that need to be addressed.
+
+---
+
+### `c:\Users\Usuario\Documents\acreditacion_prueba2\src\components\events\EventForm.tsx`
+
+- **L32**: `resolver: zodResolver(eventFormSchema)`
+  - **Error**: Type mismatch in resolver. `Resolver<...>` is not assignable to `Resolver<...>`.
+  - **Details**: The `allowGuests` property is `boolean | undefined` but is expected to be `boolean`.
+
+- **L61**: `<form onSubmit={handleSubmit(onSubmit)} ...>`
+  - **Error**: `SubmitHandler` argument type mismatch.
+  - **Details**: `TFieldValues` is not assignable to the expected form input type.
+
+---
+
+### `c:\Users\Usuario\Documents\acreditacion_prueba2\src\components\events\EventDetails.tsx`
+
+- **L6**: `import ScheduleList from './ScheduleList';`
+  - **Error**: Cannot find module `./ScheduleList` or its corresponding type declarations.
+
+---
+
+### `c:\Users\Usuario\Documents\acreditacion_prueba2\src\components\events\ScheduleList.tsx`
+
+- **L7**: `import ScheduleForm from './ScheduleForm';`
+  - **Error**: Cannot find module `./ScheduleForm` or its corresponding type declarations.
+
+---
+
+### `c:\Users\Usuario\Documents\acreditacion_prueba2\src\components\participants\ParticipantForm.tsx`
+
+- **L34**: `resolver: zodResolver(participantFormSchema)`
+  - **Error**: Type mismatch in resolver. `Resolver<...>` is not assignable to `Resolver<...>`.
+  - **Details**: The `allowedGuests` property is `number | undefined` but is expected to be `number`.
+
+- **L70**: `await createParticipant(createParticipantSchema.parse(participantData));`
+  - **Error**: Argument of type `{...}` is not assignable to parameter of type `{...}`.
+  - **Details**: Missing properties: `id`, `createdBy`, `isAccredited`.
+
+- **L82**: `<form onSubmit={handleSubmit(onSubmit)} ...>`
+  - **Error**: `SubmitHandler` argument type mismatch.
+  - **Details**: `TFieldValues` is not assignable to the expected form input type.
+
+---
+
+### `c:\Users\Usuario\Documents\acreditacion_prueba2\src\components\participants\ParticipantDetails.tsx`
+
+- **L9**: `import GuestList from './GuestList';`
+  - **Error**: Cannot find module `./GuestList` or its corresponding type declarations.
+
+---
+
+### `c:\Users\Usuario\Documents\acreditacion_prueba2\src\components\participants\ParticipantImport.tsx`
+
+- **L15**: `const { uploadParticipants, loading, error } = useParticipantStore();`
+  - **Error**: Property `uploadParticipants` does not exist on type `ParticipantState`.
+
+---
+
+### `c:\Users\Usuario\Documents\acreditacion_prueba2\src\components\accreditation\AccreditationPanel.tsx`
+
+- **L7**: `import SearchParticipant from './SearchParticipant';`
+  - **Error**: Cannot find module `./SearchParticipant`.
+- **L8**: `import ParticipantCard from './ParticipantCard';`
+  - **Error**: Cannot find module `./ParticipantCard`.
+- **L9**: `import RecentAccreditations from './RecentAccreditations';`
+  - **Error**: Cannot find module `./RecentAccreditations`.
+- **L10**: `import CapacityIndicator from './CapacityIndicator';`
+  - **Error**: Cannot find module `./CapacityIndicator`.
+
+---
+
+### `c:\Users\Usuario\Documents\acreditacion_prueba2\src\components\accreditation\ParticipantCard.tsx`
+
+- **L9**: `import AccreditationConfirm from './AccreditationConfirm';`
+  - **Error**: Cannot find module `./AccreditationConfirm`.
+
+---
+
+### `c:\Users\Usuario\Documents\acreditacion_prueba2\src\components\awards\AwardList.tsx`
+
+- **L6**: `import AwardCard from './AwardCard';`
+  - **Error**: Cannot find module `./AwardCard`.
+- **L7**: `import AwardForm from './AwardForm';`
+  - **Error**: Cannot find module `./AwardForm`.
+
+---
+
+### `c:\Users\Usuario\Documents\acreditacion_prueba2\src\store\awardStore.ts`
+
+- **L108**: `set(state => ({ awards: state.awards.map(a => a.id === awardId ? awardWithStock : a) }));`
+  - **Error**: Type mismatch when updating state.
+  - **Details**: The mapped array type is not assignable to `AwardWithStock[]`. The object from `awardWithStock` is missing Sequelize model properties.

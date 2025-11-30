@@ -1,0 +1,141 @@
+import { create } from 'zustand';
+import { devtools } from 'zustand/middleware';
+import apiClient from '@/utils/apiClient';
+import Accreditation from '@/models/Accreditation';
+import Participant from '@/models/Participant';
+import Guest from '@/models/Guest';
+import User from '@/models/User';
+
+export type RichAccreditation = Accreditation & {
+  Participant?: Participant;
+  Guest?: Guest;
+  accreditedByUser?: User;
+};
+
+interface AccreditationState {
+  accreditations: RichAccreditation[];
+  lastAccreditation: RichAccreditation | null;
+  loading: boolean;
+  error: string | null;
+  totalAccreditations: number;
+  accreditationsToday: number;
+  fetchAccreditations: (eventId: string, page: number, limit: number) => Promise<void>;
+  accreditParticipant: (participantId: string, eventScheduleId: string, accreditedById: string, notes?: string) => Promise<void>;
+  accreditGuest: (guestId: string, eventScheduleId: string, accreditedById: string, notes?: string) => Promise<void>;
+  verifyAccreditation: (type: 'participant' | 'guest', id: string, scheduleId: string) => Promise<{ isAccredited: boolean, accreditation: RichAccreditation | null }>;
+  getLastAccreditation: (eventId: string) => Promise<void>;
+  getAccreditationStats: (eventId: string) => Promise<void>;
+}
+
+const useAccreditationStore = create<AccreditationState>()(
+  devtools(
+    (set) => ({
+      accreditations: [],
+      lastAccreditation: null,
+      loading: false,
+      error: null,
+      totalAccreditations: 0,
+      accreditationsToday: 0,
+
+      fetchAccreditations: async (eventId, page, limit) => {
+        set({ loading: true, error: null });
+        try {
+          const result = await apiClient.get<{ accreditations: RichAccreditation[]; total: number }>(`/api/events/${eventId}/accreditations?page=${page}&limit=${limit}`);
+          set({ accreditations: result.accreditations, totalAccreditations: result.total, loading: false });
+        } catch (error: any) {
+          set({ error: error.message, loading: false });
+        }
+      },
+
+      accreditParticipant: async (participantId, eventScheduleId, accreditedById, notes) => {
+        set({ loading: true, error: null });
+        try {
+          const newAccreditation = await apiClient.post<RichAccreditation>(`/api/accreditations/participant`, {
+            participantId,
+            eventScheduleId,
+            accreditedById,
+            notes,
+          });
+          set((state) => ({
+            accreditations: [newAccreditation, ...state.accreditations],
+            totalAccreditations: state.totalAccreditations + 1,
+            accreditationsToday: state.accreditationsToday + 1,
+            loading: false,
+          }));
+          useAccreditationStore.getState().getLastAccreditation((newAccreditation as any).EventSchedule.eventId);
+        } catch (error: any) {
+          set({ error: error.message, loading: false });
+          throw error;
+        }
+      },
+
+      accreditGuest: async (guestId, eventScheduleId, accreditedById, notes) => {
+        set({ loading: true, error: null });
+        try {
+          const newAccreditation = await apiClient.post<RichAccreditation>(`/api/accreditations/guest`, {
+            guestId,
+            eventScheduleId,
+            accreditedById,
+            notes,
+          });
+          set((state) => ({
+            accreditations: [newAccreditation, ...state.accreditations],
+            totalAccreditations: state.totalAccreditations + 1,
+            accreditationsToday: state.accreditationsToday + 1,
+            loading: false,
+          }));
+        } catch (error: any) {
+          set({ error: error.message, loading: false });
+          throw error;
+        }
+      },
+
+      verifyAccreditation: async (type, id, scheduleId) => {
+        try {
+          const result = await apiClient.post<{ isAccredited: boolean; accreditation: RichAccreditation | null }>(`/api/accreditations/verify`, {
+            type,
+            id,
+            scheduleId,
+          });
+          return {
+            isAccredited: result.isAccredited,
+            accreditation: result.accreditation,
+          };
+        } catch (error: any) {
+          set({ error: error.message });
+          return { isAccredited: false, accreditation: null };
+        }
+      },
+
+      getLastAccreditation: async (eventId: string) => {
+        set({ loading: true, error: null });
+        try {
+          const result = await apiClient.get<{ accreditations: RichAccreditation[] }>(`/api/events/${eventId}/accreditations?page=1&limit=1`);
+          const last = result.accreditations.length > 0 ? result.accreditations[0] : null;
+          set({ lastAccreditation: last, loading: false });
+        } catch (error: any) {
+          set({ error: error.message, loading: false });
+        }
+      },
+
+      getAccreditationStats: async (eventId: string) => {
+        set({ loading: true, error: null });
+        try {
+          // TODO: Implement getAccreditationStats in the service.
+          // This is a placeholder.
+          console.log('getAccreditationStats needs to be implemented in the service for event:', eventId);
+          // const stats = await accreditationService.getAccreditationStats(eventId);
+          // set({
+          //   totalAccreditations: stats.totalAccreditations,
+          //   accreditationsToday: stats.accreditationsToday,
+          //   loading: false,
+          // });
+        } catch (error: any) {
+          set({ error: error.message, loading: false });
+        }
+      },
+    })
+  )
+);
+
+export default useAccreditationStore;

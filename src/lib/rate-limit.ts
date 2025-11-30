@@ -1,0 +1,23 @@
+import { RateLimiterMemory } from 'rate-limiter-flexible';
+import { NextRequest, NextResponse } from 'next/server';
+
+const rateLimiter = new RateLimiterMemory({
+  points: 10, // 10 requests
+  duration: 60, // per 60 seconds by IP
+});
+
+export async function rateLimitMiddleware(request: NextRequest) {
+  const ip = request.ip ?? request.headers.get('x-forwarded-for') ?? '127.0.0.1';
+  try {
+    await rateLimiter.consume(ip);
+    return null;
+  } catch (e) {
+    return new NextResponse('Too many requests', {
+      status: 429,
+      headers: {
+        'Retry-After': (e as any).msBeforeNext / 1000,
+      },
+    });
+  }
+}
+
