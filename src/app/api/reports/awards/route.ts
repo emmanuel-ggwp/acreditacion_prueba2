@@ -4,6 +4,9 @@ import { withAuth } from '@/middleware/auth';
 import { reportService } from '@/services/reportService';
 import { AuthenticatedRequest } from '@/types/auth';
 import { z } from 'zod';
+import { ROLES } from '@/utils/constants';
+
+const { ADMIN, OPERATOR, GUARD} = ROLES;
 
 const awardsQuerySchema = z.object({
   eventId: z.string(),
@@ -29,4 +32,4 @@ export const GET = withAuth(async (req: AuthenticatedRequest) => {
     }
     return NextResponse.json({ message: 'Error generating awards report', error: error.message }, { status: 500 });
   }
-}, ['admin', 'organizer']);
+}, [ADMIN, OPERATOR]);

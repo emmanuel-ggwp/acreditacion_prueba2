@@ -4,6 +4,9 @@ import { accreditationService } from '@/services/accreditationService';
 import { accreditationSchema, bulkAccreditationSchema } from '@/utils/validators/accreditationSchemas';
 import { AuthenticatedRequest } from '@/types/auth';
 import { z } from 'zod';
+import { ROLES } from '@/utils/constants';
+
+const { ADMIN, OPERATOR, GUARD } = ROLES;
 
 export const POST = withAuth(async (req: AuthenticatedRequest) => {
   try {
@@ -24,7 +27,7 @@ export const POST = withAuth(async (req: AuthenticatedRequest) => {
   } catch (error: any) {
     return NextResponse.json({ message: error.message }, { status: 400 });
   }
-}, ['admin', 'organizer', 'staff']);
+}, [ADMIN, OPERATOR, GUARD]);
 
 export const GET = withAuth(async (req: AuthenticatedRequest) => {
   try {
@@ -44,7 +47,7 @@ export const GET = withAuth(async (req: AuthenticatedRequest) => {
     }
     return NextResponse.json({ message: error.message }, { status: 500 });
   }
-}, ['admin', 'organizer']);
+}, [ADMIN, OPERATOR]);
 
 export const PUT = withAuth(async (req: AuthenticatedRequest) => {
   try {
@@ -61,4 +64,4 @@ export const PUT = withAuth(async (req: AuthenticatedRequest) => {
     }
     return NextResponse.json({ message: error.message }, { status: 500 });
   }
-}, ['admin', 'organizer', 'staff']);
+}, [ADMIN, OPERATOR, GUARD]);

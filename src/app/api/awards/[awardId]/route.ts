@@ -4,6 +4,9 @@ import { awardService } from '@/services/awardService';
 import { updateAwardSchema } from '@/utils/validators/awardSchemas';
 import { AuthenticatedRequest } from '@/types/auth';
 import { z } from 'zod';
+import { ROLES } from '@/utils/constants';
+
+const { ADMIN, OPERATOR, GUARD} = ROLES;
 
 interface Params {
   params: { awardId: string };
@@ -20,7 +23,7 @@ export const GET = withAuth(async (req: AuthenticatedRequest, { params }: Params
   } catch (error: any) {
     return NextResponse.json({ message: error.message }, { status: 500 });
   }
-}, ['admin', 'organizer']);
+}, [ADMIN, OPERATOR]);
 
 export const PUT = withAuth(async (req: AuthenticatedRequest, { params }: Params) => {
   try {
@@ -35,7 +38,7 @@ export const PUT = withAuth(async (req: AuthenticatedRequest, { params }: Params
     }
     return NextResponse.json({ message: error.message }, { status: 500 });
   }
-}, ['admin', 'organizer']);
+}, [ADMIN, OPERATOR]);
 
 export const DELETE = withAuth(async (req: AuthenticatedRequest, { params }: Params) => {
   try {
@@ -45,4 +48,4 @@ export const DELETE = withAuth(async (req: AuthenticatedRequest, { params }: Par
   } catch (error: any) {
     return NextResponse.json({ message: 'error.message' }, { status: 500 });
   }
-}, ['admin']);
+}, [ADMIN]);

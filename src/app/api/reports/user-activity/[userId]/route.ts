@@ -4,10 +4,13 @@ import { withAuth } from '@/middleware/auth';
 import { reportService } from '@/services/reportService';
 import { AuthenticatedRequest } from '@/types/auth';
 import { z } from 'zod';
+import { ROLES } from '@/utils/constants';
+
+const { ADMIN, OPERATOR, GUARD} = ROLES;
 
 const userActivityQuerySchema = z.object({
-  startDate: z.string().datetime().optional(),
-  endDate: z.string().datetime().optional(),
+  startDate: z.iso.datetime().optional(),
+  endDate: z.iso.datetime().optional(),
 });
 
 interface Params {
@@ -34,4 +37,4 @@ export const GET = withAuth(async (req: AuthenticatedRequest, { params }: Params
     }
     return NextResponse.json({ message: 'Error generating user activity report', error: error.message }, { status: 500 });
   }
-}, ['admin']);
+}, [ADMIN]);

@@ -1,16 +1,17 @@
 'use client';
 
 import React, { useEffect } from 'react';
-import { useForm, SubmitHandler, UseFormRegister } from 'react-hook-form';
+import { useForm, SubmitHandler, UseFormRegister, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import useParticipantStore from '@/store/participantStore';
+import useEventStore from '@/store/eventStore';
 import { createParticipantSchema, updateParticipantSchema } from '@/utils/validators/participantSchemas';
 import Participant from '@/models/Participant';
 import { errorHandler } from '@/utils/errors';
 
 const participantFormSchema = createParticipantSchema.extend({
-  id: z.string().uuid().optional(),
+  id: z.guid().optional(),
 });
 
 type ParticipantFormData = z.input<typeof participantFormSchema>;
@@ -23,11 +24,13 @@ interface ParticipantFormProps {
 
 const ParticipantForm: React.FC<ParticipantFormProps> = ({ eventId, participant, onClose }) => {
   const { createParticipant, updateParticipant } = useParticipantStore();
+  const { schedules, fetchSchedulesForEvent } = useEventStore();
   const isEditMode = !!participant;
 
   const {
     register,
     handleSubmit,
+    control,
     formState: { errors, isSubmitting },
     reset,
   } = useForm<ParticipantFormData>({
@@ -42,30 +45,43 @@ const ParticipantForm: React.FC<ParticipantFormProps> = ({ eventId, participant,
       company: participant?.company || '',
       position: participant?.position || '',
       allowedGuests: participant?.allowedGuests || 0,
+      scheduleIds: [], // Initialize with empty array or participant's schedules if available
     },
   });
 
   useEffect(() => {
+    fetchSchedulesForEvent(eventId);
+  }, [eventId, fetchSchedulesForEvent]);
+
+  useEffect(() => {
     if (participant) {
+      // TODO: Populate scheduleIds from participant data if available
+      // Assuming participant has schedules loaded, we would map them here.
+      // For now, we might need to fetch them or assume they are passed.
+      // If participant.EventSchedules exists:
+      const currentScheduleIds = (participant as any).EventSchedules?.map((s: any) => s.id) || [];
+      
       reset({
         ...participant,
         phone: participant.phone ?? '',
         documentNumber: participant.documentNumber ?? '',
         company: participant.company ?? '',
         position: participant.position ?? '',
+        scheduleIds: currentScheduleIds,
       });
     }
   }, [participant, reset]);
 
   const onSubmit: SubmitHandler<ParticipantFormData> = async (data) => {
     try {
-      const participantData = { ...data, eventId };
+      // Remove eventId injection
+      const participantData = { ...data };
+      
       if (isEditMode && participant) {
         const submissionData = updateParticipantSchema.parse(participantData);
         await updateParticipant(participant.id, submissionData);
       } else {
         const submissionData = createParticipantSchema.parse(participantData);
-        // This is a workaround for the store issue. The store should be fixed.
         await createParticipant({
             ...submissionData,
             id: '', // Mocking properties expected by the store
@@ -81,7 +97,7 @@ const ParticipantForm: React.FC<ParticipantFormProps> = ({ eventId, participant,
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 z-40 flex justify-center items-center">
-      <div className="bg-white p-8 rounded-lg shadow-xl z-50 w-full max-w-2xl">
+      <div className="bg-white p-8 rounded-lg shadow-xl z-50 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         <h2 className="text-2xl font-bold mb-6">{isEditMode ? 'Edit Participant' : 'Create New Participant'}</h2>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -93,6 +109,27 @@ const ParticipantForm: React.FC<ParticipantFormProps> = ({ eventId, participant,
             <InputField label="Company" name="company" register={register} error={errors.company} />
             <InputField label="Position" name="position" register={register} error={errors.position} />
             <InputField label="Allowed Guests" name="allowedGuests" type="number" register={register} error={errors.allowedGuests} />
+          </div>
+
+          <div className="col-span-2">
+            <label className="block text-sm font-medium text-gray-700 mb-1">Schedules</label>
+            <div className="border rounded-md p-2 max-h-40 overflow-y-auto">
+                {schedules.map((schedule) => (
+                    <div key={schedule.id} className="flex items-center mb-2">
+                        <input
+                            type="checkbox"
+                            id={`schedule-${schedule.id}`}
+                            value={schedule.id}
+                            {...register('scheduleIds')}
+                            className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                        />
+                        <label htmlFor={`schedule-${schedule.id}`} className="ml-2 block text-sm text-gray-900">
+                            {schedule.name} ({new Date(schedule.startTime).toLocaleString()})
+                        </label>
+                    </div>
+                ))}
+            </div>
+            {errors.scheduleIds && <p className="mt-2 text-sm text-red-600">{errors.scheduleIds.message}</p>}
           </div>
 
           <div className="flex justify-end space-x-4 pt-4">

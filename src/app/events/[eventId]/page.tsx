@@ -1,20 +1,22 @@
 import React from 'react';
-import EventDetails from '@/components/events/EventDetails';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
+import EventDetails from '@/components/events/EventDetails';
 
 interface EventDetailsPageProps {
-  params: {
+  params: Promise<{
     eventId: string;
-  };
+  }>;
 }
 
-const EventDetailsPage: React.FC<EventDetailsPageProps> = ({ params }) => {
+const EventDetailsPage = async ({ params }: EventDetailsPageProps) => {
+  const { eventId } = await params;
+  console.log('Rendering EventDetailsPage for eventId:', eventId);
   return (
-    <ProtectedRoute>
-      <main>
-        <EventDetails eventId={params.eventId} />
-      </main>
-    </ProtectedRoute>
+    <main>
+      <ProtectedRoute>
+        <EventDetails eventId={eventId} />
+      </ProtectedRoute>
+    </main>
   );
 };
 

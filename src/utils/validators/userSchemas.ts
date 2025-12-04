@@ -24,9 +24,11 @@ export const registerSchema = z.object({
 });
 
 export const userSchema = registerSchema.extend({
-  id: z.string().uuid(),
+  id: z.guid(),
   isActive: z.boolean(),
   lastLogin: z.date().nullable(),
+  createdAt: z.iso.datetime({ message: 'Invalid createdAt date format' }).optional(),
+  updatedAt: z.iso.datetime({ message: 'Invalid updatedAt date format' }).optional(),
 }).omit({ password: true });
 
 export const updateUserSchema = registerSchema.partial().extend({

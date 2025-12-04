@@ -1,20 +1,20 @@
-
 import { Model, DataTypes, UUIDV4 } from 'sequelize';
 import { sequelize } from '../lib/sequelize';
 import Participant from './Participant';
+import EventSchedule from './EventSchedule';
 
-class Guest extends Model {
+class ParticipantSchedule extends Model {
   declare public id: string;
   declare public participantId: string;
-  declare public firstName: string;
-  declare public lastName: string;
-  declare public documentNumber: string | null;
+  declare public scheduleId: string;
+  declare public attended: boolean;
+  declare public attendedAt: Date | null;
 
   declare public readonly createdAt: Date;
   declare public readonly updatedAt: Date;
 }
 
-Guest.init(
+ParticipantSchedule.init(
   {
     id: {
       type: DataTypes.UUID,
@@ -29,16 +29,20 @@ Guest.init(
         key: 'id',
       },
     },
-    firstName: {
-      type: DataTypes.STRING,
+    scheduleId: {
+      type: DataTypes.UUID,
       allowNull: false,
+      references: {
+        model: EventSchedule,
+        key: 'id',
+      },
     },
-    lastName: {
-      type: DataTypes.STRING,
-      allowNull: false,
+    attended: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
     },
-    documentNumber: {
-      type: DataTypes.STRING,
+    attendedAt: {
+      type: DataTypes.DATE,
       allowNull: true,
     },
     createdAt: {
@@ -50,19 +54,22 @@ Guest.init(
       type: DataTypes.DATE,
       allowNull: false,
       defaultValue: sequelize.literal('CURRENT_TIMESTAMP') as any,
+      onUpdate: sequelize.literal('CURRENT_TIMESTAMP') as any,
     },
   },
   {
     sequelize,
-    modelName: 'Guest',
-    tableName: 'guests',
+    modelName: 'ParticipantSchedule',
+    tableName: 'participant_schedules',
     timestamps: true,
-    paranoid: true,
+    underscored: true,
+    indexes: [
+      {
+        unique: true,
+        fields: ['participant_id', 'schedule_id'],
+      },
+    ],
   }
 );
 
-// Associations
-Participant.hasMany(Guest, { foreignKey: 'participantId' });
-Guest.belongsTo(Participant, { foreignKey: 'participantId' });
-
-export default Guest;
+export default ParticipantSchedule;

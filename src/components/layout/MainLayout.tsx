@@ -6,6 +6,7 @@ import Header from './Header';
 import Sidebar from './Sidebar';
 import useAuthStore from '@/store/authStore';
 import { Toaster } from 'react-hot-toast';
+import useMobile from 'src/hooks/useMobile';
 
 const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -13,12 +14,14 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, loading } = useAuthStore();
   const pathname = usePathname();
 
+  const isMobile = useMobile();
+
   useEffect(() => {
     // Close mobile sidebar on navigation
     setIsSidebarOpen(false);
   }, [pathname]);
 
-  const toggleSidebarCollapse = () => setIsSidebarCollapsed(!isSidebarCollapsed);
+  const toggleSidebarCollapse = () => isMobile ? setIsSidebarOpen(!isSidebarOpen) : setIsSidebarCollapsed(!isSidebarCollapsed);
   const toggleSidebarOpen = () => setIsSidebarOpen(!isSidebarOpen);
 
   // Don't render layout for auth pages
@@ -44,12 +47,12 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         onToggle={toggleSidebarCollapse}
         isOpen={isSidebarOpen}
       />
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col overflow-hidden min-w-0">
         <Header 
           onToggleSidebar={toggleSidebarOpen}
           isSidebarOpen={isSidebarOpen}
         />
-        <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-100 p-4 md:p-8">
+        <main className="flex-1 overflow-x-hidden overflow-y-auto bg-white p-4 md:p-6">
           {/* Breadcrumbs could go here */}
           {children}
         </main>

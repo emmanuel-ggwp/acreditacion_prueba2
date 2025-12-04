@@ -2,8 +2,7 @@ import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import Participant from '@/models/Participant';
 import { participantSchema } from '@/utils/validators/participantSchemas';
-import { participantService } from '@/services/participantService';
-import { accreditationService } from '@/services/accreditationService';
+import apiClient from '@/utils/apiClient';
 import useAuthStore from './authStore';
 import { z } from 'zod';
 
@@ -38,12 +37,19 @@ const useParticipantStore = create<ParticipantState>()(
       fetchParticipantsByEvent: async (eventId, page = 1, limit = 10, filters = {}) => {
         set({ loading: true, error: null });
         try {
-          const { participants, total } = await participantService.listParticipants(eventId, filters, { page, limit });
-          const participantsWithGuestCount = participants.map((p: any) => ({
-            ...p.dataValues,
-            guestCount: p.dataValues.guestCount,
+          const queryParams = new URLSearchParams({
+            page: page.toString(),
+            limit: limit.toString(),
+            ...filters,
+          });
+          const response = await apiClient.get<{ participants: any[]; total: number }>(
+            `/api/events/${eventId}/participants?${queryParams.toString()}`
+          );
+          const participantsWithGuestCount = response.participants.map((p: any) => ({
+            ...p,
+            guestCount: p.guestCount || 0,
           }));
-          set({ participants: participantsWithGuestCount, total, loading: false });
+          set({ participants: participantsWithGuestCount, total: response.total, loading: false });
         } catch (error: any) {
           set({ error: error.message, loading: false });
         }
@@ -52,11 +58,15 @@ const useParticipantStore = create<ParticipantState>()(
       fetchParticipantById: async (id) => {
         set({ loading: true, error: null });
         try {
-          const participant = await participantService.getParticipant(id, true, true);
+          const participant = await apiClient.get<any>(`/api/participants/${id}`);
           if (participant) {
             // TODO: The scheduleId is missing here. This needs to be passed from the component.
-            const { isAccredited } = await accreditationService.verifyAccreditation('participant', id, '');
-            set({ currentParticipant: { ...participant.dataValues, isAccredited }, loading: false });
+            const verification = await apiClient.post<{ isAccredited: boolean }>(`/api/accreditations/verify`, {
+              type: 'participant',
+              id,
+              scheduleId: '' // Placeholder
+            });
+            set({ currentParticipant: { ...participant, isAccredited: verification.isAccredited }, loading: false });
           } else {
             set({ currentParticipant: null, loading: false });
           }
@@ -70,10 +80,14 @@ const useParticipantStore = create<ParticipantState>()(
         if (!user) throw new Error('User not authenticated');
         set({ loading: true, error: null });
         try {
-          const newParticipant = await participantService.createParticipant(participantData, user.id);
+          const newParticipant = await apiClient.post<any>(`/api/participants`, { ...participantData, userId: user.id });
           // TODO: The scheduleId is missing here. This needs to be passed from the component.
-          const { isAccredited } = await accreditationService.verifyAccreditation('participant', newParticipant.id, '');
-          const participantWithAccreditation = { ...newParticipant.dataValues, isAccredited, guestCount: 0 };
+          const verification = await apiClient.post<{ isAccredited: boolean }>(`/api/accreditations/verify`, {
+            type: 'participant',
+            id: newParticipant.id,
+            scheduleId: '' // Placeholder
+          });
+          const participantWithAccreditation = { ...newParticipant, isAccredited: verification.isAccredited, guestCount: 0 };
           set((state) => ({
             participants: [...state.participants, participantWithAccreditation],
             loading: false,
@@ -87,10 +101,14 @@ const useParticipantStore = create<ParticipantState>()(
       updateParticipant: async (id, participantData) => {
         set({ loading: true, error: null });
         try {
-          const updatedParticipant = await participantService.updateParticipant(id, participantData);
+          const updatedParticipant = await apiClient.put<any>(`/api/participants/${id}`, participantData);
           // TODO: The scheduleId is missing here. This needs to be passed from the component.
-          const { isAccredited } = await accreditationService.verifyAccreditation('participant', id, '');
-          const participantWithAccreditation = { ...updatedParticipant.dataValues, isAccredited };
+          const verification = await apiClient.post<{ isAccredited: boolean }>(`/api/accreditations/verify`, {
+            type: 'participant',
+            id,
+            scheduleId: '' // Placeholder
+          });
+          const participantWithAccreditation = { ...updatedParticipant, isAccredited: verification.isAccredited };
 
           set((state) => ({
             participants: state.participants.map((p) => (p.id === id ? { ...p, ...participantWithAccreditation } : p)),
@@ -106,7 +124,7 @@ const useParticipantStore = create<ParticipantState>()(
       deleteParticipant: async (id) => {
         set({ loading: true, error: null });
         try {
-          await participantService.deleteParticipant(id);
+          await apiClient.delete(`/api/participants/${id}`);
           set((state) => ({
             participants: state.participants.filter((p) => p.id !== id),
             total: state.total - 1,

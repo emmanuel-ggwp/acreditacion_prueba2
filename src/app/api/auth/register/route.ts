@@ -4,6 +4,9 @@ import { registerSchema } from '@/utils/validators/authSchemas';
 import { withAuth, AuthenticatedRequest } from '@/middleware/auth';
 import { ZodError } from 'zod';
 import { rateLimitMiddleware } from '@/lib/rate-limit';
+import { ROLES } from '@/utils/constants';
+
+const { ADMIN, OPERATOR, GUARD} = ROLES;
 
 async function registerHandler(request: AuthenticatedRequest) {
   const rateLimitResult = await rateLimitMiddleware(request as any);
@@ -32,4 +35,4 @@ async function registerHandler(request: AuthenticatedRequest) {
 }
 
 // Protect the route and only allow ADMINs
-export const POST = withAuth(registerHandler, ['ADMIN']);
+export const POST = withAuth(registerHandler, [ADMIN]);

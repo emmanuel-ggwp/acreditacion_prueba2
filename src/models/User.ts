@@ -3,8 +3,9 @@ import {
   Model,
   DataTypes,
   UUIDV4,
+  Sequelize,
 } from 'sequelize';
-import bcrypt from 'bcryptjs';
+import * as bcrypt from 'bcryptjs';
 import { sequelize } from '../lib/sequelize'; // Asumimos que la conexión está en /lib/sequelize
 
 console.log('Initializing User model...');
@@ -73,6 +74,16 @@ User.init(
     lastLogin: {
       type: DataTypes.DATE,
       allowNull: true,
+    },
+    createdAt: {
+      type: DataTypes.DATE,
+      allowNull: false,
+      defaultValue: Sequelize.literal('CURRENT_TIMESTAMP') as any,
+    },
+    updatedAt: {
+      type: DataTypes.DATE,
+      allowNull: false,
+      defaultValue: Sequelize.literal('CURRENT_TIMESTAMP') as any,
     },
   },
   {

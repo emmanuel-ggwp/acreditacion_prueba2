@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { format } from 'date-fns';
-import { Calendar as CalendarIcon, MapPin, Users, CheckSquare, Trash2, Edit } from 'lucide-react';
+import { Calendar as CalendarIcon, MapPin, Users, CheckSquare, Trash2, Edit, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
 import Event from '@/models/Event';
 import RoleGuard from '../auth/RoleGuard';
@@ -24,59 +24,70 @@ const EventCard: React.FC<EventCardProps> = ({ event }) => {
   };
 
   // Assuming event dates are stored in schedules. For simplicity, we'll show created date.
-  const eventDate = event.createdAt ? format(new Date(event.createdAt), 'PPP') : 'Date not set';
+  const eventDate = event.schedules && event.schedules.length > 0
+    ? `${format(new Date(event.schedules[0].startDateTime), 'MMM dd, yyyy')} - ${format(new Date(event.schedules[event.schedules.length - 1].endDateTime), 'MMM dd, yyyy')}`
+    : 'Date not specified';
 
   return (
-    <div className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-xl transition-shadow duration-300">
-      <div className="p-6">
-        <div className="flex justify-between items-start">
-          <h3 className="text-xl font-bold text-gray-800 mb-2">{event.name}</h3>
+    <div className="group bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-all duration-300 flex flex-col h-full">
+      <div className="p-6 flex-grow">
+        <div className="flex justify-between items-start mb-4">
+          <h3 className="text-lg font-bold text-gray-900 line-clamp-1 group-hover:text-indigo-600 transition-colors">
+            {event.name}
+          </h3>
           <RoleGuard allowedRoles={[ROLES.ADMIN]}>
-            <div className="flex items-center space-x-2">
-              <Link href={`/events/${event.id}/edit`}>
-                <button className="p-1 text-gray-500 hover:text-indigo-600">
-                  <Edit size={18} />
+            <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              <Link href={`/events/${event.id}`}>
+                <button className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-md transition-colors">
+                  <Edit size={16} />
                 </button>
               </Link>
-              <button onClick={handleDelete} className="p-1 text-gray-500 hover:text-red-600">
-                <Trash2 size={18} />
+              <button 
+                onClick={handleDelete} 
+                className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
+              >
+                <Trash2 size={16} />
               </button>
             </div>
           </RoleGuard>
         </div>
-        <p className="text-gray-600 text-sm mb-4">{event.description}</p>
+        
+        <p className="text-gray-500 text-sm mb-6 line-clamp-2 h-10">{event.description}</p>
 
-        <div className="space-y-3 text-sm text-gray-500 mb-4">
+        <div className="space-y-3 text-sm text-gray-600 mb-6">
           <div className="flex items-center">
-            <CalendarIcon size={16} className="mr-2" />
+            <CalendarIcon size={16} className="mr-2.5 text-gray-400" />
             <span>{eventDate}</span>
           </div>
           <div className="flex items-center">
-            <MapPin size={16} className="mr-2" />
-            <span>{event.location || 'Location not specified'}</span>
+            <MapPin size={16} className="mr-2.5 text-gray-400" />
+            <span className="truncate">{event.location || 'Location not specified'}</span>
           </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-4 text-center border-t pt-4">
-          <div>
-            <p className="font-semibold text-lg text-gray-700">{event.participantCount || 0}</p>
-            <p className="text-xs text-gray-500">Participants</p>
+        <div className="grid grid-cols-3 gap-2 py-4 border-t border-gray-100 bg-gray-50/50 -mx-6 px-6">
+          <div className="text-center">
+            <p className="font-semibold text-gray-900">{event.participantCount || 0}</p>
+            <p className="text-xs text-gray-500 font-medium uppercase tracking-wide mt-0.5">Total</p>
           </div>
-          <div>
-            <p className="font-semibold text-lg text-gray-700">{event.accreditedCount || 0}</p>
-            <p className="text-xs text-gray-500">Accredited</p>
+          <div className="text-center border-l border-gray-200">
+            <p className="font-semibold text-indigo-600">{event.accreditedCount || 0}</p>
+            <p className="text-xs text-gray-500 font-medium uppercase tracking-wide mt-0.5">Check-in</p>
           </div>
-          <div>
-            <p className="font-semibold text-lg text-gray-700">
+          <div className="text-center border-l border-gray-200">
+            <p className="font-semibold text-gray-900">
               {formatCapacity(event.accreditedCount || 0, event.maxCapacity)}
             </p>
-            <p className="text-xs text-gray-500">Capacity</p>
+            <p className="text-xs text-gray-500 font-medium uppercase tracking-wide mt-0.5">Cap</p>
           </div>
         </div>
-        
-        <Link href={`/events/${event.id}`}>
-          <button className="mt-6 w-full bg-indigo-600 text-white py-2 rounded-md hover:bg-indigo-700 transition-colors">
+      </div>
+      
+      <div className="p-4 bg-gray-50 border-t border-gray-100">
+        <Link href={`/events/${event.id}`} className="block">
+          <button className="w-full bg-white border border-gray-300 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-50 hover:text-indigo-600 hover:border-indigo-200 transition-all duration-200 text-sm font-medium flex items-center justify-center group-hover:border-indigo-300">
             View Details
+            <ArrowRight size={16} className="ml-2 opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-200" />
           </button>
         </Link>
       </div>

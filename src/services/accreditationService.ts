@@ -35,14 +35,47 @@ export class AccreditationService {
     let person;
     if (participantId) {
         person = await Participant.findByPk(participantId, { transaction });
-        if (!person || person.eventId !== schedule.eventId) {
-            throw new Error('Participant not found or does not belong to this event.');
+        
+        if (!person) {
+             throw new Error('Participant not found.');
         }
+
+        const isParticipantInEvent = await EventSchedule.count({
+            where: { eventId: schedule.eventId },
+            include: [{
+                model: Participant,
+                where: { id: participantId },
+                required: true,
+                through: { attributes: [] }
+            }],
+            transaction
+        });
+
+        if (isParticipantInEvent === 0) {
+            throw new Error('Participant does not belong to this event.');
+        }
+
     } else if (guestId) {
         person = await Guest.findByPk(guestId, { include: [Participant], transaction });
         const guestParticipant = (person as any)?.Participant;
-        if (!person || guestParticipant?.eventId !== schedule.eventId) {
-            throw new Error('Guest not found or does not belong to this event.');
+        
+        if (!person || !guestParticipant) {
+             throw new Error('Guest or associated participant not found.');
+        }
+
+        const isParticipantInEvent = await EventSchedule.count({
+            where: { eventId: schedule.eventId },
+            include: [{
+                model: Participant,
+                where: { id: guestParticipant.id },
+                required: true,
+                through: { attributes: [] }
+            }],
+            transaction
+        });
+
+        if (isParticipantInEvent === 0) {
+            throw new Error('Guest\'s participant does not belong to this event.');
         }
     } else {
         throw new Error('Participant or Guest ID is required.');
@@ -188,8 +221,7 @@ export class AccreditationService {
       include: [
         { 
           model: Participant, 
-          attributes: ['id', 'firstName', 'lastName', 'email'],
-          include: [{ model: Event, attributes: ['id', 'name'] }] 
+          attributes: ['id', 'firstName', 'lastName', 'email']
         },
         { 
           model: Guest, 

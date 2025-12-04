@@ -4,6 +4,9 @@ import { withAuth } from '@/middleware/auth';
 import { updateScheduleSchema } from '@/utils/validators/eventSchemas';
 import { eventScheduleService } from '@/services/eventScheduleService';
 import { AuthenticatedRequest } from '@/types/auth';
+import { ROLES } from '@/utils/constants';
+
+const { ADMIN, OPERATOR, GUARD} = ROLES;
 
 interface Params {
   params: { eventId: string; scheduleId: string };
@@ -26,7 +29,7 @@ export const PUT = withAuth(async (req: AuthenticatedRequest, { params }: Params
     }
     return NextResponse.json({ message: 'Error updating schedule', error: error.message }, { status: 500 });
   }
-}, ['admin', 'organizer']);
+}, [ADMIN, OPERATOR]);
 
 export const DELETE = withAuth(async (req: AuthenticatedRequest, { params }: Params) => {
   try {
@@ -40,4 +43,4 @@ export const DELETE = withAuth(async (req: AuthenticatedRequest, { params }: Par
     console.error(`Error deleting schedule ${params.scheduleId}:`, error);
     return NextResponse.json({ message: 'Error deleting schedule', error: error.message }, { status: 500 });
   }
-}, ['admin', 'organizer']);
+}, [ADMIN, OPERATOR]);

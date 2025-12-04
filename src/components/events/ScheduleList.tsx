@@ -1,12 +1,13 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { format } from 'date-fns';
 import { Plus, Edit, Trash2, Clock, Users } from 'lucide-react';
 import EventSchedule from '@/models/EventSchedule';
 import ScheduleForm from '@/components/events/ScheduleForm';
 import RoleGuard from '../auth/RoleGuard';
 import { ROLES } from '@/utils/constants';
+import useEventStore from '@/store/eventStore';
 
 interface ScheduleListProps {
   eventId: string;
@@ -18,13 +19,11 @@ const mockSchedules: EventSchedule[] = [
 ];
 
 const ScheduleList: React.FC<ScheduleListProps> = ({ eventId }) => {
-  const [schedules, setSchedules] = useState<EventSchedule[]>(mockSchedules);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingSchedule, setEditingSchedule] = useState<EventSchedule | null>(null);
 
-  // TODO: Replace with store integration
-  // const { schedules, fetchSchedules, deleteSchedule } = useScheduleStore();
-  // useEffect(() => { fetchSchedules(eventId); }, [eventId, fetchSchedules]);
+  const { schedules, fetchSchedulesForEvent, deleteSchedule } = useEventStore();
+  useEffect(() => { fetchSchedulesForEvent(eventId); }, [eventId, fetchSchedulesForEvent]);
 
   const handleEdit = (schedule: EventSchedule) => {
     setEditingSchedule(schedule);
@@ -71,34 +70,52 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ eventId }) => {
       <div className="space-y-4">
         {schedules.length > 0 ? (
           schedules.map((schedule) => (
-            <div key={schedule.id} className="p-4 border rounded-lg flex justify-between items-center">
+            <div key={schedule.id} className="bg-white border border-gray-200 rounded-lg p-5 shadow-sm hover:shadow-md transition-shadow duration-200 flex justify-between items-center">
               <div>
-                <p className="font-semibold">{schedule.scheduleName}</p>
-                <div className="flex items-center text-sm text-gray-500 mt-1">
-                  <Clock size={14} className="mr-2" />
-                  <span>
-                    {format(new Date(schedule.startDateTime), 'p')} - {format(new Date(schedule.endDateTime), 'p')}
-                  </span>
-                  <span className="mx-2">|</span>
-                  <Users size={14} className="mr-1" />
-                  <span>{schedule.maxCapacity || 'Unlimited'} capacity</span>
+                <h4 className="text-lg font-semibold text-gray-900">{schedule.scheduleName}</h4>
+                <div className="flex items-center text-sm text-gray-500 mt-2 space-x-4">
+                  <div className="flex items-center">
+                    <Clock size={16} className="mr-1.5 text-indigo-500" />
+                    <span>
+                      {format(new Date(schedule.startDateTime), 'p')} - {format(new Date(schedule.endDateTime), 'p')}
+                    </span>
+                  </div>
+                  <div className="h-4 w-px bg-gray-300"></div>
+                  <div className="flex items-center">
+                    <Users size={16} className="mr-1.5 text-indigo-500" />
+                    <span>{schedule.maxCapacity ? `${schedule.maxCapacity} capacity` : 'Unlimited capacity'}</span>
+                  </div>
                 </div>
               </div>
               <div className="flex items-center space-x-2">
                 <RoleGuard allowedRoles={[ROLES.ADMIN]}>
-                  <button onClick={() => handleEdit(schedule)} className="p-2 text-gray-500 hover:text-indigo-600">
+                  <button 
+                    onClick={() => handleEdit(schedule)} 
+                    className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-full transition-colors"
+                    title="Edit Schedule"
+                  >
                     <Edit size={18} />
                   </button>
-                  <button onClick={() => handleDelete(schedule.id)} className="p-2 text-gray-500 hover:text-red-600">
+                  <button 
+                    onClick={() => handleDelete(schedule.id)} 
+                    className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors"
+                    title="Delete Schedule"
+                  >
                     <Trash2 size={18} />
                   </button>
                 </RoleGuard>
-                <button className="text-sm text-indigo-600 hover:underline">View Accredited</button>
+                <button className="ml-2 text-sm font-medium text-indigo-600 hover:text-indigo-800 hover:underline px-3 py-1.5 rounded-md hover:bg-indigo-50 transition-colors">
+                  View Accredited
+                </button>
               </div>
             </div>
           ))
         ) : (
-          <p className="text-gray-500">No schedules have been created for this event yet.</p>
+          <div className="text-center py-12 bg-gray-50 rounded-lg border border-dashed border-gray-300">
+            <Clock className="mx-auto h-12 w-12 text-gray-400" />
+            <h3 className="mt-2 text-sm font-medium text-gray-900">No schedules</h3>
+            <p className="mt-1 text-sm text-gray-500">Get started by creating a new schedule for this event.</p>
+          </div>
         )}
       </div>
     </div>

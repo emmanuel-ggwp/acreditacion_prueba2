@@ -10,7 +10,7 @@ export class EventScheduleService {
     const validatedData = createScheduleSchema.parse(data);
     const event = await Event.findByPk(eventId);
     if (!event) {
-      throw new Error('Event not found');
+      throw new Error(`Evento ${eventId} no encontrado para la agenda.`);
     }
 
     // Optional: Check for overlapping schedules

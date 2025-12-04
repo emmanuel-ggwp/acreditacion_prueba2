@@ -5,7 +5,7 @@ import ParticipantAward from '@/models/ParticipantAward';
 import { createAwardSchema, updateAwardSchema } from '@/utils/validators/awardSchemas';
 
 export class AwardService {
-  async createAward(eventId: number, data: z.infer<typeof createAwardSchema>, createdBy: string) {
+  async createAward(eventId: string, data: z.infer<typeof createAwardSchema>, createdBy: string) {
     const validatedData = createAwardSchema.parse(data);
     const award = await Award.create({ ...validatedData, eventId, createdBy });
     return award;
@@ -48,7 +48,7 @@ export class AwardService {
     return { message: 'Award deleted successfully' };
   }
 
-  async listAwardsByEvent(eventId: number) {
+  async listAwardsByEvent(eventId: string) {
     const awards = await Award.findAll({ where: { eventId } });
     
     const awardsWithStock = await Promise.all(awards.map(async (award) => {

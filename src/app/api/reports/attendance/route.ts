@@ -4,12 +4,15 @@ import { withAuth } from '@/middleware/auth';
 import { reportService } from '@/services/reportService';
 import { AuthenticatedRequest } from '@/types/auth';
 import { z } from 'zod';
+import { ROLES } from '@/utils/constants';
+
+const { ADMIN, OPERATOR, GUARD} = ROLES;
 
 const attendanceQuerySchema = z.object({
   eventId: z.string().optional(),
   scheduleId: z.string().optional(),
-  startDate: z.string().datetime().optional(),
-  endDate: z.string().datetime().optional(),
+  startDate: z.iso.datetime().optional(),
+  endDate: z.iso.datetime().optional(),
   format: z.enum(['json', 'csv']).default('json'),
 });
 
@@ -40,4 +43,4 @@ export const GET = withAuth(async (req: AuthenticatedRequest) => {
     }
     return NextResponse.json({ message: 'Error generating attendance report', error: error.message }, { status: 500 });
   }
-}, ['admin', 'organizer']);
+}, [ADMIN, OPERATOR]);

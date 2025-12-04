@@ -4,6 +4,9 @@ import { withAuth } from '@/middleware/auth';
 import { assignAwardSchema } from '@/utils/validators/awardSchemas';
 import { participantAwardService } from '@/services/participantAwardService';
 import { AuthenticatedRequest } from '@/types/auth';
+import { ROLES } from '@/utils/constants';
+
+const { ADMIN, OPERATOR, GUARD} = ROLES;
 
 interface Params {
   params: { awardId: string };
@@ -35,4 +38,4 @@ export const POST = withAuth(async (req: AuthenticatedRequest, { params }: Param
     }
     return NextResponse.json({ message: 'Error assigning award', error: error.message }, { status: 500 });
   }
-}, ['admin', 'organizer', 'staff']);
+}, [ADMIN, OPERATOR, GUARD]);

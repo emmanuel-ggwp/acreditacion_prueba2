@@ -5,6 +5,7 @@ import { sequelize } from '@/lib/sequelize';
 import ParticipantAward from '@/models/ParticipantAward';
 import Participant from '@/models/Participant';
 import Award from '@/models/Award';
+import EventSchedule from '@/models/EventSchedule';
 import { assignAwardSchema } from '@/utils/validators/awardSchemas';
 import User from '@/models/User';
 import Event from '@/models/Event';
@@ -24,7 +25,18 @@ export class ParticipantAwardService {
         throw new Error('Participant not found.');
       }
       
-      if (participant.eventId !== award.eventId) {
+      const isParticipantInEvent = await EventSchedule.count({
+        where: { eventId: award.eventId },
+        include: [{
+            model: Participant,
+            where: { id: participantId },
+            required: true,
+            through: { attributes: [] }
+        }],
+        transaction
+      });
+
+      if (isParticipantInEvent === 0) {
           throw new Error('Participant and Award do not belong to the same event.');
       }
 
@@ -100,6 +112,14 @@ export class ParticipantAwardService {
     }
 
     return ParticipantAward.findAll({
+      include: [{
+        model: EventSchedule,
+        where: { eventId },
+        required: true
+      }],
+      distinct: true,
+      col: 'id'
+   
       where,
       include: [
         { model: Participant, attributes: ['id', 'firstName', 'lastName', 'email'] },

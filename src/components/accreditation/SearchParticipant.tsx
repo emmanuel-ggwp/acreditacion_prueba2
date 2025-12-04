@@ -3,7 +3,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { Search } from 'lucide-react';
 import { debounce } from 'lodash';
-import { participantService } from '@/services/participantService';
+import apiClient from '@/utils/apiClient';
 import Participant from '@/models/Participant';
 import Guest from '@/models/Guest';
 
@@ -23,10 +23,15 @@ const SearchParticipant: React.FC<SearchParticipantProps> = ({ eventId, onSelect
       return;
     }
     setIsLoading(true);
-    // In a real scenario, you'd have a service that searches both participants and guests
-    const participants = await participantService.searchParticipants(eventId, searchQuery);
-    // const guests = await guestService.searchGuests(eventId, searchQuery);
-    setResults(participants); // Combine participants and guests
+    try {
+      const response = await apiClient.get<{ participants: Participant[]; guests: Guest[] }>(
+        `/api/events/${eventId}/search?query=${encodeURIComponent(searchQuery)}`
+      );
+      // Combine participants and guests if needed
+      setResults([...(response.participants || []), ...(response.guests || [])]);
+    } catch (error) {
+      setResults([]);
+    }
     setIsLoading(false);
   };
 

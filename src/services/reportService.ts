@@ -26,11 +26,19 @@ interface IUserActivityReportDateRange {
 
 export class ReportService {
 
-  async getEventReport(eventId: number) {
+  async getEventReport(eventId: string) {
     const event = await Event.findByPk(eventId);
     if (!event) throw new Error('Event not found');
 
-    const totalParticipants = await Participant.count({ where: { eventId } });
+    const totalParticipants = await Participant.count({
+      include: [{
+        model: EventSchedule,
+        where: { eventId },
+        required: true
+      }],
+      distinct: true,
+      col: 'id'
+    });
     const accreditedParticipants = await Accreditation.count({
       where: { participantId: { [Op.ne]: null } },
       include: [{ model: EventSchedule, where: { eventId }, attributes: [] }]
@@ -247,7 +255,15 @@ export class ReportService {
       });
       return {
         eventName: event.name,
-        totalParticipants: await Participant.count({ where: { eventId } }),
+        totalParticipants: await Participant.count({
+          include: [{
+            model: EventSchedule,
+            where: { eventId },
+            required: true
+          }],
+          distinct: true,
+          col: 'id'
+        }),
         totalAccredited: accreditedCount,
         awardsPending,
       };
@@ -263,7 +279,7 @@ export class ReportService {
     }
   }
 
-  async getRealTimeStats(eventId: number) {
+  async getRealTimeStats(eventId: string) {
     const now = new Date();
     const thirtyMinutesAgo = subMinutes(now, 30);
 

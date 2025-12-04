@@ -2,18 +2,18 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { verifyAccessToken } from '@/lib/jwt';
-import { UserRole } from '@/models/User';
+import { Role, ROLES } from '@/utils/constants';
 
 export interface AuthenticatedRequest extends NextRequest {
   user: {
     id: string;
-    role: UserRole;
+    role: Role;
   };
 }
 
 type AppRouterHandler = (req: AuthenticatedRequest, context: { params: any }) => Promise<NextResponse>;
 
-type RoleGuard = (allowedRoles: UserRole[]) => (handler: AppRouterHandler) => (req: NextRequest, context: { params: any }) => Promise<NextResponse>;
+type RoleGuard = (allowedRoles: Role[]) => (handler: AppRouterHandler) => (req: NextRequest, context: { params: any }) => Promise<NextResponse>;
 
 const roleGuard: RoleGuard = (allowedRoles) => (handler) => async (req, context) => {
   const authHeader = req.headers.get('authorization');
@@ -29,7 +29,7 @@ const roleGuard: RoleGuard = (allowedRoles) => (handler) => async (req, context)
     return NextResponse.json({ message: 'Unauthorized: Invalid token' }, { status: 401 });
   }
 
-  const user = decoded as { id: string; role: UserRole };
+  const user = decoded as { id: string; role: Role };
 
   if (!allowedRoles.includes(user.role)) {
     return NextResponse.json({ message: 'Forbidden: Insufficient permissions' }, { status: 403 });
@@ -41,7 +41,7 @@ const roleGuard: RoleGuard = (allowedRoles) => (handler) => async (req, context)
   return handler(authenticatedRequest, context);
 };
 
-export const withAuth = (handler: AppRouterHandler, allowedRoles: UserRole[]): ((req: NextRequest, context: { params: any }) => Promise<NextResponse>) => {
+export const withAuth = (handler: AppRouterHandler, allowedRoles: Role[] = [ROLES.ADMIN]): ((req: NextRequest, context: { params: any }) => Promise<NextResponse>) => {
   return roleGuard(allowedRoles)(handler);
 };
 

@@ -2,7 +2,7 @@
 import { z } from 'zod';
 
 export const eventSchema = z.object({
-  id: z.string().uuid(),
+  id: z.guid(),
   name: z.string().min(3, 'Event name must be at least 3 characters'),
   description: z.string().optional(),
   location: z.string().optional(),
@@ -10,18 +10,20 @@ export const eventSchema = z.object({
   allowGuests: z.boolean().default(true),
   maxGuestsPerParticipant: z.number().int().min(0).default(0),
   isActive: z.boolean().default(true),
-  createdBy: z.string().uuid(),
+  createdBy: z.guid(),
+  createdAt: z.iso.datetime({ message: 'Invalid createdAt date format' }).optional(),
+  updatedAt: z.iso.datetime({ message: 'Invalid updatedAt date format' }).optional(),
 });
 
 export const createEventSchema = eventSchema.omit({ id: true, isActive: true, createdBy: true });
 export const updateEventSchema = createEventSchema.partial();
 
 export const scheduleSchema = z.object({
-  id: z.string().uuid(),
-  eventId: z.string().uuid(),
+  id: z.guid(),
+  eventId: z.guid(),
   scheduleName: z.string().min(3, 'Schedule name must be at least 3 characters'),
-  startDateTime: z.string().datetime('Invalid start date format'),
-  endDateTime: z.string().datetime('Invalid end date format'),
+  startDateTime: z.iso.datetime({ message: 'Invalid start date format' }),
+  endDateTime: z.iso.datetime({ message: 'Invalid end date format' }),
   maxCapacity: z.number().int().positive().nullable(),
   isActive: z.boolean().default(true),
 }).refine(data => new Date(data.endDateTime) > new Date(data.startDateTime), {
@@ -34,7 +36,7 @@ export const updateScheduleSchema = createScheduleSchema.partial();
 
 export const eventFilterSchema = z.object({
   isActive: z.string().transform(val => val === 'true').optional(),
-  createdBy: z.string().uuid().optional(),
+  createdBy: z.guid().optional(),
   page: z.string().transform(val => parseInt(val, 10)).optional(),
   limit: z.string().transform(val => parseInt(val, 10)).optional(),
 });

@@ -1,12 +1,10 @@
 
 import { Model, DataTypes, UUIDV4 } from 'sequelize';
 import { sequelize } from '../lib/sequelize';
-import Event from './Event';
 import User from './User';
 
 class Participant extends Model {
   declare public id: string;
-  declare public eventId: string;
   declare public firstName: string;
   declare public lastName: string;
   declare public email: string;
@@ -27,14 +25,6 @@ Participant.init(
       type: DataTypes.UUID,
       defaultValue: UUIDV4,
       primaryKey: true,
-    },
-    eventId: {
-      type: DataTypes.UUID,
-      allowNull: false,
-      references: {
-        model: Event,
-        key: 'id',
-      },
     },
     firstName: {
       type: DataTypes.STRING,
@@ -79,6 +69,17 @@ Participant.init(
         key: 'id',
       },
     },
+    createdAt: {
+      type: DataTypes.DATE,
+      allowNull: false,
+      defaultValue: sequelize.literal('CURRENT_TIMESTAMP') as any,
+    },
+    updatedAt: {
+      type: DataTypes.DATE,
+      allowNull: false,
+      defaultValue: sequelize.literal('CURRENT_TIMESTAMP') as any,
+      onUpdate: sequelize.literal('CURRENT_TIMESTAMP') as any,
+    },
   },
   {
     sequelize,
@@ -87,9 +88,6 @@ Participant.init(
     timestamps: true,
     paranoid: true,
     indexes: [
-      {
-        fields: ['event_id'],
-      },
       {
         fields: ['email'],
       },
@@ -101,9 +99,6 @@ Participant.init(
 );
 
 // Associations
-Event.hasMany(Participant, { foreignKey: 'eventId' });
-Participant.belongsTo(Event, { foreignKey: 'eventId' });
-
 User.hasMany(Participant, { foreignKey: 'createdBy' });
 Participant.belongsTo(User, { foreignKey: 'createdBy' });
 

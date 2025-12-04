@@ -45,6 +45,11 @@ AuditLog.init(
       type: DataTypes.JSON,
       allowNull: true,
     },
+    createdAt: {
+      type: DataTypes.DATE,
+      allowNull: false,
+      defaultValue: DataTypes.NOW,
+    },
   },
   {
     sequelize,

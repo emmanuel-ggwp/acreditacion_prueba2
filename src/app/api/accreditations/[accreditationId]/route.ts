@@ -3,6 +3,9 @@ import { NextResponse } from 'next/server';
 import { withAuth } from '@/middleware/auth';
 import { accreditationService } from '@/services/accreditationService';
 import { AuthenticatedRequest } from '@/types/auth';
+import { ROLES } from '@/utils/constants';
+
+const { ADMIN, OPERATOR, GUARD} = ROLES;
 
 interface Params {
   params: { accreditationId: string };
@@ -34,4 +37,4 @@ export const PATCH = withAuth(async (req: AuthenticatedRequest, { params }: Para
     console.error(`Error checking out accreditation ${params.accreditationId}:`, error);
     return NextResponse.json({ message: 'Error checking out accreditation', error: error.message }, { status: 500 });
   }
-}, ['admin', 'organizer', 'staff']);
+}, [ADMIN, OPERATOR, GUARD]);

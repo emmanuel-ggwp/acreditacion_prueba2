@@ -55,12 +55,13 @@ describe('AccreditationService', () => {
       maxCapacity: 100,
       Event: { id: eventId, isActive: true, maxCapacity: 200 },
     };
-    const mockParticipant = { id: participantId, eventId };
+    const mockParticipant = { id: participantId };
     const mockAccreditation = { id: 'accred-1', participantId, eventScheduleId };
 
     it('should accredit a participant successfully', async () => {
         (EventScheduleMock.findByPk as jest.Mock).mockResolvedValue(mockSchedule);
         (ParticipantMock.findByPk as jest.Mock).mockResolvedValue(mockParticipant);
+        (EventScheduleMock.count as jest.Mock).mockResolvedValue(1); // Participant is in event
         (AccreditationMock.count as jest.Mock).mockResolvedValue(50); // Below capacity
         (AccreditationMock.findOne as jest.Mock).mockResolvedValue(null); // Not accredited yet
         (AccreditationMock.create as jest.Mock).mockResolvedValue(mockAccreditation);
@@ -72,6 +73,7 @@ describe('AccreditationService', () => {
 
         expect(EventScheduleMock.findByPk).toHaveBeenCalledWith(eventScheduleId, expect.any(Object));
         expect(ParticipantMock.findByPk).toHaveBeenCalledWith(participantId, expect.any(Object));
+        expect(EventScheduleMock.count).toHaveBeenCalled();
         expect(AccreditationMock.findOne).toHaveBeenCalled();
         expect(AccreditationMock.create).toHaveBeenCalledWith(
             expect.objectContaining({ participantId, eventScheduleId, accreditedBy }),
@@ -92,6 +94,7 @@ describe('AccreditationService', () => {
     it('should throw an error if capacity is reached', async () => {
         (EventScheduleMock.findByPk as jest.Mock).mockResolvedValue(mockSchedule);
         (ParticipantMock.findByPk as jest.Mock).mockResolvedValue(mockParticipant);
+        (EventScheduleMock.count as jest.Mock).mockResolvedValue(1); // Participant is in event
         (AccreditationMock.count as jest.Mock).mockResolvedValue(100); // At capacity
 
         await expect(
@@ -102,6 +105,7 @@ describe('AccreditationService', () => {
     it('should throw an error if participant is already accredited', async () => {
         (EventScheduleMock.findByPk as jest.Mock).mockResolvedValue(mockSchedule);
         (ParticipantMock.findByPk as jest.Mock).mockResolvedValue(mockParticipant);
+        (EventScheduleMock.count as jest.Mock).mockResolvedValue(1); // Participant is in event
         (AccreditationMock.count as jest.Mock).mockResolvedValue(50);
         (AccreditationMock.findOne as jest.Mock).mockResolvedValue(mockAccreditation); // Already accredited
 
@@ -123,14 +127,13 @@ describe('AccreditationService', () => {
       eventId,
       isActive: true,
       maxCapacity: 100,
-      Event: { id: eventId, isActive: true, maxCapacity: 200 },
-    };
-    const mockGuest = { id: guestId, Participant: { eventId } };
+      Event: { id: eventId, isActive: true, maxCapacid: participantId } };
     const mockAccreditation = { id: 'accred-2', guestId, eventScheduleId };
 
     it('should accredit a guest successfully', async () => {
         (EventScheduleMock.findByPk as jest.Mock).mockResolvedValue(mockSchedule);
         (GuestMock.findByPk as jest.Mock).mockResolvedValue(mockGuest);
+        (EventScheduleMock.count as jest.Mock).mockResolvedValue(1); // Guest's participant is in event
         (AccreditationMock.count as jest.Mock).mockResolvedValue(50);
         (AccreditationMock.findOne as jest.Mock).mockResolvedValue(null);
         (AccreditationMock.create as jest.Mock).mockResolvedValue(mockAccreditation);
@@ -149,11 +152,14 @@ describe('AccreditationService', () => {
     });
 
     it('should throw an error if guest does not belong to the event', async () => {
-        const wrongGuest = { id: guestId, Participant: { eventId: 'wrong-event' } };
+        const wrongGuest = { id: guestId, Participant: { id: participantId } };
         (EventScheduleMock.findByPk as jest.Mock).mockResolvedValue(mockSchedule);
         (GuestMock.findByPk as jest.Mock).mockResolvedValue(wrongGuest);
+        (EventScheduleMock.count as jest.Mock).mockResolvedValue(0); // Not in event
 
         await expect(
+            accreditationService.accreditGuest(guestId, eventScheduleId, accreditedBy)
+        ).rejects.toThrow('Guest\'s participant
             accreditationService.accreditGuest(guestId, eventScheduleId, accreditedBy)
         ).rejects.toThrow('Guest not found or does not belong to this event.');
     });
@@ -233,13 +239,14 @@ describe('AccreditationService', () => {
       eventId,
       isActive: true,
       maxCapacity: 100,
-      Event: { id: eventId, isActive: true, maxCapacity: 200 },
-    };
-    const mockParticipant1 = { id: participantId1, eventId };
-    const mockGuest1 = { id: guestId1, Participant: { eventId } };
+      Event: { id: eventId, isActive: true, maxCa };
+    const mockGuest1 = { id: guestId1, Participant: { id: participantId1 } };
 
 
     beforeEach(() => {
+        // Reset mocks before each test in this block
+        (EventScheduleMock.findByPk as jest.Mock).mockResolvedValue(mockSchedule);
+        (EventScheduleMock.count as jest.Mock).mockResolvedValue(1); // In event
         // Reset mocks before each test in this block
         (EventScheduleMock.findByPk as jest.Mock).mockResolvedValue(mockSchedule);
         (AccreditationMock.count as jest.Mock).mockResolvedValue(0);

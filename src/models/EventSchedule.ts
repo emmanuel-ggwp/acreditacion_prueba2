@@ -51,17 +51,32 @@ EventSchedule.init(
       type: DataTypes.BOOLEAN,
       defaultValue: true,
     },
+    createdAt: {
+      type: DataTypes.DATE,
+      allowNull: false,
+      defaultValue: sequelize.literal('CURRENT_TIMESTAMP') as any,
+    },
+    updatedAt: {
+      type: DataTypes.DATE,
+      allowNull: false,
+      defaultValue: sequelize.literal('CURRENT_TIMESTAMP') as any,
+    },
   },
   {
     sequelize,
     modelName: 'EventSchedule',
     tableName: 'event_schedules',
     timestamps: true,
+    underscored: true,
   }
 );
 
 // Associations
 Event.hasMany(EventSchedule, { foreignKey: 'eventId' });
 EventSchedule.belongsTo(Event, { foreignKey: 'eventId' });
+
+// Note: The Many-to-Many association with Participant is defined in Participant.ts to avoid circular dependency issues during initialization order,
+// or it can be defined here as well if imports are handled carefully.
+// For clarity, we will rely on the definition in Participant.ts or index.ts if we had one centralizing associations.
 
 export default EventSchedule;

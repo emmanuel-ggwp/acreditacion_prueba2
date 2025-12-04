@@ -3,7 +3,7 @@ import { devtools } from 'zustand/middleware';
 import apiClient from '@/utils/apiClient';
 import Event from '@/models/Event';
 import EventSchedule from '@/models/EventSchedule';
-import { createEventSchema, updateEventSchema } from '@/utils/validators/eventSchemas';
+import { createEventSchema, updateEventSchema, createScheduleSchema, updateScheduleSchema } from '@/utils/validators/eventSchemas';
 import { z } from 'zod';
 
 interface EventState {
@@ -18,9 +18,12 @@ interface EventState {
   fetchEvents: (page?: number, limit?: number) => Promise<void>;
   fetchSchedulesForEvent: (eventId: string) => Promise<void>;
   fetchEventById: (id: string) => Promise<void>;
-  createEvent: (eventData: z.infer<typeof createEventSchema>) => Promise<void>;
+  createEvent: (eventData: z.infer<typeof createEventSchema>) => Promise<Event | void>;
   updateEvent: (id: string, eventData: z.infer<typeof updateEventSchema>) => Promise<void>;
   deleteEvent: (id: string) => Promise<void>;
+  createSchedule: (scheduleData: z.infer<typeof createScheduleSchema>) => Promise<void>;
+  updateSchedule: (id: string, eventId: string, scheduleData: z.infer<typeof updateScheduleSchema>) => Promise<void>;
+  deleteSchedule: (id: string, eventId: string) => Promise<void>;
   setCurrentEvent: (event: Event | null) => void;
 }
 
@@ -71,6 +74,7 @@ const useEventStore = create<EventState>()(
         try {
           const newEvent = await apiClient.post<Event>('/api/events', eventData);
           set((state) => ({ events: [...state.events, newEvent], loading: false }));
+          return newEvent;
         } catch (error: any) {
           set({ error: error.message, loading: false });
           throw error;
@@ -98,6 +102,44 @@ const useEventStore = create<EventState>()(
           await apiClient.delete(`/api/events/${id}`);
           set((state) => ({
             events: state.events.filter((e) => e.id !== id),
+            loading: false,
+          }));
+        } catch (error: any) {
+          set({ error: error.message, loading: false });
+        }
+      },
+
+      createSchedule: async (scheduleData) => {
+        set({ loading: true, error: null });
+        try {
+          const newSchedule = await apiClient.post<EventSchedule>(`/api/events/${scheduleData.eventId}/schedules`, scheduleData);
+          set((state) => ({ schedules: [...state.schedules, newSchedule], loading: false }));
+        } catch (error: any) {
+          set({ error: error.message, loading: false });
+          throw error;
+        }
+      },
+
+      updateSchedule: async (id, eventId, scheduleData) => {
+        set({ loading: true, error: null });
+        try {
+          const updatedSchedule = await apiClient.put<EventSchedule>(`/api/events/${eventId}/schedules/${id}`, scheduleData);
+          set((state) => ({
+            schedules: state.schedules.map((s) => (s.id === updatedSchedule.id ? updatedSchedule : s)),
+            loading: false,
+          }));
+        } catch (error: any) {
+          set({ error: error.message, loading: false });
+          throw error;
+        }
+      },
+
+      deleteSchedule: async (id, eventId) => {
+        set({ loading: true, error: null });
+        try {
+          await apiClient.delete(`/api/events/${eventId}/schedules/${id}`);
+          set((state) => ({
+            schedules: state.schedules.filter((s) => s.id !== id),
             loading: false,
           }));
         } catch (error: any) {

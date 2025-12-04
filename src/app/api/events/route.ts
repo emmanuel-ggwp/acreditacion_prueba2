@@ -4,12 +4,15 @@ import { withAuth } from '@/middleware/auth';
 import { createEventSchema, eventFilterSchema } from '@/utils/validators/eventSchemas';
 import { eventService } from '@/services/eventService';
 import { AuthenticatedRequest } from '@/types/auth';
+import { ROLES } from '@/utils/constants';
+
+const { ADMIN, OPERATOR, GUARD} = ROLES;
 
 export const POST = withAuth(async (req: AuthenticatedRequest) => {
   try {
     const body = await req.json();
     const validatedData = createEventSchema.parse(body);
-    const event = await eventService.createEvent(validatedData);
+    const event = await eventService.createEvent(validatedData, req.user.id);
     return NextResponse.json(event, { status: 201 });
   } catch (error: any) {
     console.error('Error creating event:', error);
@@ -18,7 +21,7 @@ export const POST = withAuth(async (req: AuthenticatedRequest) => {
     }
     return NextResponse.json({ message: 'Error creating event', error: error.message }, { status: 500 });
   }
-}, ['admin', 'organizer']);
+}, [ADMIN, OPERATOR]);
 
 export const GET = withAuth(async (req: AuthenticatedRequest) => {
   try {
@@ -35,4 +38,4 @@ export const GET = withAuth(async (req: AuthenticatedRequest) => {
     }
     return NextResponse.json({ message: 'Error fetching events', error: error.message }, { status: 500 });
   }
-}, ['admin', 'organizer', 'staff']);
+}, [ADMIN, OPERATOR, GUARD]);

@@ -4,6 +4,9 @@ import { withAuth } from '@/middleware/auth';
 import { bulkAccreditationSchema } from '@/utils/validators/accreditationSchemas';
 import { accreditationService } from '@/services/accreditationService';
 import { AuthenticatedRequest } from '@/types/auth';
+import { ROLES } from '@/utils/constants';
+
+const { ADMIN, OPERATOR, GUARD} = ROLES;
 
 export const POST = withAuth(async (req: AuthenticatedRequest) => {
   try {
@@ -20,4 +23,4 @@ export const POST = withAuth(async (req: AuthenticatedRequest) => {
     }
     return NextResponse.json({ message: 'Error in bulk accreditation', error: error.message }, { status: 500 });
   }
-}, ['admin', 'organizer']);
+}, [ADMIN, OPERATOR]);

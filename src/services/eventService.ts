@@ -10,13 +10,13 @@ import { createEventSchema, updateEventSchema } from '@/utils/validators/eventSc
 import User from '@/models/User';
 
 export class EventService {
-  async createEvent(data: z.infer<typeof createEventSchema>) {
+  async createEvent(data: z.infer<typeof createEventSchema>, userId: string) {
     const validatedData = createEventSchema.parse(data);
-    const event = await Event.create({ ...validatedData });
+    const event = await Event.create({ ...validatedData, createdBy: userId });
     return event;
   }
 
-  async updateEvent(eventId: number, data: z.infer<typeof updateEventSchema>) {
+  async updateEvent(eventId: string, data: z.infer<typeof updateEventSchema>) {
     const validatedData = updateEventSchema.parse(data);
     const event = await Event.findByPk(eventId);
     if (!event) {
@@ -26,7 +26,7 @@ export class EventService {
     return event;
   }
 
-  async deleteEvent(eventId: number) {
+  async deleteEvent(eventId: string) {
     const event = await Event.findByPk(eventId);
     if (!event) {
       throw new Error('Event not found');
@@ -36,7 +36,7 @@ export class EventService {
     return { message: 'Event deleted successfully' };
   }
 
-  async getEventById(eventId: number, includeSchedules = false) {
+  async getEventById(eventId: string, includeSchedules = false) {
     const options: any = {
       include: [],
     };
@@ -56,24 +56,49 @@ export class EventService {
     if (isActive !== undefined) where.isActive = isActive;
     if (createdBy) where.createdBy = createdBy;
 
+    // 1. Fetch events with pagination
     const { count, rows } = await Event.findAndCountAll({
       where,
-      include: [
-        {
-          model: Participant,
-          attributes: [],
-        },
-      ],
-      attributes: {
-        include: [[fn('COUNT', col('Participants.id')), 'participantCount']],
-      },
-      group: ['Event.id'],
       limit,
       offset: (page - 1) * limit,
       order: [['createdAt', 'DESC']],
     });
 
-    return { events: rows, total: count.length, page, limit };
+    // 2. Fetch participant counts for these events
+    if (rows.length > 0) {
+      const eventIds = rows.map(e => e.id);
+      
+      // Count unique participants per event via EventSchedule
+      const participantCounts = await EventSchedule.findAll({
+        attributes: [
+          'eventId',
+          [fn('COUNT', fn('DISTINCT', col('Participants.id'))), 'count']
+        ],
+        where: {
+          eventId: eventIds,
+        },
+        include: [{
+          model: Participant,
+          attributes: [],
+          through: { attributes: [] }
+        }],
+        group: ['EventSchedule.eventId'],
+        raw: true,
+      });
+
+      // 3. Map counts to events
+      const countMap = new Map<string, number>();
+      (participantCounts as any[]).forEach((p: any) => {
+        countMap.set(p.eventId, parseInt(p.count, 10));
+      });
+
+      rows.forEach(event => {
+        const count = countMap.get(event.id) || 0;
+        event.setDataValue('participantCount' as any, count);
+      });
+    }
+
+    return { events: rows, total: count, page, limit };
   }
 
   async getSchedulesForEvent(eventId: string) {
@@ -81,13 +106,21 @@ export class EventService {
     return schedules;
   }
 
-  async getEventStatistics(eventId: number) {
+  async getEventStatistics(eventId: string) {
     const event = await Event.findByPk(eventId);
     if (!event) {
       throw new Error('Event not found');
     }
 
-    const totalParticipants = await Participant.count({ where: { eventId } });
+    const totalParticipants = await Participant.count({
+      include: [{
+        model: EventSchedule,
+        where: { eventId },
+        required: true
+      }],
+      distinct: true,
+      col: 'id'
+    });
 
     const accreditedBySchedule = await Accreditation.findAll({
       attributes: [
