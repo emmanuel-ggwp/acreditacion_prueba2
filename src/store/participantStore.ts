@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import Participant from '@/models/Participant';
-import { participantSchema } from '@/utils/validators/participantSchemas';
+import { participantSchema, createParticipantSchema, updateParticipantSchema } from '@/utils/validators/participantSchemas';
 import apiClient from '@/utils/apiClient';
 import useAuthStore from './authStore';
 import { z } from 'zod';
@@ -19,8 +19,9 @@ interface ParticipantState {
   total: number;
   fetchParticipantsByEvent: (eventId: string, page?: number, limit?: number, filters?: any) => Promise<void>;
   fetchParticipantById: (id: string) => Promise<void>;
-  createParticipant: (participantData: z.infer<typeof participantSchema>) => Promise<void>;
-  updateParticipant: (id: string, participantData: Partial<z.infer<typeof participantSchema>>) => Promise<void>;
+  searchParticipants: (eventId: string, query: string) => Promise<Participant[]>;
+  createParticipant: (participantData: z.infer<typeof createParticipantSchema>) => Promise<void>;
+  updateParticipant: (id: string, participantData: z.infer<typeof updateParticipantSchema>) => Promise<void>;
   deleteParticipant: (id: string) => Promise<void>;
   setCurrentParticipant: (participant: ParticipantWithAccreditation | null) => void;
 }
@@ -59,19 +60,19 @@ const useParticipantStore = create<ParticipantState>()(
         set({ loading: true, error: null });
         try {
           const participant = await apiClient.get<any>(`/api/participants/${id}`);
-          if (participant) {
-            // TODO: The scheduleId is missing here. This needs to be passed from the component.
-            const verification = await apiClient.post<{ isAccredited: boolean }>(`/api/accreditations/verify`, {
-              type: 'participant',
-              id,
-              scheduleId: '' // Placeholder
-            });
-            set({ currentParticipant: { ...participant, isAccredited: verification.isAccredited }, loading: false });
-          } else {
-            set({ currentParticipant: null, loading: false });
-          }
+          set({ currentParticipant: participant, loading: false });
         } catch (error: any) {
           set({ error: error.message, loading: false });
+        }
+      },
+
+      searchParticipants: async (eventId, query) => {
+        try {
+          const response = await apiClient.get<{ participants: Participant[] }>(`/api/events/${eventId}/participants?search=${query}`);
+          return response.participants;
+        } catch (error: any) {
+          console.error('Error searching participants:', error);
+          return [];
         }
       },
 
@@ -81,15 +82,8 @@ const useParticipantStore = create<ParticipantState>()(
         set({ loading: true, error: null });
         try {
           const newParticipant = await apiClient.post<any>(`/api/participants`, { ...participantData, userId: user.id });
-          // TODO: The scheduleId is missing here. This needs to be passed from the component.
-          const verification = await apiClient.post<{ isAccredited: boolean }>(`/api/accreditations/verify`, {
-            type: 'participant',
-            id: newParticipant.id,
-            scheduleId: '' // Placeholder
-          });
-          const participantWithAccreditation = { ...newParticipant, isAccredited: verification.isAccredited, guestCount: 0 };
           set((state) => ({
-            participants: [...state.participants, participantWithAccreditation],
+            participants: [...state.participants, { ...newParticipant, guestCount: 0 }],
             loading: false,
           }));
         } catch (error: any) {
@@ -102,17 +96,9 @@ const useParticipantStore = create<ParticipantState>()(
         set({ loading: true, error: null });
         try {
           const updatedParticipant = await apiClient.put<any>(`/api/participants/${id}`, participantData);
-          // TODO: The scheduleId is missing here. This needs to be passed from the component.
-          const verification = await apiClient.post<{ isAccredited: boolean }>(`/api/accreditations/verify`, {
-            type: 'participant',
-            id,
-            scheduleId: '' // Placeholder
-          });
-          const participantWithAccreditation = { ...updatedParticipant, isAccredited: verification.isAccredited };
-
           set((state) => ({
-            participants: state.participants.map((p) => (p.id === id ? { ...p, ...participantWithAccreditation } : p)),
-            currentParticipant: state.currentParticipant?.id === id ? { ...state.currentParticipant, ...participantWithAccreditation } : state.currentParticipant,
+            participants: state.participants.map((p) => (p.id === id ? { ...p, ...updatedParticipant } : p)),
+            currentParticipant: state.currentParticipant?.id === id ? { ...state.currentParticipant, ...updatedParticipant } : state.currentParticipant,
             loading: false,
           }));
         } catch (error: any) {

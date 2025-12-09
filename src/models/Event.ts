@@ -1,7 +1,25 @@
 
-import { Model, DataTypes, UUIDV4 } from 'sequelize';
+import { 
+  Model, 
+  DataTypes, 
+  UUIDV4,
+  BelongsToGetAssociationMixin,
+  BelongsToSetAssociationMixin,
+  BelongsToCreateAssociationMixin,
+  HasManyAddAssociationMixin,
+  HasManyAddAssociationsMixin,
+  HasManyCountAssociationsMixin,
+  HasManyGetAssociationsMixin,
+  HasManyHasAssociationMixin,
+  HasManyHasAssociationsMixin,
+  HasManyRemoveAssociationMixin,
+  HasManyRemoveAssociationsMixin,
+  HasManySetAssociationsMixin,
+  HasManyCreateAssociationMixin
+} from 'sequelize';
 import { sequelize } from '../lib/sequelize';
 import User from './User';
+import EventSchedule from './EventSchedule';
 
 class Event extends Model {
   declare public id: string;
@@ -13,9 +31,28 @@ class Event extends Model {
   declare public allowGuests: boolean;
   declare public maxGuestsPerParticipant: number;
   declare public createdBy: string;
+  
+  declare public EventSchedules?: EventSchedule[];
 
   declare public readonly createdAt: Date;
   declare public readonly updatedAt: Date;
+
+  // Mixins for User (CreatedBy)
+  declare public getUser: BelongsToGetAssociationMixin<User>;
+  declare public setUser: BelongsToSetAssociationMixin<User, string>;
+  declare public createUser: BelongsToCreateAssociationMixin<User>;
+
+  // Mixins for EventSchedule
+  declare public getEventSchedules: HasManyGetAssociationsMixin<EventSchedule>;
+  declare public addEventSchedule: HasManyAddAssociationMixin<EventSchedule, string>;
+  declare public addEventSchedules: HasManyAddAssociationsMixin<EventSchedule, string>;
+  declare public setEventSchedules: HasManySetAssociationsMixin<EventSchedule, string>;
+  declare public removeEventSchedule: HasManyRemoveAssociationMixin<EventSchedule, string>;
+  declare public removeEventSchedules: HasManyRemoveAssociationsMixin<EventSchedule, string>;
+  declare public hasEventSchedule: HasManyHasAssociationMixin<EventSchedule, string>;
+  declare public hasEventSchedules: HasManyHasAssociationsMixin<EventSchedule, string>;
+  declare public countEventSchedules: HasManyCountAssociationsMixin;
+  declare public createEventSchedule: HasManyCreateAssociationMixin<EventSchedule>;
 }
 
 Event.init(

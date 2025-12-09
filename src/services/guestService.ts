@@ -1,9 +1,6 @@
 import { z } from 'zod';
-import Participant from '@/models/Participant';
-import Guest from '@/models/Guest';
-import Accreditation from '@/models/Accreditation';
+import { Participant, Guest, Accreditation, Event } from '@/models/index';
 import { guestSchema, updateGuestSchema } from '@/utils/validators/participantSchemas';
-import Event from '@/models/Event';
 
 export class GuestService {
   async addGuest(participantId: string, guestData: z.infer<typeof guestSchema>) {

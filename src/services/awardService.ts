@@ -1,7 +1,6 @@
 import { z } from 'zod';
 import { Op } from 'sequelize';
-import Award from '@/models/Award';
-import ParticipantAward from '@/models/ParticipantAward';
+import { Award, ParticipantAward } from '@/models/index';
 import { createAwardSchema, updateAwardSchema } from '@/utils/validators/awardSchemas';
 
 export class AwardService {

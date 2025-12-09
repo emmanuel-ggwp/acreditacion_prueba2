@@ -1,7 +1,35 @@
 
-import { Model, DataTypes, UUIDV4 } from 'sequelize';
+import { 
+  Model, 
+  DataTypes, 
+  UUIDV4,
+  BelongsToGetAssociationMixin,
+  BelongsToSetAssociationMixin,
+  BelongsToCreateAssociationMixin,
+  BelongsToManyAddAssociationMixin,
+  BelongsToManyAddAssociationsMixin,
+  BelongsToManyCountAssociationsMixin,
+  BelongsToManyGetAssociationsMixin,
+  BelongsToManyHasAssociationMixin,
+  BelongsToManyHasAssociationsMixin,
+  BelongsToManyRemoveAssociationMixin,
+  BelongsToManyRemoveAssociationsMixin,
+  BelongsToManySetAssociationsMixin,
+  HasManyAddAssociationMixin,
+  HasManyAddAssociationsMixin,
+  HasManyCountAssociationsMixin,
+  HasManyGetAssociationsMixin,
+  HasManyHasAssociationMixin,
+  HasManyHasAssociationsMixin,
+  HasManyRemoveAssociationMixin,
+  HasManyRemoveAssociationsMixin,
+  HasManySetAssociationsMixin,
+  HasManyCreateAssociationMixin
+} from 'sequelize';
 import { sequelize } from '../lib/sequelize';
 import Event from './Event';
+import type Participant from './Participant';
+import type Accreditation from './Accreditation';
 
 class EventSchedule extends Model {
   declare public id: string;
@@ -14,6 +42,34 @@ class EventSchedule extends Model {
 
   declare public readonly createdAt: Date;
   declare public readonly updatedAt: Date;
+
+  // Mixins for Event
+  declare public getEvent: BelongsToGetAssociationMixin<Event>;
+  declare public setEvent: BelongsToSetAssociationMixin<Event, string>;
+  declare public createEvent: BelongsToCreateAssociationMixin<Event>;
+
+  // Mixins for Participant
+  declare public getParticipants: BelongsToManyGetAssociationsMixin<Participant>;
+  declare public addParticipant: BelongsToManyAddAssociationMixin<Participant, string>;
+  declare public addParticipants: BelongsToManyAddAssociationsMixin<Participant, string>;
+  declare public setParticipants: BelongsToManySetAssociationsMixin<Participant, string>;
+  declare public removeParticipant: BelongsToManyRemoveAssociationMixin<Participant, string>;
+  declare public removeParticipants: BelongsToManyRemoveAssociationsMixin<Participant, string>;
+  declare public hasParticipant: BelongsToManyHasAssociationMixin<Participant, string>;
+  declare public hasParticipants: BelongsToManyHasAssociationsMixin<Participant, string>;
+  declare public countParticipants: BelongsToManyCountAssociationsMixin;
+
+  // Mixins for Accreditation
+  declare public getAccreditations: HasManyGetAssociationsMixin<Accreditation>;
+  declare public addAccreditation: HasManyAddAssociationMixin<Accreditation, string>;
+  declare public addAccreditations: HasManyAddAssociationsMixin<Accreditation, string>;
+  declare public setAccreditations: HasManySetAssociationsMixin<Accreditation, string>;
+  declare public removeAccreditation: HasManyRemoveAssociationMixin<Accreditation, string>;
+  declare public removeAccreditations: HasManyRemoveAssociationsMixin<Accreditation, string>;
+  declare public hasAccreditation: HasManyHasAssociationMixin<Accreditation, string>;
+  declare public hasAccreditations: HasManyHasAssociationsMixin<Accreditation, string>;
+  declare public countAccreditations: HasManyCountAssociationsMixin;
+  declare public createAccreditation: HasManyCreateAssociationMixin<Accreditation>;
 }
 
 EventSchedule.init(

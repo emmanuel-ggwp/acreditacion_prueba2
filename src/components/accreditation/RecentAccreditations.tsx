@@ -1,13 +1,36 @@
 'use client';
 
-import React, { useEffect } from 'react';
-import useAccreditationStore from '@/store/accreditationStore';
+import React, { useEffect, useRef } from 'react';
+import useAccreditationStore, { RichAccreditation } from '@/store/accreditationStore';
 import { UserCheck, Clock } from 'lucide-react';
 import { TransitionGroup, CSSTransition } from 'react-transition-group';
 
 interface RecentAccreditationsProps {
   eventId: string;
 }
+
+const AccreditationItem = ({ acc, ...props }: { acc: RichAccreditation } & any) => {
+  const nodeRef = useRef(null);
+  return (
+    <CSSTransition
+      nodeRef={nodeRef}
+      {...props}
+    >
+      <div ref={nodeRef} className="flex items-start p-3 bg-gray-50 rounded-md">
+        <UserCheck className="h-6 w-6 text-green-500 mr-4 mt-1" />
+        <div>
+          <p className="font-semibold">
+            {acc.Participant?.firstName || acc.Guest?.firstName} {acc.Participant?.lastName || acc.Guest?.lastName}
+          </p>
+          <p className="text-sm text-gray-500 flex items-center">
+            <Clock size={14} className="mr-1" />
+            {new Date(acc.checkInTime).toLocaleTimeString()} by {acc.accreditedByUser?.firstName}
+          </p>
+        </div>
+      </div>
+    </CSSTransition>
+  );
+};
 
 const RecentAccreditations: React.FC<RecentAccreditationsProps> = ({ eventId }) => {
   const { accreditations, fetchAccreditations } = useAccreditationStore();
@@ -16,7 +39,7 @@ const RecentAccreditations: React.FC<RecentAccreditationsProps> = ({ eventId }) 
     if (eventId) {
       const interval = setInterval(() => {
         fetchAccreditations(eventId, 1, 10);
-      }, 5000); // Refresh every 5 seconds
+      }, 10000); // Refresh every 5 seconds
       
       // Initial fetch
       fetchAccreditations(eventId, 1, 10);
@@ -31,24 +54,12 @@ const RecentAccreditations: React.FC<RecentAccreditationsProps> = ({ eventId }) 
       <div className="space-y-4 h-96 overflow-y-auto">
         <TransitionGroup>
           {accreditations.map(acc => (
-            <CSSTransition
+            <AccreditationItem
               key={acc.id}
+              acc={acc}
               timeout={500}
               classNames="accreditation-item"
-            >
-              <div className="flex items-start p-3 bg-gray-50 rounded-md">
-                <UserCheck className="h-6 w-6 text-green-500 mr-4 mt-1" />
-                <div>
-                  <p className="font-semibold">
-                    {acc.Participant?.firstName || acc.Guest?.firstName} {acc.Participant?.lastName || acc.Guest?.lastName}
-                  </p>
-                  <p className="text-sm text-gray-500 flex items-center">
-                    <Clock size={14} className="mr-1" />
-                    {new Date(acc.checkInTime).toLocaleTimeString()} by {acc.accreditedByUser?.firstName}
-                  </p>
-                </div>
-              </div>
-            </CSSTransition>
+            />
           ))}
         </TransitionGroup>
         {accreditations.length === 0 && (

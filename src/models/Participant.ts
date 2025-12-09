@@ -1,7 +1,32 @@
 
-import { Model, DataTypes, UUIDV4 } from 'sequelize';
+import { 
+  Model, 
+  DataTypes, 
+  UUIDV4, 
+  BelongsToManyAddAssociationMixin, 
+  BelongsToManyAddAssociationsMixin, 
+  BelongsToManyCountAssociationsMixin, 
+  BelongsToManyGetAssociationsMixin, 
+  BelongsToManyHasAssociationMixin, 
+  BelongsToManyHasAssociationsMixin, 
+  BelongsToManyRemoveAssociationMixin, 
+  BelongsToManyRemoveAssociationsMixin, 
+  BelongsToManySetAssociationsMixin,
+  HasManyAddAssociationMixin,
+  HasManyAddAssociationsMixin,
+  HasManyCountAssociationsMixin,
+  HasManyGetAssociationsMixin,
+  HasManyHasAssociationMixin,
+  HasManyHasAssociationsMixin,
+  HasManyRemoveAssociationMixin,
+  HasManyRemoveAssociationsMixin,
+  HasManySetAssociationsMixin,
+  HasManyCreateAssociationMixin
+} from 'sequelize';
 import { sequelize } from '../lib/sequelize';
 import User from './User';
+import EventSchedule from './EventSchedule';
+import type Guest from './Guest';
 
 class Participant extends Model {
   declare public id: string;
@@ -17,6 +42,32 @@ class Participant extends Model {
 
   declare public readonly createdAt: Date;
   declare public readonly updatedAt: Date;
+
+  // Association Mixins
+  declare public addEventSchedule: BelongsToManyAddAssociationMixin<EventSchedule, string>;
+  declare public addEventSchedules: BelongsToManyAddAssociationsMixin<EventSchedule, string>;
+  declare public getEventSchedules: BelongsToManyGetAssociationsMixin<EventSchedule>;
+  declare public hasEventSchedule: BelongsToManyHasAssociationMixin<EventSchedule, string>;
+  declare public hasEventSchedules: BelongsToManyHasAssociationsMixin<EventSchedule, string>;
+  declare public removeEventSchedule: BelongsToManyRemoveAssociationMixin<EventSchedule, string>;
+  declare public removeEventSchedules: BelongsToManyRemoveAssociationsMixin<EventSchedule, string>;
+  declare public setEventSchedules: BelongsToManySetAssociationsMixin<EventSchedule, string>;
+  declare public countEventSchedules: BelongsToManyCountAssociationsMixin;
+
+  declare public EventSchedules?: EventSchedule[];
+  declare public guests?: Guest[];
+
+  // Mixins for Guest
+  declare public getGuests: HasManyGetAssociationsMixin<Guest>;
+  declare public addGuest: HasManyAddAssociationMixin<Guest, string>;
+  declare public addGuests: HasManyAddAssociationsMixin<Guest, string>;
+  declare public setGuests: HasManySetAssociationsMixin<Guest, string>;
+  declare public removeGuest: HasManyRemoveAssociationMixin<Guest, string>;
+  declare public removeGuests: HasManyRemoveAssociationsMixin<Guest, string>;
+  declare public hasGuest: HasManyHasAssociationMixin<Guest, string>;
+  declare public hasGuests: HasManyHasAssociationsMixin<Guest, string>;
+  declare public countGuests: HasManyCountAssociationsMixin;
+  declare public createGuest: HasManyCreateAssociationMixin<Guest>;
 }
 
 Participant.init(

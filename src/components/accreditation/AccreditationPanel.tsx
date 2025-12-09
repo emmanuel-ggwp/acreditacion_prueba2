@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import useEventStore from '@/store/eventStore';
 import useAccreditationStore from '@/store/accreditationStore';
 import EventSchedule from '@/models/EventSchedule';
@@ -11,17 +11,30 @@ import CapacityIndicator from './CapacityIndicator';
 import Participant from '@/models/Participant';
 import Guest from '@/models/Guest';
 
-const AccreditationPanel = () => {
-  const { events, fetchEvents, schedules, fetchSchedulesForEvent } = useEventStore();
+interface AccreditationPanelProps {
+  eventId?: string;
+  scheduleId?: string;
+}
+
+const AccreditationPanel = ({ eventId, scheduleId }: AccreditationPanelProps) => {
+  const { searchedSchedules, searchSchedules, EventSchedules, fetchSchedulesForEvent } = useEventStore();
   const { lastAccreditation, getAccreditationStats, totalAccreditations, accreditationsToday } = useAccreditationStore();
   
-  const [selectedEventId, setSelectedEventId] = useState<string>('');
-  const [selectedScheduleId, setSelectedScheduleId] = useState<string>('');
+  const [selectedEventId, setSelectedEventId] = useState<string>(eventId || '');
+  const [selectedScheduleId, setSelectedScheduleId] = useState<string>(scheduleId || '');
   const [selectedPerson, setSelectedPerson] = useState<{ type: 'participant' | 'guest', data: Participant | Guest } | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [searchAll, setSearchAll] = useState(false);
 
   useEffect(() => {
-    fetchEvents(1, 100); // Fetch all events
-  }, [fetchEvents]);
+    if (eventId) setSelectedEventId(eventId);
+    if (scheduleId) setSelectedScheduleId(scheduleId);
+  }, [eventId, scheduleId]);
+
+  useEffect(() => {
+    searchSchedules('', searchAll); // Fetch default schedules (yesterday, today, tomorrow)
+  }, [searchSchedules, searchAll]);
 
   useEffect(() => {
     if (selectedEventId) {
@@ -30,23 +43,63 @@ const AccreditationPanel = () => {
     }
   }, [selectedEventId, fetchSchedulesForEvent, getAccreditationStats]);
 
-  const handleEventChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const eventId = e.target.value;
-    setSelectedEventId(eventId);
-    setSelectedScheduleId('');
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setSearchTerm(value);
+    if (!eventId) {
+      searchSchedules(value, searchAll);
+    }
+    setShowDropdown(true);
+  };
+
+  const handleSearchAllChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const checked = e.target.checked;
+    setSearchAll(checked);
+    if (!eventId) {
+      searchSchedules(searchTerm, checked);
+    }
+  };
+
+  const filteredSchedules = useMemo(() => {
+    if (eventId) {
+      if (!searchTerm) return EventSchedules;
+      return EventSchedules.filter(s => s.scheduleName.toLowerCase().includes(searchTerm.toLowerCase()));
+    }
+    return searchedSchedules;
+  }, [eventId, EventSchedules, searchedSchedules, searchTerm]);
+
+  const handleScheduleSelect = (schedule: EventSchedule) => {
+    setSelectedScheduleId(schedule.id);
+    setSelectedEventId(schedule.eventId);
+    setSearchTerm(schedule.scheduleName);
+    setShowDropdown(false);
     setSelectedPerson(null);
   };
 
-  const handleScheduleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    setSelectedScheduleId(e.target.value);
-    setSelectedPerson(null);
-  };
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (filteredSchedules.length === 1) {
+        const schedule = filteredSchedules[0];
+        if (selectedScheduleId !== schedule.id) {
+          handleScheduleSelect(schedule);
+        }
+      }
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [filteredSchedules, selectedScheduleId]);
 
   const handlePersonSelect = (person: { type: 'participant' | 'guest', data: Participant | Guest }) => {
     setSelectedPerson(person);
   };
 
-  const selectedSchedule = schedules.find((s: EventSchedule) => s.id === selectedScheduleId);
+  const selectedSchedule = EventSchedules.find((s: EventSchedule) => s.id === selectedScheduleId) || searchedSchedules.find((s: EventSchedule) => s.id === selectedScheduleId);
+
+  useEffect(() => {
+    if (selectedSchedule && !searchTerm) {
+      setSearchTerm(selectedSchedule.scheduleName);
+    }
+  }, [selectedSchedule, searchTerm]);
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 p-8 bg-gray-50 min-h-screen">
@@ -54,36 +107,55 @@ const AccreditationPanel = () => {
       <div className="lg:col-span-2 bg-white p-6 rounded-lg shadow-md">
         <h1 className="text-3xl font-bold mb-6">Accreditation</h1>
         
-        {/* Event and Schedule Selectors */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-          <div>
-            <label htmlFor="event-select" className="block text-sm font-medium text-gray-700">Event</label>
-            <select
-              id="event-select"
-              value={selectedEventId}
-              onChange={handleEventChange}
-              className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
-            >
-              <option value="">Select an Event</option>
-              {events.map(event => (
-                <option key={event.id} value={event.id}>{event.name}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label htmlFor="schedule-select" className="block text-sm font-medium text-gray-700">Schedule</label>
-            <select
-              id="schedule-select"
-              value={selectedScheduleId}
-              onChange={handleScheduleChange}
-              disabled={!selectedEventId}
-              className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
-            >
-              <option value="">Select a Schedule</option>
-              {schedules.map(schedule => (
-                <option key={schedule.id} value={schedule.id}>{schedule.scheduleName}</option>
-              ))}
-            </select>
+        {/* Schedule Search Input */}
+        <div className="mb-6 relative">
+          <label htmlFor="schedule-search" className="block text-sm font-medium text-gray-700">Search Schedule</label>
+          <div className="flex items-center gap-4">
+            <div className="relative flex-grow">
+                <input
+                    id="schedule-search"
+                    type="text"
+                    value={searchTerm}
+                    onChange={handleSearchChange}
+                    onFocus={() => {
+                        if (!searchTerm) searchSchedules('', searchAll);
+                        setShowDropdown(true);
+                    }}
+                    onBlur={() => setTimeout(() => setShowDropdown(false), 200)}
+                    placeholder="Type to search schedules..."
+                    className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md border"
+                />
+                {showDropdown && filteredSchedules.length > 0 && (
+                    <div className="absolute z-10 mt-1 w-full bg-white shadow-lg max-h-60 rounded-md py-1 text-base ring-1 ring-black ring-opacity-5 overflow-auto focus:outline-none sm:text-sm">
+                    {filteredSchedules.map((schedule) => (
+                        <div
+                        key={schedule.id}
+                        className="cursor-pointer select-none relative py-2 pl-3 pr-9 hover:bg-indigo-600 hover:text-white border-b last:border-b-0"
+                        onClick={() => handleScheduleSelect(schedule)}
+                        >
+                        <span className="block truncate font-medium">{schedule.scheduleName} </span>
+                        <span className="block truncate text-xs text-gray-500 hover:text-gray-200">
+                            {new Date(schedule.startDateTime).toLocaleDateString()} - {(schedule as any).Event?.name}
+                        </span>
+                        </div>
+                    ))}
+                    </div>
+                )}
+            </div>
+            {!eventId && (
+              <div className="flex items-center mt-1">
+                  <input
+                      id="search-all-checkbox"
+                      type="checkbox"
+                      checked={searchAll}
+                      onChange={handleSearchAllChange}
+                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                  />
+                  <label htmlFor="search-all-checkbox" className="ml-2 block text-sm text-gray-900">
+                      Search all events
+                  </label>
+              </div>
+            )}
           </div>
         </div>
 

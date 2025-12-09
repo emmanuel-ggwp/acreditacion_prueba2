@@ -92,11 +92,11 @@ const ParticipantCard: React.FC<ParticipantCardProps> = ({ person, type, schedul
         </div>
       </div>
 
-      {isParticipant && (participant as any).guests && (participant as any).guests.length > 0 && (
+      {isParticipant && participant?.guests && participant.guests.length > 0 && (
         <div className="p-6 border-t">
           <h3 className="font-semibold text-lg mb-3">Guests</h3>
           <div className="space-y-2">
-            {(participant as any).guests.map((g: Guest) => (
+            {participant.guests.map((g) => (
               <div key={g.id} className="flex items-center justify-between bg-gray-50 p-3 rounded-md">
                 <span>{g.firstName} {g.lastName}</span>
                 <input 

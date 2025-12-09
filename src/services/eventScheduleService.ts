@@ -1,8 +1,6 @@
 import { z } from 'zod';
 import { Op, fn, col } from 'sequelize';
-import Event from '@/models/Event';
-import EventSchedule from '@/models/EventSchedule';
-import Accreditation from '@/models/Accreditation';
+import { Event, EventSchedule, Accreditation } from '@/models/index';
 import { createScheduleSchema, updateScheduleSchema } from '@/utils/validators/eventSchemas';
 
 export class EventScheduleService {
@@ -73,7 +71,7 @@ export class EventScheduleService {
       attributes: {
         include: [[fn('COUNT', col('Accreditations.id')), 'accreditedCount']],
       },
-      group: ['EventSchedule.id'],
+      group: ['id'],
       order: [['startDateTime', 'ASC']],
     });
     return schedules;
@@ -94,6 +92,29 @@ export class EventScheduleService {
     const accreditedCount = await Accreditation.count({ where: { eventScheduleId: scheduleId } });
     
     return capacity - accreditedCount;
+  }
+
+  async searchSchedules(query: { name?: string, startDate?: Date, endDate?: Date }) {
+    const where: any = {};
+    
+    if (query.name) {
+      where.scheduleName = { [Op.iLike]: `%${query.name}%` };
+    }
+
+    if (query.startDate && query.endDate) {
+        where.startDateTime = {
+            [Op.between]: [query.startDate, query.endDate]
+        };
+    } else if (query.startDate) {
+        where.startDateTime = { [Op.gte]: query.startDate };
+    }
+
+    return await EventSchedule.findAll({
+      where,
+      include: [{ model: Event, attributes: ['name'] }],
+      order: [['startDateTime', 'ASC']],
+      limit: 50
+    });
   }
 }
 

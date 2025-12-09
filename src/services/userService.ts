@@ -1,5 +1,5 @@
 
-import User from "@/models/User";
+import { User } from "@/models";
 
 export class UserService {
     async getUserById(userId: string) {

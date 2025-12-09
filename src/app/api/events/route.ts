@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { withAuth } from '@/middleware/auth';
 import { createEventSchema, eventFilterSchema } from '@/utils/validators/eventSchemas';
 import { eventService } from '@/services/eventService';
+import { eventScheduleService } from '@/services/eventScheduleService';
 import { AuthenticatedRequest } from '@/types/auth';
 import { ROLES } from '@/utils/constants';
 
@@ -26,6 +27,20 @@ export const POST = withAuth(async (req: AuthenticatedRequest) => {
 export const GET = withAuth(async (req: AuthenticatedRequest) => {
   try {
     const { searchParams } = new URL(req.url);
+
+    if (searchParams.get('mode') === 'schedules') {
+        const name = searchParams.get('name') || undefined;
+        const from = searchParams.get('from');
+        const to = searchParams.get('to');
+        
+        const schedules = await eventScheduleService.searchSchedules({
+            name,
+            startDate: from ? new Date(from) : undefined,
+            endDate: to ? new Date(to) : undefined
+        });
+        return NextResponse.json({ schedules });
+    }
+
     const filters = Object.fromEntries(searchParams.entries());
     const validatedFilters = eventFilterSchema.parse(filters);
     

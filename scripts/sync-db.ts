@@ -1,14 +1,16 @@
 import { sequelize } from '../src/lib/sequelize';
-import User from '../src/models/User';
-import Event from '../src/models/Event';
-import EventSchedule from '../src/models/EventSchedule';
-import Participant from '../src/models/Participant';
-import Guest from '../src/models/Guest';
-import Award from '../src/models/Award';
-import ParticipantAward from '../src/models/ParticipantAward';
-import Accreditation from '../src/models/Accreditation';
-import RefreshToken from '../src/models/RefreshToken';
-import AuditLog from '../src/models/AuditLog';
+import {
+  User,
+  Event,
+  EventSchedule,
+  Participant,
+  Guest,
+  Award,
+  ParticipantAward,
+  Accreditation,
+  RefreshToken,
+  AuditLog
+} from '../src/models/index';
 
 const syncDB = async () => {
   try {

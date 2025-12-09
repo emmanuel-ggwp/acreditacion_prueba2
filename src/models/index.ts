@@ -10,6 +10,7 @@ import Award from './Award';
 import ParticipantAward from './ParticipantAward';
 import Accreditation from './Accreditation';
 import RefreshToken from './RefreshToken';
+import AuditLog from './AuditLog';
 
 // Define associations here to avoid circular dependencies
 Participant.belongsToMany(EventSchedule, { through: ParticipantSchedule, foreignKey: 'participantId' });
@@ -25,5 +26,6 @@ export {
   Award,
   ParticipantAward,
   Accreditation,
-  RefreshToken
+  RefreshToken,
+  AuditLog
 };

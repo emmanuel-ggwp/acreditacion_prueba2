@@ -2,8 +2,8 @@ import { RateLimiterMemory } from 'rate-limiter-flexible';
 import { NextRequest, NextResponse } from 'next/server';
 
 const rateLimiter = new RateLimiterMemory({
-  points: 10, // 10 requests
-  duration: 60, // per 60 seconds by IP
+  points: 1000, // 10 requests
+  duration: 6, // per 60 seconds by IP
 });
 
 export async function rateLimitMiddleware(request: NextRequest) {

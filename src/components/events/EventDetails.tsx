@@ -5,27 +5,29 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import useEventStore from '@/store/eventStore';
-import { Calendar, Clock, Users, Award, BarChart2, Save, Edit2, X } from 'lucide-react';
+import { Calendar, Clock, Users, Award, BarChart2, Save, Edit2, X, UserCheck } from 'lucide-react';
 import ScheduleList from '@/components/events/ScheduleList';
+import ParticipantList from '@/components/participants/ParticipantList';
+import AccreditationPanel from '@/components/accreditation/AccreditationPanel';
+import EventReport from '@/components/reports/EventReport';
 import { createEventSchema, updateEventSchema } from '@/utils/validators/eventSchemas';
 import toast from 'react-hot-toast';
 import { useRouter } from 'next/navigation';
+import { isToday, isYesterday, isTomorrow } from 'date-fns';
 
 // Placeholders for other components
-const ParticipantsTab = () => <div>Participants Management</div>;
 const AwardsTab = () => <div>Awards Management</div>;
-const ReportsTab = () => <div>Event Reports</div>;
 
 interface EventDetailsProps {
   eventId?: string;
 }
 
-type Tab = 'info' | 'schedules' | 'participants' | 'awards' | 'reports';
+type Tab = 'info' | 'schedules' | 'participants' | 'awards' | 'reports' | 'accreditation';
 type EventFormData = z.infer<typeof createEventSchema>;
 
 const EventDetails: React.FC<EventDetailsProps> = ({ eventId }) => {
   const router = useRouter();
-  const { currentEvent, fetchEventById, createEvent, updateEvent, loading } = useEventStore();
+  const { currentEvent, fetchEventById, createEvent, updateEvent, loading, EventSchedules, fetchSchedulesForEvent } = useEventStore();
   const [activeTab, setActiveTab] = useState<Tab>('info');
   const [isEditMode, setIsEditMode] = useState(!eventId);
 
@@ -41,7 +43,7 @@ const EventDetails: React.FC<EventDetailsProps> = ({ eventId }) => {
       name: '',
       description: '',
       location: '',
-      maxCapacity: null,
+      maxCapacity: 0,
       allowGuests: true,
       maxGuestsPerParticipant: 0,
     }
@@ -52,10 +54,11 @@ const EventDetails: React.FC<EventDetailsProps> = ({ eventId }) => {
   useEffect(() => {
     if (eventId) {
       fetchEventById(eventId);
+      fetchSchedulesForEvent(eventId);
     } else {
       setIsEditMode(true);
     }
-  }, [eventId, fetchEventById]);
+  }, [eventId, fetchEventById, fetchSchedulesForEvent]);
 
   useEffect(() => {
     if (eventId && currentEvent) {
@@ -63,7 +66,7 @@ const EventDetails: React.FC<EventDetailsProps> = ({ eventId }) => {
         name: currentEvent.name,
         description: currentEvent.description || '',
         location: currentEvent.location || '',
-        maxCapacity: currentEvent.maxCapacity,
+        maxCapacity: currentEvent.maxCapacity || 0,
         allowGuests: currentEvent.allowGuests,
         maxGuestsPerParticipant: currentEvent.maxGuestsPerParticipant,
       });
@@ -89,6 +92,13 @@ const EventDetails: React.FC<EventDetailsProps> = ({ eventId }) => {
     }
   };
 
+  const hasActiveSchedule = React.useMemo(() => {
+    return EventSchedules.some(schedule => {
+      const date = new Date(schedule.startDateTime);
+      return isToday(date) || isYesterday(date) || isTomorrow(date);
+    });
+  }, [EventSchedules]);
+
   if (loading && eventId && !currentEvent) {
     return <div className="text-center p-10">Loading event details...</div>;
   }
@@ -97,6 +107,8 @@ const EventDetails: React.FC<EventDetailsProps> = ({ eventId }) => {
     return <div className="text-center p-10 text-red-500">Event not found.</div>;
   }
 
+  
+
   const tabs: { id: Tab; label: string; icon: React.ElementType }[] = [
     { id: 'info', label: 'Info', icon: Calendar },
     { id: 'schedules', label: 'Schedules', icon: Clock },
@@ -104,6 +116,10 @@ const EventDetails: React.FC<EventDetailsProps> = ({ eventId }) => {
     { id: 'awards', label: 'Awards', icon: Award },
     { id: 'reports', label: 'Reports', icon: BarChart2 },
   ];
+
+  if (hasActiveSchedule) {
+    tabs.push({ id: 'accreditation', label: 'Accreditation', icon: UserCheck });
+  }
 
   const renderTabContent = () => {
     switch (activeTab) {
@@ -170,14 +186,12 @@ const EventDetails: React.FC<EventDetailsProps> = ({ eventId }) => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Max Capacity (optional)</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Max Capacity</label>
                   {isEditMode ? (
                     <>
                       <input
                         type="number"
-                        {...register('maxCapacity', { 
-                          setValueAs: (v) => (v === '' || v === null ? null : parseInt(v, 10))
-                        })}
+                        {...register('maxCapacity')}
                         placeholder="Leave empty for unlimited"
                         className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2.5 border"
                       />
@@ -245,11 +259,13 @@ const EventDetails: React.FC<EventDetailsProps> = ({ eventId }) => {
       case 'schedules':
         return eventId ? <ScheduleList eventId={eventId} /> : <div className="p-6 text-center text-gray-500">Save the event to manage schedules.</div>;
       case 'participants':
-        return eventId ? <ParticipantsTab /> : <div className="p-6 text-center text-gray-500">Save the event to manage participants.</div>;
+        return eventId ? <ParticipantList eventId={eventId} /> : <div className="p-6 text-center text-gray-500">Save the event to manage participants.</div>;
       case 'awards':
         return eventId ? <AwardsTab /> : <div className="p-6 text-center text-gray-500">Save the event to manage awards.</div>;
       case 'reports':
-        return eventId ? <ReportsTab /> : <div className="p-6 text-center text-gray-500">Save the event to view reports.</div>;
+        return eventId ? <EventReport eventId={eventId} /> : <div className="p-6 text-center text-gray-500">Save the event to view reports.</div>;
+      case 'accreditation':
+        return eventId ? <AccreditationPanel eventId={eventId} /> : null;
       default:
         return null;
     }

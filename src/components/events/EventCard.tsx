@@ -8,7 +8,8 @@ import Event from '@/models/Event';
 import RoleGuard from '../auth/RoleGuard';
 import { ROLES } from '@/utils/constants';
 import useEventStore from '@/store/eventStore';
-import { formatCapacity } from '@/utils/formatters';
+import { formatCapacity, formatEventDate } from '@/utils/formatters';
+import { EventStatusBadge } from './EventStatusBadge';
 
 interface EventCardProps {
   event: Event & { participantCount?: number; accreditedCount?: number };
@@ -24,17 +25,25 @@ const EventCard: React.FC<EventCardProps> = ({ event }) => {
   };
 
   // Assuming event dates are stored in schedules. For simplicity, we'll show created date.
-  const eventDate = event.schedules && event.schedules.length > 0
-    ? `${format(new Date(event.schedules[0].startDateTime), 'MMM dd, yyyy')} - ${format(new Date(event.schedules[event.schedules.length - 1].endDateTime), 'MMM dd, yyyy')}`
-    : 'Date not specified';
+  const startDate = event.EventSchedules?.[0]?.startDateTime;
+  const endDate = event.EventSchedules?.[event.EventSchedules.length - 1]?.endDateTime;
+
+  const eventDate = startDate && endDate
+    ? formatEventDate(startDate, endDate)
+    : 'Fecha no especificada';
 
   return (
     <div className="group bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-all duration-300 flex flex-col h-full">
       <div className="p-6 flex-grow">
         <div className="flex justify-between items-start mb-4">
-          <h3 className="text-lg font-bold text-gray-900 line-clamp-1 group-hover:text-indigo-600 transition-colors">
-            {event.name}
-          </h3>
+          <div className="flex-1 min-w-0 pr-4">
+            <div className="mb-2">
+              <EventStatusBadge startDate={startDate} endDate={endDate} />
+            </div>
+            <h3 className="text-lg font-bold text-gray-900 line-clamp-1 group-hover:text-indigo-600 transition-colors">
+              {event.name}
+            </h3>
+          </div>
           <RoleGuard allowedRoles={[ROLES.ADMIN]}>
             <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
               <Link href={`/events/${event.id}`}>

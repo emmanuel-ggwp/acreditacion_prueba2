@@ -1,7 +1,6 @@
 import { Op } from 'sequelize';
 import { loginSchema, registerSchema } from '@/utils/validators/authSchemas';
-import User from '@/models/User';
-import RefreshToken from '@/models/RefreshToken';
+import { User, RefreshToken } from '@/models/index';
 import { generateTokens, verifyRefreshToken } from '@/lib/jwt';
 import { z } from 'zod';
 import bcrypt from 'bcryptjs';

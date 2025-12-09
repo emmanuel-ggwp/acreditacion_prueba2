@@ -2,12 +2,14 @@
 import { z } from 'zod';
 import { Op, fn, col } from 'sequelize';
 import { sequelize } from '@/lib/sequelize';
-import Participant from '@/models/Participant';
-import Guest from '@/models/Guest';
-import Award from '@/models/Award';
-import Event from '@/models/Event';
-import EventSchedule from '@/models/EventSchedule';
-import Accreditation from '@/models/Accreditation';
+import { 
+  Participant, 
+  Guest, 
+  Award, 
+  Event, 
+  EventSchedule, 
+  Accreditation 
+} from '@/models/index';
 import { createParticipantSchema, updateParticipantSchema, bulkCreateParticipantSchema } from '@/utils/validators/participantSchemas';
 
 export class ParticipantService {
@@ -28,12 +30,19 @@ export class ParticipantService {
     // Check guest limits against the event of the first schedule (assuming all schedules belong to same event or we pick one)
     // Ideally we should check consistency, but for now let's check the first one.
     const event = schedules[0].Event; // Access included Event
-    if (event && participantData.allowedGuests > event.maxGuestsPerParticipant) {
+    if (event && participantData.allowedGuests > event.maxGuestsPerParticipant && event.maxGuestsPerParticipant > 0 && participantData.allowedGuests > 0) {
        throw new Error(`Number of allowed guests exceeds the event limit of ${event.maxGuestsPerParticipant}`);
     }
 
-    // Check if participant exists by email (globally)
-    let participant = await Participant.findOne({ where: { email: participantData.email } });
+    // Check if participant exists by email or documentNumber
+    let participant = await Participant.findOne({
+      where: {
+        [Op.or]: [
+          { email: participantData.email },
+          { documentNumber: participantData.documentNumber }
+        ]
+      }
+    });
 
     if (!participant) {
       participant = await Participant.create({ ...participantData, createdBy });
@@ -46,8 +55,7 @@ export class ParticipantService {
     }
 
     // Add schedules
-    // We need to cast to any because TypeScript might not know about the mixin methods added by Sequelize
-    await (participant as any).addEventSchedules(schedules);
+    await participant.addEventSchedules(schedules);
 
     return participant;
   }
@@ -74,7 +82,7 @@ export class ParticipantService {
     for (const participantData of validatedData) {
         const transaction = await sequelize.transaction();
         try {
-            if (participantData.allowedGuests > event.maxGuestsPerParticipant) {
+            if (participantData.allowedGuests > event.maxGuestsPerParticipant && event.maxGuestsPerParticipant > 0 && participantData.allowedGuests > 0) {
                 throw new Error(`Number of allowed guests exceeds the event limit of ${event.maxGuestsPerParticipant}`);
             }
 
@@ -86,7 +94,7 @@ export class ParticipantService {
             }
 
             // Add to all active schedules of the event
-            await (participant as any).addEventSchedules(schedules, { transaction });
+            await participant.addEventSchedules(schedules, { transaction });
 
             await transaction.commit();
         } catch (error: any) {
@@ -129,7 +137,7 @@ export class ParticipantService {
       include.push({ model: Guest, as: 'guests' });
     }
     if (includeAwards) {
-      include.push({ model: Award, as: 'awards' });
+      // include.push({ model: Award, as: 'awards' });
     }
     // Include schedules to see what they are registered for
     include.push({ model: EventSchedule, through: { attributes: ['attended', 'attendedAt'] } });
@@ -148,23 +156,24 @@ export class ParticipantService {
     const where: any = {};
     
     const include: any[] = [
-        { model: Guest, attributes: [] },
+        { model: Guest, as: 'guests', attributes: [] },
         { 
             model: EventSchedule, 
             where: { eventId }, // This filters the participants to those linked to schedules of this event
             attributes: [],
+            through: { attributes: [] },
             required: true // Inner join
         }
     ];
 
     if (filters.name) {
       where[Op.or] = [
-        { firstName: { [Op.iLike]: `%${filters.name}%` } },
-        { lastName: { [Op.iLike]: `%${filters.name}%` } },
+        { firstName: { [Op.like]: `%${filters.name}%` } },
+        { lastName: { [Op.like]: `%${filters.name}%` } },
       ];
     }
     if (filters.email) {
-      where.email = { [Op.iLike]: `%${filters.email}%` };
+      where.email = { [Op.like]: `%${filters.email}%` };
     }
     
     // Note: Accredited logic might need to change if accreditation is per schedule. 
@@ -191,7 +200,10 @@ export class ParticipantService {
       where,
       include,
       attributes: {
-        include: [[fn('COUNT', col('Guests.id')), 'guestCount']],
+        include: [
+            [fn('COUNT', col('guests.id')), 'guestCount'],
+            [fn('MAX', col('EventSchedules.ParticipantSchedule.attended')), 'accredited']
+        ],
       },
       group: ['Participant.id'],
       order: [['firstName', 'ASC']],
@@ -217,16 +229,17 @@ export class ParticipantService {
     const participants = await Participant.findAll({
       where: {
         [Op.or]: [
-          { firstName: { [Op.iLike]: `%${query}%` } },
-          { lastName: { [Op.iLike]: `%${query}%` } },
-          { email: { [Op.iLike]: `%${query}%` } },
-          { documentNumber: { [Op.iLike]: `%${query}%` } },
+          { firstName: { [Op.like]: `%${query}%` } },
+          { lastName: { [Op.like]: `%${query}%` } },
+          { email: { [Op.like]: `%${query}%` } },
+          { documentNumber: { [Op.like]: `%${query}%` } },
         ],
       },
       include: [{
           model: EventSchedule,
           where: { eventId },
           attributes: [],
+          through: { attributes: [] },
           required: true
       }],
       limit: 10,

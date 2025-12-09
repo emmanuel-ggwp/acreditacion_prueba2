@@ -1,15 +1,19 @@
-import { Op, fn, col, literal, Sequelize } from 'sequelize';
+import { Op, fn, col, literal, Sequelize, QueryTypes } from 'sequelize';
 import { startOfHour, endOfHour, eachHourOfInterval, format, startOfDay, endOfDay, subMinutes, parseISO } from 'date-fns';
 import { stringify } from 'csv-stringify/sync';
+import { sequelize } from '../lib/sequelize';
 
-import Event from '@/models/Event';
-import EventSchedule from '@/models/EventSchedule';
-import Participant from '@/models/Participant';
-import Guest from '@/models/Guest';
-import Accreditation from '@/models/Accreditation';
-import Award from '@/models/Award';
-import ParticipantAward from '@/models/ParticipantAward';
-import User from '@/models/User';
+import { 
+  Event, 
+  EventSchedule, 
+  Participant, 
+  ParticipantSchedule,
+  Guest, 
+  Accreditation, 
+  Award, 
+  ParticipantAward, 
+  User 
+} from '@/models/index';
 
 // Define interfaces for filters to ensure type safety
 interface IAttendanceReportFilters {
@@ -30,81 +34,176 @@ export class ReportService {
     const event = await Event.findByPk(eventId);
     if (!event) throw new Error('Event not found');
 
-    const totalParticipants = await Participant.count({
-      include: [{
-        model: EventSchedule,
-        where: { eventId },
-        required: true
-      }],
-      distinct: true,
-      col: 'id'
+    // 1. Get all schedules for this event
+    const schedules = await EventSchedule.findAll({ where: { eventId } });
+    const scheduleIds = schedules.map(s => s.id);
+
+    if (scheduleIds.length === 0) {
+        return {
+            eventInfo: event,
+            participantStats: { registered: 0, totalAccredited: 0, accredited: 0, accreditedGuests: 0, attendanceRate: 0 },
+            scheduleStats: [],
+            awardStats: { assigned: 0, delivered: 0, deliveryRate: 0, pending: 0 },
+            accreditationTimeline: []
+        };
+    }
+
+    // 2. Batch: Get Accreditation counts per schedule
+    const accreditationCounts = await Accreditation.findAll({
+        attributes: [
+            ['event_schedule_id', 'eventScheduleId'],
+            [fn('COUNT', col('id')), 'total'],
+            [fn('COUNT', col('participant_id')), 'participants'],
+            [fn('COUNT', col('guest_id')), 'guests']
+        ],
+        where: {
+            eventScheduleId: { [Op.in]: scheduleIds }
+        },
+        group: ['event_schedule_id'],
+        raw: true
+    }) as unknown as Array<{ eventScheduleId: string, total: number, participants: number, guests: number }>;
+
+    const accMap = new Map(accreditationCounts.map(a => [a.eventScheduleId, a]));
+
+    // 3. Batch: Get Registered Participants per schedule
+    const registrationCounts = await ParticipantSchedule.findAll({
+        attributes: [
+            ['schedule_id', 'scheduleId'],
+            [fn('COUNT', col('participant_id')), 'count']
+        ],
+        where: {
+            scheduleId: { [Op.in]: scheduleIds }
+        },
+        group: ['schedule_id'],
+        raw: true
+    }) as unknown as Array<{ scheduleId: string, count: number }>;
+
+    const regMap = new Map(registrationCounts.map(r => [r.scheduleId, r.count]));
+
+    // 3b. Batch: Get Registered Guests per schedule
+    const guestRegistrationQuery = `
+        SELECT ps.schedule_id as scheduleId, COUNT(g.id) as count
+        FROM participant_schedules ps
+        INNER JOIN guests g ON ps.participant_id = g.participant_id
+        WHERE ps.schedule_id IN (:scheduleIds)
+        GROUP BY ps.schedule_id
+    `;
+
+    const guestRegistrationCounts = await sequelize.query<{ scheduleId: string; count: number }>(guestRegistrationQuery, {
+        replacements: { scheduleIds },
+        type: QueryTypes.SELECT
     });
-    const accreditedParticipants = await Accreditation.count({
-      where: { participantId: { [Op.ne]: null } },
-      include: [{ model: EventSchedule, where: { eventId }, attributes: [] }]
-    });
-    const accreditedGuests = await Accreditation.count({
-      where: { guestId: { [Op.ne]: null } },
-      include: [{ model: EventSchedule, where: { eventId }, attributes: [] }]
+    
+    const guestRegMap = new Map(guestRegistrationCounts.map(r => [r.scheduleId, r.count]));
+
+    // 4. Batch: Get Awards Delivered per schedule
+    const awardsQuery = `
+        SELECT ps.schedule_id as scheduleId, COUNT(pa.id) as count
+        FROM participant_schedules ps
+        INNER JOIN participant_awards pa ON ps.participant_id = pa.participant_id
+        INNER JOIN awards a ON pa.award_id = a.id
+        WHERE ps.schedule_id IN (:scheduleIds)
+          AND a.event_id = :eventId
+          AND pa.delivered_at IS NOT NULL
+        GROUP BY ps.schedule_id
+    `;
+    
+    const awardsCounts = await sequelize.query<{ scheduleId: string; count: number }>(awardsQuery, {
+        replacements: { scheduleIds, eventId },
+        type: QueryTypes.SELECT
     });
 
-    const schedules = await EventSchedule.findAll({ where: { eventId } });
-    const scheduleDetails = await Promise.all(schedules.map(async (s: EventSchedule) => {
-      const capacity = s.maxCapacity ?? event.maxCapacity ?? 0;
-      const accreditedCount = await Accreditation.count({ where: { eventScheduleId: s.id } });
-      const participantCount = await Accreditation.count({ where: { eventScheduleId: s.id, participantId: { [Op.ne]: null } } });
-      const guestCount = await Accreditation.count({ where: { eventScheduleId: s.id, guestId: { [Op.ne]: null } } });
-      return {
-        scheduleName: s.scheduleName,
-        startDateTime: s.startDateTime,
-        endDateTime: s.endDateTime,
-        capacity,
-        accreditedTotal: accreditedCount,
-        accreditedParticipants: participantCount,
-        accreditedGuests: guestCount,
-        capacityUsedPercentage: capacity > 0 ? (accreditedCount / capacity) * 100 : 0,
-      };
-    }));
+    const awardMap = new Map(awardsCounts.map(a => [a.scheduleId, a.count]));
+
+    // 5. Build Schedule Details
+    const scheduleDetails = schedules.map(s => {
+        const accData = accMap.get(s.id) || { total: 0, participants: 0, guests: 0 };
+        const registeredParticipants = regMap.get(s.id) || 0;
+        const registeredGuests = guestRegMap.get(s.id) || 0;
+        const registeredTotal = registeredParticipants + registeredGuests;
+        const awardsDelivered = awardMap.get(s.id) || 0;
+        const capacity = s.maxCapacity ?? event.maxCapacity ?? 0;
+
+        return {
+            scheduleName: s.scheduleName,
+            startDateTime: s.startDateTime,
+            endDateTime: s.endDateTime,
+            capacity,
+            registered: registeredTotal,
+            registeredTotal,
+            registeredParticipants,
+            registeredGuests,
+            accreditedTotal: accData.total,
+            accreditedParticipants: accData.participants,
+            accreditedGuests: accData.guests,
+            awardsDelivered,
+            capacityUsedPercentage: capacity > 0 ? (accData.total / capacity) * 100 : 0,
+        };
+    });
+
+    // 6. Event Level Stats
+    const totalParticipants = await Participant.count({
+        include: [{
+            model: EventSchedule,
+            where: { eventId },
+            required: true
+        }],
+        distinct: true,
+        col: 'id'
+    });
+
+    const totalAccreditedParticipants = scheduleDetails.reduce((sum, s) => sum + (s.accreditedParticipants as number), 0);
+    const totalAccreditedGuests = scheduleDetails.reduce((sum, s) => sum + (s.accreditedGuests as number), 0);
 
     const awardsAssigned = await ParticipantAward.count({ include: [{ model: Award, where: { eventId }, attributes: [] }] });
-    const awardsDelivered = await ParticipantAward.count({
+    const awardsDeliveredTotal = await ParticipantAward.count({
       where: { deliveredAt: { [Op.ne]: null } },
       include: [{ model: Award, where: { eventId }, attributes: [] }]
     });
 
+    // 7. Timeline
     const accreditations = await Accreditation.findAll({
-        include: [{ model: EventSchedule, where: { eventId }, attributes: ['startDateTime', 'endDateTime'] }],
-        order: [['checkInTime', 'ASC']]
+        attributes: ['checkInTime'],
+        include: [{ model: EventSchedule, where: { eventId }, attributes: [] }],
+        order: [['checkInTime', 'ASC']],
+        raw: true
     });
 
-    const firstAccreditation = accreditations[0];
-    const lastAccreditation = accreditations[accreditations.length - 1];
     let accreditationTimeline: { hour: string, count: number }[] = [];
-    if(firstAccreditation && lastAccreditation) {
-        const interval = { start: startOfHour(firstAccreditation.checkInTime), end: endOfHour(lastAccreditation.checkInTime) };
-        accreditationTimeline = eachHourOfInterval(interval).map(hour => ({
-            hour: format(hour, 'yyyy-MM-dd HH:mm'),
-            count: 0
-        }));
-        accreditations.forEach((acc: Accreditation) => {
-            const hourIndex = accreditationTimeline.findIndex(t => t.hour === format(startOfHour(acc.checkInTime), 'yyyy-MM-dd HH:mm'));
-            if(hourIndex !== -1) accreditationTimeline[hourIndex].count++;
+    if (accreditations.length > 0) {
+        const firstTime = accreditations[0].checkInTime;
+        const lastTime = accreditations[accreditations.length - 1].checkInTime;
+        
+        const hourMap = new Map<string, number>();
+        
+        const interval = eachHourOfInterval({ start: startOfHour(firstTime), end: endOfHour(lastTime) });
+        interval.forEach(d => hourMap.set(format(d, 'yyyy-MM-dd HH:mm'), 0));
+
+        accreditations.forEach((acc) => {
+            const key = format(startOfHour(acc.checkInTime), 'yyyy-MM-dd HH:mm');
+            if (hourMap.has(key)) {
+                hourMap.set(key, (hourMap.get(key) || 0) + 1);
+            }
         });
+
+        accreditationTimeline = Array.from(hourMap.entries()).map(([hour, count]) => ({ hour, count }));
     }
 
     return {
       eventInfo: event,
       participantStats: {
         registered: totalParticipants,
-        accreditedTotal: accreditedParticipants + accreditedGuests,
-        accreditedParticipants,
-        accreditedGuests,
+        totalAccredited: totalAccreditedParticipants + totalAccreditedGuests,
+        accredited: totalAccreditedParticipants,
+        accreditedGuests: totalAccreditedGuests,
+        attendanceRate: totalParticipants > 0 ? (totalAccreditedParticipants / totalParticipants) * 100 : 0,
       },
-      scheduleBreakdown: scheduleDetails,
+      scheduleStats: scheduleDetails,
       awardStats: {
         assigned: awardsAssigned,
-        delivered: awardsDelivered,
-        pending: awardsAssigned - awardsDelivered,
+        delivered: awardsDeliveredTotal,
+        deliveryRate: awardsAssigned > 0 ? (awardsDeliveredTotal / awardsAssigned) * 100 : 0,
+        pending: awardsAssigned - awardsDeliveredTotal,
       },
       accreditationTimeline,
     };
@@ -162,7 +261,7 @@ export class ReportService {
       include: [
         { model: EventSchedule, where: scheduleWhere, attributes: ['scheduleName'] },
         { model: Participant, attributes: ['firstName', 'lastName', 'email', 'documentNumber'] },
-        { model: Guest, attributes: ['firstName', 'lastName', 'documentNumber'], include: [{model: Participant, as: 'associatedParticipant', attributes: ['email']}] },
+        { model: Guest, attributes: ['firstName', 'lastName', 'documentNumber'], include: [{model: Participant, as: 'participant', attributes: ['email']}] },
       ],
       order: [['checkInTime', 'ASC']]
     });

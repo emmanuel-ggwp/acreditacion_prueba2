@@ -1,3 +1,9 @@
+Agregar la locacion al schedule tomar por defecto la del event y en caso exista la del schedule tomar esa
+
+Fecha de inscripcion fecha de acreditacion
+
+Participantes con multiples schedules
+
 # TODO List
 
 This file contains a list of errors that need to be addressed.

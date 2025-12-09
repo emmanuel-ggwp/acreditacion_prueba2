@@ -1,5 +1,13 @@
 
-import { Model, DataTypes, UUIDV4, Op } from 'sequelize';
+import { 
+  Model, 
+  DataTypes, 
+  UUIDV4, 
+  Op,
+  BelongsToGetAssociationMixin,
+  BelongsToSetAssociationMixin,
+  BelongsToCreateAssociationMixin
+} from 'sequelize';
 import { sequelize } from '../lib/sequelize';
 import Participant from './Participant';
 import Guest from './Guest';
@@ -19,6 +27,26 @@ class Accreditation extends Model {
 
   declare public readonly createdAt: Date;
   declare public readonly updatedAt: Date;
+
+  // Mixins for Participant
+  declare public getParticipant: BelongsToGetAssociationMixin<Participant>;
+  declare public setParticipant: BelongsToSetAssociationMixin<Participant, string>;
+  declare public createParticipant: BelongsToCreateAssociationMixin<Participant>;
+
+  // Mixins for Guest
+  declare public getGuest: BelongsToGetAssociationMixin<Guest>;
+  declare public setGuest: BelongsToSetAssociationMixin<Guest, string>;
+  declare public createGuest: BelongsToCreateAssociationMixin<Guest>;
+
+  // Mixins for EventSchedule
+  declare public getEventSchedule: BelongsToGetAssociationMixin<EventSchedule>;
+  declare public setEventSchedule: BelongsToSetAssociationMixin<EventSchedule, string>;
+  declare public createEventSchedule: BelongsToCreateAssociationMixin<EventSchedule>;
+
+  // Mixins for User (AccreditedBy)
+  declare public getUser: BelongsToGetAssociationMixin<User>;
+  declare public setUser: BelongsToSetAssociationMixin<User, string>;
+  declare public createUser: BelongsToCreateAssociationMixin<User>;
 }
 
 Accreditation.init(
@@ -126,6 +154,6 @@ EventSchedule.hasMany(Accreditation, { foreignKey: 'eventScheduleId' });
 Accreditation.belongsTo(EventSchedule, { foreignKey: 'eventScheduleId' });
 
 User.hasMany(Accreditation, { foreignKey: 'accreditedBy' });
-Accreditation.belongsTo(User, { foreignKey: 'accreditedBy' });
+Accreditation.belongsTo(User, { foreignKey: 'accreditedBy', as: 'accreditedByUser' });
 
 export default Accreditation;

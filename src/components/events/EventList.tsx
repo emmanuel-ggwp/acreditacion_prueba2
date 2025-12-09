@@ -16,11 +16,11 @@ const EventList = () => {
 
   useEffect(() => {
     // TODO: Adjust fetchEvents to support filtering
-    fetchEvents(1, 10);
+    fetchEvents(1, 10, true);
   }, [fetchEvents, filter]);
 
   const handlePageChange = (newPage: number) => {
-    fetchEvents(newPage, limit);
+    fetchEvents(newPage, limit, true);
   };
 
   const totalPages = Math.ceil(total / limit);

@@ -62,7 +62,7 @@ Guest.init(
 );
 
 // Associations
-Participant.hasMany(Guest, { foreignKey: 'participantId' });
-Guest.belongsTo(Participant, { foreignKey: 'participantId' });
+Participant.hasMany(Guest, { foreignKey: 'participantId', as: 'guests' });
+Guest.belongsTo(Participant, { foreignKey: 'participantId', as: 'participant' });
 
 export default Guest;

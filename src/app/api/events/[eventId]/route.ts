@@ -17,10 +17,14 @@ export const GET = withAuth(async (req: AuthenticatedRequest, { params }: Params
     console.log('Fetching event with ID:', {params});
     const resolvedParams = await params;
     const eventId = resolvedParams.eventId;
+    
+    const { searchParams } = new URL(req.url);
+    const includeSchedules = searchParams.get('includeSchedules') === 'true';
+
     if (!eventId?.length) {
       return NextResponse.json({ message: 'Invalid event ID' }, { status: 400 });
     }
-    const event = await eventService.getEventById(eventId);
+    const event = await eventService.getEventById(eventId, includeSchedules);
     return NextResponse.json(event);
   } catch (error: any) {
     return NextResponse.json({ message: error.message }, { status: 404 });

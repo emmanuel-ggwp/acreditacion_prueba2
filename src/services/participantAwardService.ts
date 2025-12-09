@@ -2,13 +2,15 @@
 import { z } from 'zod';
 import { Op, Transaction } from 'sequelize';
 import { sequelize } from '@/lib/sequelize';
-import ParticipantAward from '@/models/ParticipantAward';
-import Participant from '@/models/Participant';
-import Award from '@/models/Award';
-import EventSchedule from '@/models/EventSchedule';
+import { 
+  ParticipantAward, 
+  Participant, 
+  Award, 
+  EventSchedule, 
+  User, 
+  Event 
+} from '@/models/index';
 import { assignAwardSchema } from '@/utils/validators/awardSchemas';
-import User from '@/models/User';
-import Event from '@/models/Event';
 
 export class ParticipantAwardService {
 

@@ -6,7 +6,7 @@ export const eventSchema = z.object({
   name: z.string().min(3, 'Event name must be at least 3 characters'),
   description: z.string().optional(),
   location: z.string().optional(),
-  maxCapacity: z.number().int().positive().nullable(),
+  maxCapacity: z.number().int().positive(),
   allowGuests: z.boolean().default(true),
   maxGuestsPerParticipant: z.number().int().min(0).default(0),
   isActive: z.boolean().default(true),
@@ -24,7 +24,7 @@ export const scheduleSchema = z.object({
   scheduleName: z.string().min(3, 'Schedule name must be at least 3 characters'),
   startDateTime: z.iso.datetime({ message: 'Invalid start date format' }),
   endDateTime: z.iso.datetime({ message: 'Invalid end date format' }),
-  maxCapacity: z.number().int().positive().nullable(),
+  maxCapacity: z.number().int().positive('Max capacity must be greater than 0'),
   isActive: z.boolean().default(true),
 }).refine(data => new Date(data.endDateTime) > new Date(data.startDateTime), {
   message: 'End date must be after start date',
@@ -37,6 +37,7 @@ export const updateScheduleSchema = createScheduleSchema.partial();
 export const eventFilterSchema = z.object({
   isActive: z.string().transform(val => val === 'true').optional(),
   createdBy: z.guid().optional(),
+  includeSchedules: z.string().transform(val => val === 'true').optional(),
   page: z.string().transform(val => parseInt(val, 10)).optional(),
   limit: z.string().transform(val => parseInt(val, 10)).optional(),
 });

@@ -36,9 +36,9 @@ const ScheduleForm: React.FC<ScheduleFormProps> = ({ eventId, schedule, onClose 
         scheduleName: schedule.scheduleName,
         startDateTime: new Date(schedule.startDateTime).toISOString(),
         endDateTime: new Date(schedule.endDateTime).toISOString(),
-        maxCapacity: schedule.maxCapacity || null,
+        maxCapacity: schedule.maxCapacity || 0,
       }
-      : { eventId },
+      : { eventId, maxCapacity: 0 },
   });
 
   const onSubmit = async (data: ScheduleFormInputs) => {
@@ -126,15 +126,15 @@ const ScheduleForm: React.FC<ScheduleFormProps> = ({ eventId, schedule, onClose 
         </div>
 
         <div>
-          <label htmlFor="maxCapacity" className="block text-sm font-medium text-gray-700 mb-1">Max Capacity (optional)</label>
+          <label htmlFor="maxCapacity" className="block text-sm font-medium text-gray-700 mb-1">Max Capacity</label>
           <input
             type="number"
             id="maxCapacity"
             {...register('maxCapacity', {
-              setValueAs: v => (v === '' || v == null ? null : parseInt(v as string, 10))
+              setValueAs: v => v === '' ? undefined : parseInt(v, 10)
             })}
             className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border"
-            placeholder="Leave empty for unlimited"
+            placeholder="Enter max capacity"
           />
           {errors.maxCapacity && <p className="mt-1 text-sm text-red-500">{errors.maxCapacity.message}</p>}
         </div>

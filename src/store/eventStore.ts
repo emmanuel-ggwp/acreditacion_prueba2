@@ -8,16 +8,18 @@ import { z } from 'zod';
 
 interface EventState {
   events: Event[];
-  schedules: EventSchedule[];
+  EventSchedules: EventSchedule[];
+  searchedSchedules: EventSchedule[];
   currentEvent: Event | null;
   loading: boolean;
   error: string | null;
   total: number;
   page: number;
   limit: number;
-  fetchEvents: (page?: number, limit?: number) => Promise<void>;
+  fetchEvents: (page?: number, limit?: number, includeSchedules?: boolean) => Promise<void>;
   fetchSchedulesForEvent: (eventId: string) => Promise<void>;
-  fetchEventById: (id: string) => Promise<void>;
+  searchSchedules: (query: string, searchAll?: boolean) => Promise<void>;
+  fetchEventById: (id: string, includeSchedules?: boolean) => Promise<void>;
   createEvent: (eventData: z.infer<typeof createEventSchema>) => Promise<Event | void>;
   updateEvent: (id: string, eventData: z.infer<typeof updateEventSchema>) => Promise<void>;
   deleteEvent: (id: string) => Promise<void>;
@@ -31,7 +33,8 @@ const useEventStore = create<EventState>()(
   devtools(
     (set) => ({
       events: [],
-      schedules: [],
+      EventSchedules: [],
+      searchedSchedules: [],
       currentEvent: null,
       loading: false,
       error: null,
@@ -39,10 +42,10 @@ const useEventStore = create<EventState>()(
       page: 1,
       limit: 10,
 
-      fetchEvents: async (page = 1, limit = 10) => {
+      fetchEvents: async (page = 1, limit = 10, includeSchedules = false) => {
         set({ loading: true, error: null });
         try {
-          const response = await apiClient.get<{ events: Event[]; total: number }>(`/api/events?page=${page}&limit=${limit}`);
+          const response = await apiClient.get<{ events: Event[]; total: number }>(`/api/events?page=${page}&limit=${limit}&includeSchedules=${includeSchedules}`);
           set({ events: response.events, total: response.total, page, limit, loading: false });
         } catch (error: any) {
           set({ error: error.message, loading: false });
@@ -52,17 +55,43 @@ const useEventStore = create<EventState>()(
       fetchSchedulesForEvent: async (eventId: string) => {
         set({ loading: true, error: null });
         try {
-          const schedules = await apiClient.get<EventSchedule[]>(`/api/events/${eventId}/schedules`);
-          set({ schedules, loading: false });
+          const response = await apiClient.get<EventSchedule[]>(`/api/events/${eventId}/schedules`);
+          set({ EventSchedules: response, loading: false });
         } catch (error: any) {
           set({ error: error.message, loading: false });
         }
       },
 
-      fetchEventById: async (id: string) => {
+      searchSchedules: async (query: string, searchAll = false) => {
         set({ loading: true, error: null });
         try {
-          const event = await apiClient.get<Event>(`/api/events/${id}`);
+            let url = `/api/events?mode=schedules`;
+            if (query) {
+                url += `&name=${encodeURIComponent(query)}`;
+            }
+            
+            if (!searchAll) {
+                const today = new Date();
+                const yesterday = new Date(today); yesterday.setDate(yesterday.getDate() - 1);
+                const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1);
+                
+                yesterday.setHours(0,0,0,0);
+                tomorrow.setHours(23,59,59,999);
+                
+                url += `&from=${yesterday.toISOString()}&to=${tomorrow.toISOString()}`;
+            }
+
+            const response = await apiClient.get<{ schedules: EventSchedule[] }>(url);
+            set({ searchedSchedules: response.schedules, loading: false });
+        } catch (error: any) {
+            set({ error: error.message, loading: false });
+        }
+      },
+
+      fetchEventById: async (id: string, includeSchedules = false) => {
+        set({ loading: true, error: null });
+        try {
+          const event = await apiClient.get<Event>(`/api/events/${id}?includeSchedules=${includeSchedules}`);
           set({ currentEvent: event, loading: false });
         } catch (error: any) {
           set({ error: error.message, loading: false });
@@ -113,7 +142,7 @@ const useEventStore = create<EventState>()(
         set({ loading: true, error: null });
         try {
           const newSchedule = await apiClient.post<EventSchedule>(`/api/events/${scheduleData.eventId}/schedules`, scheduleData);
-          set((state) => ({ schedules: [...state.schedules, newSchedule], loading: false }));
+          set((state) => ({ EventSchedules: [...state.EventSchedules, newSchedule], loading: false }));
         } catch (error: any) {
           set({ error: error.message, loading: false });
           throw error;
@@ -125,7 +154,7 @@ const useEventStore = create<EventState>()(
         try {
           const updatedSchedule = await apiClient.put<EventSchedule>(`/api/events/${eventId}/schedules/${id}`, scheduleData);
           set((state) => ({
-            schedules: state.schedules.map((s) => (s.id === updatedSchedule.id ? updatedSchedule : s)),
+            EventSchedules: state.EventSchedules.map((s) => (s.id === updatedSchedule.id ? updatedSchedule : s)),
             loading: false,
           }));
         } catch (error: any) {
@@ -139,7 +168,7 @@ const useEventStore = create<EventState>()(
         try {
           await apiClient.delete(`/api/events/${eventId}/schedules/${id}`);
           set((state) => ({
-            schedules: state.schedules.filter((s) => s.id !== id),
+            EventSchedules: state.EventSchedules.filter((s) => s.id !== id),
             loading: false,
           }));
         } catch (error: any) {

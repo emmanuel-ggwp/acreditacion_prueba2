@@ -1,13 +1,15 @@
 import { z } from 'zod';
 import { Op, fn, col, literal } from 'sequelize';
-import Event from '@/models/Event';
-import EventSchedule from '@/models/EventSchedule';
-import Participant from '@/models/Participant';
-import Accreditation from '@/models/Accreditation';
-import Award from '@/models/Award';
-import ParticipantAward from '@/models/ParticipantAward';
+import { 
+  Event,
+  EventSchedule, 
+  Participant, 
+  Accreditation, 
+  Award, 
+  ParticipantAward, 
+  User 
+} from '@/models/index';
 import { createEventSchema, updateEventSchema } from '@/utils/validators/eventSchemas';
-import User from '@/models/User';
 
 export class EventService {
   async createEvent(data: z.infer<typeof createEventSchema>, userId: string) {
@@ -41,7 +43,7 @@ export class EventService {
       include: [],
     };
     if (includeSchedules) {
-      options.include.push({ model: EventSchedule, as: 'schedules' });
+      options.include.push({ model: EventSchedule });
     }
     const event = await Event.findByPk(eventId, options);
     if (!event) {
@@ -50,8 +52,8 @@ export class EventService {
     return event;
   }
 
-  async getAllEvents(filters: { isActive?: boolean; createdBy?: string; page?: number; limit?: number }) {
-    const { isActive, createdBy, page = 1, limit = 10 } = filters;
+  async getAllEvents(filters: { isActive?: boolean; createdBy?: string; page?: number; limit?: number; includeSchedules?: boolean }) {
+    const { isActive, createdBy, page = 1, limit = 10, includeSchedules = false } = filters;
     const where: any = {};
     if (isActive !== undefined) where.isActive = isActive;
     if (createdBy) where.createdBy = createdBy;
@@ -62,6 +64,7 @@ export class EventService {
       limit,
       offset: (page - 1) * limit,
       order: [['createdAt', 'DESC']],
+      include: includeSchedules ? [{ model: EventSchedule }] : [],
     });
 
     // 2. Fetch participant counts for these events
@@ -82,7 +85,7 @@ export class EventService {
           attributes: [],
           through: { attributes: [] }
         }],
-        group: ['EventSchedule.eventId'],
+        group: ['eventId'],
         raw: true,
       });
 
@@ -158,7 +161,7 @@ export class EventService {
             model: Accreditation,
             attributes: [],
         }],
-        group: ['EventSchedule.id'],
+        group: ['id'],
     });
 
     const stats = {

@@ -13,8 +13,9 @@ interface Params {
 
 export const GET = withAuth(async (req: AuthenticatedRequest, { params }: Params) => {
   try {
-    const eventId = parseInt(params.eventId, 10);
-    if (isNaN(eventId)) {
+    const resolvedParams = await params;
+    const eventId = resolvedParams.eventId;
+    if (!eventId?.length) {
       return NextResponse.json({ message: 'Invalid event ID' }, { status: 400 });
     }
     const report = await reportService.getEventReport(eventId);

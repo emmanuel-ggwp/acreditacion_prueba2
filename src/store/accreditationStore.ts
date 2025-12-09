@@ -40,7 +40,7 @@ const useAccreditationStore = create<AccreditationState>()(
       fetchAccreditations: async (eventId, page, limit) => {
         set({ loading: true, error: null });
         try {
-          const result = await apiClient.get<{ accreditations: RichAccreditation[]; total: number }>(`/api/events/${eventId}/accreditations?page=${page}&limit=${limit}`);
+          const result = await apiClient.get<{ accreditations: RichAccreditation[]; total: number }>(`/api/accreditations?eventId=${eventId}&page=${page}&limit=${limit}`);
           set({ accreditations: result.accreditations, totalAccreditations: result.total, loading: false });
         } catch (error: any) {
           set({ error: error.message, loading: false });
@@ -50,10 +50,10 @@ const useAccreditationStore = create<AccreditationState>()(
       accreditParticipant: async (participantId, eventScheduleId, accreditedById, notes) => {
         set({ loading: true, error: null });
         try {
-          const newAccreditation = await apiClient.post<RichAccreditation>(`/api/accreditations/participant`, {
-            participantId,
-            eventScheduleId,
-            accreditedById,
+          const newAccreditation = await apiClient.post<RichAccreditation>(`/api/accreditations`, {
+            type: 'participant',
+            id: participantId,
+            scheduleId: eventScheduleId,
             notes,
           });
           set((state) => ({
@@ -110,7 +110,7 @@ const useAccreditationStore = create<AccreditationState>()(
       getLastAccreditation: async (eventId: string) => {
         set({ loading: true, error: null });
         try {
-          const result = await apiClient.get<{ accreditations: RichAccreditation[] }>(`/api/events/${eventId}/accreditations?page=1&limit=1`);
+          const result = await apiClient.get<{ accreditations: RichAccreditation[] }>(`/api/accreditations?eventId=${eventId}&page=1&limit=1`);
           const last = result.accreditations.length > 0 ? result.accreditations[0] : null;
           set({ lastAccreditation: last, loading: false });
         } catch (error: any) {

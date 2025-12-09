@@ -25,6 +25,9 @@ interface Event {
 // Schema for form validation
 const eventFormValidationSchema = createEventSchema.extend({
   id: z.guid().optional(),
+  //NOTE: These fields are included for avoid errors from react-hook-form
+  allowGuests: z.boolean(),
+  maxGuestsPerParticipant: z.number().int().min(0),
 });
 
 type EventFormInputs = z.infer<typeof eventFormValidationSchema>;
@@ -45,7 +48,7 @@ const EventForm: React.FC<EventFormProps> = ({ event, onClose }) => {
     reset,
     formState: { errors, isSubmitting },
   } = useForm<EventFormInputs>({
-    resolver: zodResolver(eventFormValidationSchema) as any,
+    resolver: zodResolver(eventFormValidationSchema),
     defaultValues: {
       id: event?.id,
       name: event?.name || '',

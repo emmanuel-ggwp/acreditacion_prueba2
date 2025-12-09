@@ -1,4 +1,5 @@
-import AuditLog, { AuditAction } from '../models/AuditLog';
+import { AuditLog } from '@/models/index';
+import { AuditAction } from '@/models/AuditLog';
 
 interface LogData {
   userId: string;

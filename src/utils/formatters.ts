@@ -1,5 +1,35 @@
-import { format, parseISO } from 'date-fns';
+import { format, parseISO, isToday, isTomorrow } from 'date-fns';
+import { es } from 'date-fns/locale';
 import { DATE_FORMATS } from './constants';
+
+/**
+ * Formats a date range in a friendly way (e.g., "Hoy de 12am a 4pm").
+ * @param startDate The start date of the event.
+ * @param endDate The end date of the event.
+ * @returns The formatted date range string.
+ */
+export const formatEventDate = (startDate: string | Date, endDate: string | Date): string => {
+  try {
+    const start = typeof startDate === 'string' ? parseISO(startDate) : startDate;
+    const end = typeof endDate === 'string' ? parseISO(endDate) : endDate;
+
+    const startTime = format(start, 'h:mm a', { locale: es });
+    const endTime = format(end, 'h:mm a', { locale: es });
+
+    if (isToday(start)) {
+      return `Hoy de ${startTime} a ${endTime}`;
+    }
+
+    if (isTomorrow(start)) {
+      return `Mañana de ${startTime} a ${endTime}`;
+    }
+
+    return `${format(start, 'd MMM, yyyy', { locale: es })} de ${startTime} a ${endTime}`;
+  } catch (error) {
+    console.error("Failed to format event date:", error);
+    return 'Fecha inválida';
+  }
+};
 
 /**
  * Formats a date string or Date object into a specified format.

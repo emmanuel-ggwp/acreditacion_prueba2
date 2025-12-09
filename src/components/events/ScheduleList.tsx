@@ -22,7 +22,7 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ eventId }) => {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingSchedule, setEditingSchedule] = useState<EventSchedule | null>(null);
 
-  const { schedules, fetchSchedulesForEvent, deleteSchedule } = useEventStore();
+  const { EventSchedules, fetchSchedulesForEvent, deleteSchedule } = useEventStore();
   useEffect(() => { fetchSchedulesForEvent(eventId); }, [eventId, fetchSchedulesForEvent]);
 
   const handleEdit = (schedule: EventSchedule) => {
@@ -68,8 +68,8 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ eventId }) => {
       )}
 
       <div className="space-y-4">
-        {schedules.length > 0 ? (
-          schedules.map((schedule) => (
+        {EventSchedules?.length > 0 ? (
+          EventSchedules.map((schedule: EventSchedule) => (
             <div key={schedule.id} className="bg-white border border-gray-200 rounded-lg p-5 shadow-sm hover:shadow-md transition-shadow duration-200 flex justify-between items-center">
               <div>
                 <h4 className="text-lg font-semibold text-gray-900">{schedule.scheduleName}</h4>

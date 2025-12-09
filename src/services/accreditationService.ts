@@ -1,13 +1,16 @@
 import { z } from 'zod';
 import { Op, Transaction } from 'sequelize';
 import { sequelize } from '@/lib/sequelize';
-import Accreditation from '@/models/Accreditation';
-import Participant from '@/models/Participant';
-import Guest from '@/models/Guest';
-import EventSchedule from '@/models/EventSchedule';
-import Event from '@/models/Event';
+import { 
+  Accreditation, 
+  Participant, 
+  Guest, 
+  EventSchedule, 
+  Event, 
+  User,
+  ParticipantSchedule
+} from '@/models/index';
 import { bulkAccreditationSchema } from '@/utils/validators/accreditationSchemas';
-import User from '@/models/User';
 import { auditLogService } from './auditLogService';
 
 export class AccreditationService {
@@ -56,8 +59,8 @@ export class AccreditationService {
         }
 
     } else if (guestId) {
-        person = await Guest.findByPk(guestId, { include: [Participant], transaction });
-        const guestParticipant = (person as any)?.Participant;
+        person = await Guest.findByPk(guestId, { include: [{ model: Participant, as: 'participant' }], transaction });
+        const guestParticipant = (person as any)?.participant;
         
         if (!person || !guestParticipant) {
              throw new Error('Guest or associated participant not found.');
@@ -122,6 +125,18 @@ export class AccreditationService {
         entityId: accreditation.id,
         details: { participantId, eventScheduleId },
       });
+
+      // Update ParticipantSchedule attended status
+      await ParticipantSchedule.update(
+        { attended: true, attendedAt: new Date() },
+        { 
+          where: { 
+            participantId, 
+            scheduleId: eventScheduleId 
+          },
+          transaction 
+        }
+      );
 
       await transaction.commit();
       return this.getAccreditationById(accreditation.id);
@@ -226,9 +241,9 @@ export class AccreditationService {
         { 
           model: Guest, 
           attributes: ['id', 'firstName', 'lastName'],
-          include: [{ model: Participant, attributes: ['id', 'firstName', 'lastName'] }] 
+          include: [{ model: Participant, as: 'participant', attributes: ['id', 'firstName', 'lastName'] }] 
         },
-        { model: EventSchedule, attributes: ['id', 'name', 'startTime', 'endTime'] },
+        { model: EventSchedule, attributes: ['id', 'scheduleName', 'startDateTime', 'endDateTime'] },
         { model: User, as: 'accreditedByUser', attributes: ['id', 'firstName', 'lastName'] }
       ],
     });
@@ -254,7 +269,7 @@ export class AccreditationService {
           model: EventSchedule, 
           where: scheduleWhere, 
           required: !!eventId, 
-          attributes: ['id', 'name'] 
+          attributes: ['id', 'scheduleName'] 
         },
         { 
           model: Participant, 
