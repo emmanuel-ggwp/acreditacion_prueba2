@@ -15,12 +15,17 @@ const EventList = () => {
   const [filter, setFilter] = useState<FilterType>('all');
 
   useEffect(() => {
-    // TODO: Adjust fetchEvents to support filtering
-    fetchEvents(1, 10, true);
+    const params: any = { page: 1, limit: 10, includeSchedules: true };
+    if (filter === 'active') params.isActive = true;
+    if (filter === 'inactive') params.isActive = false;
+    fetchEvents(params);
   }, [fetchEvents, filter]);
 
   const handlePageChange = (newPage: number) => {
-    fetchEvents(newPage, limit, true);
+    const params: any = { page: newPage, limit, includeSchedules: true };
+    if (filter === 'active') params.isActive = true;
+    if (filter === 'inactive') params.isActive = false;
+    fetchEvents(params);
   };
 
   const totalPages = Math.ceil(total / limit);

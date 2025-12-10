@@ -35,6 +35,7 @@ class Participant extends Model {
   declare public email: string;
   declare public phone: string | null;
   declare public documentNumber: string | null;
+  declare public numeroSap: string | null;
   declare public company: string | null;
   declare public position: string | null;
   declare public allowedGuests: number;
@@ -97,6 +98,10 @@ Participant.init(
       allowNull: true,
     },
     documentNumber: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    numeroSap: {
       type: DataTypes.STRING,
       allowNull: true,
     },

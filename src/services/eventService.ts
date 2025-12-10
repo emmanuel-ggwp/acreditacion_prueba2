@@ -52,18 +52,57 @@ export class EventService {
     return event;
   }
 
-  async getAllEvents(filters: { isActive?: boolean; createdBy?: string; page?: number; limit?: number; includeSchedules?: boolean }) {
-    const { isActive, createdBy, page = 1, limit = 10, includeSchedules = false } = filters;
+  async getAllEvents(filters: { 
+    isActive?: boolean; 
+    createdBy?: string; 
+    page?: number; 
+    limit?: number; 
+    includeSchedules?: boolean;
+    search?: string;
+    sortBy?: string;
+    sortOrder?: 'ASC' | 'DESC';
+  }) {
+    const { 
+        isActive, 
+        createdBy, 
+        page = 1, 
+        limit = 10, 
+        includeSchedules = false, 
+        search, 
+        sortBy = 'createdAt', 
+        sortOrder = 'DESC' 
+    } = filters;
+
     const where: any = {};
     if (isActive !== undefined) where.isActive = isActive;
     if (createdBy) where.createdBy = createdBy;
+    
+    if (search) {
+        where[Op.or] = [
+            { name: { [Op.like]: `%${search}%` } },
+            { description: { [Op.like]: `%${search}%` } },
+            { location: { [Op.like]: `%${search}%` } }
+        ];
+    }
 
     // 1. Fetch events with pagination
+    let order: any = [[sortBy, sortOrder]];
+    
+    if (sortBy === 'startDateTime') {
+        order = [[literal(`(
+            SELECT start_date_time 
+            FROM event_schedules 
+            WHERE event_schedules.event_id = \`Event\`.\`id\` 
+            ORDER BY start_date_time ${sortOrder} 
+            LIMIT 1
+        )`), sortOrder]];
+    }
+
     const { count, rows } = await Event.findAndCountAll({
       where,
       limit,
       offset: (page - 1) * limit,
-      order: [['createdAt', 'DESC']],
+      order,
       include: includeSchedules ? [{ model: EventSchedule }] : [],
     });
 

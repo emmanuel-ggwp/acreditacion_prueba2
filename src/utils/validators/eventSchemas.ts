@@ -40,5 +40,8 @@ export const eventFilterSchema = z.object({
   includeSchedules: z.string().transform(val => val === 'true').optional(),
   page: z.string().transform(val => parseInt(val, 10)).optional(),
   limit: z.string().transform(val => parseInt(val, 10)).optional(),
+  search: z.string().optional(),
+  sortBy: z.enum(['name', 'createdAt', 'updatedAt', 'startDateTime']).optional(),
+  sortOrder: z.enum(['ASC', 'DESC']).optional(),
 });
 

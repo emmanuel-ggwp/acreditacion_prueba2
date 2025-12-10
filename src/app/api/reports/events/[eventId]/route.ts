@@ -18,6 +18,23 @@ export const GET = withAuth(async (req: AuthenticatedRequest, { params }: Params
     if (!eventId?.length) {
       return NextResponse.json({ message: 'Invalid event ID' }, { status: 400 });
     }
+
+    const { searchParams } = new URL(req.url);
+    const type = searchParams.get('type');
+
+    if (type === 'general') {
+        const reportData = await reportService.getGeneralReport(eventId);
+        const csv = await reportService.generateCsv(reportData);
+        
+        return new NextResponse(csv, {
+            status: 200,
+            headers: {
+                'Content-Type': 'text/csv',
+                'Content-Disposition': `attachment; filename="event_report_${eventId}.csv"`,
+            },
+        });
+    }
+
     const report = await reportService.getEventReport(eventId);
     return NextResponse.json(report);
   } catch (error: any) {

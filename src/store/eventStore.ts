@@ -6,6 +6,16 @@ import EventSchedule from '@/models/EventSchedule';
 import { createEventSchema, updateEventSchema, createScheduleSchema, updateScheduleSchema } from '@/utils/validators/eventSchemas';
 import { z } from 'zod';
 
+export interface FetchEventsParams {
+  page?: number;
+  limit?: number;
+  search?: string;
+  sortBy?: string;
+  sortOrder?: 'ASC' | 'DESC';
+  includeSchedules?: boolean;
+  isActive?: boolean;
+}
+
 interface EventState {
   events: Event[];
   EventSchedules: EventSchedule[];
@@ -16,7 +26,7 @@ interface EventState {
   total: number;
   page: number;
   limit: number;
-  fetchEvents: (page?: number, limit?: number, includeSchedules?: boolean) => Promise<void>;
+  fetchEvents: (params?: FetchEventsParams) => Promise<void>;
   fetchSchedulesForEvent: (eventId: string) => Promise<void>;
   searchSchedules: (query: string, searchAll?: boolean) => Promise<void>;
   fetchEventById: (id: string, includeSchedules?: boolean) => Promise<void>;
@@ -42,10 +52,20 @@ const useEventStore = create<EventState>()(
       page: 1,
       limit: 10,
 
-      fetchEvents: async (page = 1, limit = 10, includeSchedules = false) => {
+      fetchEvents: async (params = {}) => {
+        const { page = 1, limit = 10, includeSchedules = false, search, sortBy, sortOrder, isActive } = params;
         set({ loading: true, error: null });
         try {
-          const response = await apiClient.get<{ events: Event[]; total: number }>(`/api/events?page=${page}&limit=${limit}&includeSchedules=${includeSchedules}`);
+          const queryParams = new URLSearchParams();
+          queryParams.append('page', page.toString());
+          queryParams.append('limit', limit.toString());
+          if (includeSchedules) queryParams.append('includeSchedules', 'true');
+          if (search) queryParams.append('search', search);
+          if (sortBy) queryParams.append('sortBy', sortBy);
+          if (sortOrder) queryParams.append('sortOrder', sortOrder);
+          if (isActive !== undefined) queryParams.append('isActive', isActive.toString());
+
+          const response = await apiClient.get<{ events: Event[]; total: number }>(`/api/events?${queryParams.toString()}`);
           set({ events: response.events, total: response.total, page, limit, loading: false });
         } catch (error: any) {
           set({ error: error.message, loading: false });

@@ -5,6 +5,7 @@ import { AuthenticationError, ServerError, NetworkError, NotFoundError, Validati
 // This interface is for the apiClient's public methods
 interface ApiClientRequestOptions extends Omit<RequestInit, 'body'> {
   body?: BodyInit | null | object;
+  responseType?: 'json' | 'blob' | 'text';
 }
 
 interface RetryConfig {
@@ -19,6 +20,7 @@ const apiClient = {
     retryConfig: RetryConfig = { attempts: 1, delay: 1000 }
   ): Promise<T> {
     const { accessToken, refreshAuthToken, logout } = useAuthStore.getState();
+    const { responseType = 'json', ...fetchOptions } = options;
 
     const headers = new Headers(options.headers || {});
     if (accessToken) {
@@ -37,7 +39,7 @@ const apiClient = {
     }
 
     const config: RequestInit = {
-      ...options,
+      ...fetchOptions,
       headers,
       body,
     };
@@ -81,6 +83,12 @@ const apiClient = {
         // If response is empty
         if (response.status === 204 || response.headers.get('Content-Length') === '0') {
             return {} as T;
+        }
+
+        if (responseType === 'blob') {
+            return await response.blob() as unknown as T;
+        } else if (responseType === 'text') {
+            return await response.text() as unknown as T;
         }
 
         return await response.json() as T;

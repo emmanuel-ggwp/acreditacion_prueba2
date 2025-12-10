@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { format } from 'date-fns';
-import { Calendar as CalendarIcon, MapPin, Users, CheckSquare, Trash2, Edit, ArrowRight } from 'lucide-react';
+import { Calendar as CalendarIcon, MapPin, Users, CheckSquare, Trash2, Edit, ArrowRight, FileText, ClipboardList } from 'lucide-react';
 import Link from 'next/link';
 import Event from '@/models/Event';
 import RoleGuard from '../auth/RoleGuard';
@@ -10,6 +10,8 @@ import { ROLES } from '@/utils/constants';
 import useEventStore from '@/store/eventStore';
 import { formatCapacity, formatEventDate } from '@/utils/formatters';
 import { EventStatusBadge } from './EventStatusBadge';
+import apiClient from '@/utils/apiClient';
+import toast from 'react-hot-toast';
 
 interface EventCardProps {
   event: Event & { participantCount?: number; accreditedCount?: number };
@@ -21,6 +23,29 @@ const EventCard: React.FC<EventCardProps> = ({ event }) => {
   const handleDelete = async () => {
     if (window.confirm('Are you sure you want to delete this event?')) {
       await deleteEvent(event.id);
+    }
+  };
+
+  const handleDownloadReport = async () => {
+    try {
+        const response = await apiClient.get(`/api/reports/events/${event.id}?type=general`, {
+            responseType: 'blob'
+        });
+        
+        // Create a blob from the response
+        const blob = new Blob([response as any], { type: 'text/csv' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `event_report_${event.name.replace(/\s+/g, '_')}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        toast.success('Report downloaded successfully');
+    } catch (error) {
+        console.error('Error downloading report:', error);
+        toast.error('Failed to download report');
     }
   };
 
@@ -46,6 +71,13 @@ const EventCard: React.FC<EventCardProps> = ({ event }) => {
           </div>
           <RoleGuard allowedRoles={[ROLES.ADMIN]}>
             <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              <button 
+                onClick={handleDownloadReport}
+                className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-md transition-colors"
+                title="Download General Report"
+              >
+                <FileText size={16} />
+              </button>
               <Link href={`/events/${event.id}`}>
                 <button className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-md transition-colors">
                   <Edit size={16} />

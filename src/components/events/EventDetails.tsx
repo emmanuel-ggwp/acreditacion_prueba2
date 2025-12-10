@@ -5,7 +5,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import useEventStore from '@/store/eventStore';
-import { Calendar, Clock, Users, Award, BarChart2, Save, Edit2, X, UserCheck } from 'lucide-react';
+import { Calendar, Clock, Users, Award, BarChart2, Save, Edit2, X, UserCheck, FileText, ClipboardList } from 'lucide-react';
 import ScheduleList from '@/components/events/ScheduleList';
 import ParticipantList from '@/components/participants/ParticipantList';
 import AccreditationPanel from '@/components/accreditation/AccreditationPanel';
@@ -14,6 +14,7 @@ import { createEventSchema, updateEventSchema } from '@/utils/validators/eventSc
 import toast from 'react-hot-toast';
 import { useRouter } from 'next/navigation';
 import { isToday, isYesterday, isTomorrow } from 'date-fns';
+import apiClient from '@/utils/apiClient';
 
 // Placeholders for other components
 const AwardsTab = () => <div>Awards Management</div>;
@@ -92,6 +93,30 @@ const EventDetails: React.FC<EventDetailsProps> = ({ eventId }) => {
     }
   };
 
+  const handleDownloadReport = async () => {
+    if (!eventId || !currentEvent) return;
+    try {
+        const response = await apiClient.get(`/api/reports/events/${eventId}?type=general`, {
+            responseType: 'blob'
+        });
+        
+        // Create a blob from the response
+        const blob = new Blob([response as any], { type: 'text/csv' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `event_report_${currentEvent.name.replace(/\s+/g, '_')}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        toast.success('Report downloaded successfully');
+    } catch (error) {
+        console.error('Error downloading report:', error);
+        toast.error('Failed to download report');
+    }
+  };
+
   const hasActiveSchedule = React.useMemo(() => {
     return EventSchedules.some(schedule => {
       const date = new Date(schedule.startDateTime);
@@ -129,16 +154,25 @@ const EventDetails: React.FC<EventDetailsProps> = ({ eventId }) => {
             <div className="flex justify-between items-center mb-8 pb-4 border-b border-gray-100">
               <h3 className="text-xl font-semibold text-gray-900">Event Information</h3>
               {eventId && (
-                <button
-                  onClick={() => setIsEditMode(!isEditMode)}
-                  className={`flex items-center px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                    isEditMode 
-                      ? 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50' 
-                      : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100'
-                  }`}
-                >
-                  {isEditMode ? <><X size={16} className="mr-2"/> Cancel</> : <><Edit2 size={16} className="mr-2"/> Edit Details</>}
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleDownloadReport}
+                    className="flex items-center px-4 py-2 rounded-md text-sm font-medium transition-colors bg-green-50 text-green-700 hover:bg-green-100"
+                    title="Download General Report"
+                  >
+                    <FileText size={16} className="mr-2"/> Report
+                  </button>
+                  <button
+                    onClick={() => setIsEditMode(!isEditMode)}
+                    className={`flex items-center px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                      isEditMode 
+                        ? 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50' 
+                        : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100'
+                    }`}
+                  >
+                    {isEditMode ? <><X size={16} className="mr-2"/> Cancel</> : <><Edit2 size={16} className="mr-2"/> Edit Details</>}
+                  </button>
+                </div>
               )}
             </div>
             

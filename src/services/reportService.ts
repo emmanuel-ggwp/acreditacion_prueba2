@@ -48,13 +48,13 @@ export class ReportService {
         };
     }
 
-    // 2. Batch: Get Accreditation counts per schedule
+    // 2. Batch: Get Accreditation counts per schedule (Unique participants/guests)
     const accreditationCounts = await Accreditation.findAll({
         attributes: [
             ['event_schedule_id', 'eventScheduleId'],
             [fn('COUNT', col('id')), 'total'],
-            [fn('COUNT', col('participant_id')), 'participants'],
-            [fn('COUNT', col('guest_id')), 'guests']
+            [fn('COUNT', fn('DISTINCT', col('participant_id'))), 'participants'],
+            [fn('COUNT', fn('DISTINCT', col('guest_id'))), 'guests']
         ],
         where: {
             eventScheduleId: { [Op.in]: scheduleIds }
@@ -65,11 +65,11 @@ export class ReportService {
 
     const accMap = new Map(accreditationCounts.map(a => [a.eventScheduleId, a]));
 
-    // 3. Batch: Get Registered Participants per schedule
+    // 3. Batch: Get Registered Participants per schedule 
     const registrationCounts = await ParticipantSchedule.findAll({
         attributes: [
             ['schedule_id', 'scheduleId'],
-            [fn('COUNT', col('participant_id')), 'count']
+            [fn('COUNT', fn('DISTINCT', col('participant_id'))), 'count']
         ],
         where: {
             scheduleId: { [Op.in]: scheduleIds }
@@ -152,8 +152,22 @@ export class ReportService {
         col: 'id'
     });
 
-    const totalAccreditedParticipants = scheduleDetails.reduce((sum, s) => sum + (s.accreditedParticipants as number), 0);
-    const totalAccreditedGuests = scheduleDetails.reduce((sum, s) => sum + (s.accreditedGuests as number), 0);
+    // Efficiently get unique accredited participants and guests across the entire event
+    const uniqueEventStats = await Accreditation.findOne({
+        attributes: [
+            [fn('COUNT', fn('DISTINCT', col('participant_id'))), 'uniqueParticipants'],
+            [fn('COUNT', fn('DISTINCT', col('guest_id'))), 'uniqueGuests']
+        ],
+        include: [{
+            model: EventSchedule,
+            where: { eventId },
+            attributes: []
+        }],
+        raw: true
+    }) as any;
+
+    const totalAccreditedParticipants = parseInt(uniqueEventStats?.uniqueParticipants || '0', 10);
+    const totalAccreditedGuests = parseInt(uniqueEventStats?.uniqueGuests || '0', 10);
 
     const awardsAssigned = await ParticipantAward.count({ include: [{ model: Award, where: { eventId }, attributes: [] }] });
     const awardsDeliveredTotal = await ParticipantAward.count({
@@ -417,6 +431,55 @@ export class ReportService {
       currentCapacity,
       accreditationRatePerMinute: rate,
     };
+  }
+
+  async getGeneralReport(eventId: string) {
+    const query = `
+        SELECT 
+            p.first_name as "Nombre",
+            p.last_name as "Apellido",
+            p.document_number as "Documento",
+            p.numero_sap as "Número SAP",
+            p.phone as "Teléfono",
+            p.email as "Email",
+            es.start_date_time as "eventDate",
+            CASE WHEN acc.id IS NOT NULL THEN 'Sí' ELSE 'No' END as "Asistencia",
+            acc.check_in_time as "checkInTime",
+            (SELECT COUNT(*) FROM guests g WHERE g.participant_id = p.id) as "Cant. Invitados",
+            (SELECT COUNT(*) FROM accreditations acc_g 
+             INNER JOIN guests g ON acc_g.guest_id = g.id 
+             WHERE g.participant_id = p.id AND acc_g.event_schedule_id = es.id) as "Cant. Invitados Asistentes",
+            (SELECT GROUP_CONCAT(a.name SEPARATOR ', ') 
+             FROM participant_awards pa 
+             INNER JOIN awards a ON pa.award_id = a.id 
+             WHERE pa.participant_id = p.id AND a.event_id = :eventId AND pa.delivered_at IS NOT NULL) as "awardName"
+        FROM participants p
+        INNER JOIN participant_schedules ps ON p.id = ps.participant_id
+        INNER JOIN event_schedules es ON ps.schedule_id = es.id
+        LEFT JOIN accreditations acc ON p.id = acc.participant_id AND es.id = acc.event_schedule_id
+        WHERE es.event_id = :eventId
+        ORDER BY p.last_name, p.first_name, es.start_date_time
+    `;
+
+    const results = await sequelize.query(query, {
+        replacements: { eventId },
+        type: QueryTypes.SELECT
+    });
+
+    return results.map((row: any) => ({
+        "Nombre": row["Nombre"],
+        "Apellido": row["Apellido"],
+        "Documento": row["Documento"],
+        "Número SAP": row["Número SAP"],
+        "Teléfono": row["Teléfono"],
+        "Email": row["Email"],
+        "Fecha Evento": row["eventDate"] ? format(new Date(row["eventDate"]), 'dd/MM/yyyy') : '',
+        "Asistencia": row["Asistencia"],
+        "Hora Check-in": row["checkInTime"] ? format(new Date(row["checkInTime"]), 'HH:mm:ss') : '',
+        "Cant. Invitados": row["Cant. Invitados"],
+        "Cant. Invitados Asistentes": row["Cant. Invitados Asistentes"],
+        "Premio": row["awardName"] || 'No'
+    }));
   }
 
   async generateCsv(data: any[]): Promise<string> {
