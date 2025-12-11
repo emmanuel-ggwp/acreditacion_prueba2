@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { format } from 'date-fns';
-import { Plus, Edit, Trash2, Clock, Users } from 'lucide-react';
+import { Plus, Edit, Trash2, Clock, Users, MapPin } from 'lucide-react';
 import EventSchedule from '@/models/EventSchedule';
 import ScheduleForm from '@/components/events/ScheduleForm';
 import RoleGuard from '../auth/RoleGuard';
@@ -83,8 +83,17 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ eventId }) => {
                   <div className="h-4 w-px bg-gray-300"></div>
                   <div className="flex items-center">
                     <Users size={16} className="mr-1.5 text-indigo-500" />
-                    <span>{schedule.maxCapacity ? `${schedule.maxCapacity} capacity` : 'Unlimited capacity'}</span>
+                    <span>{schedule.displayMaxCapacity ? `${schedule.displayMaxCapacity} capacity` : 'Unlimited capacity'}</span>
                   </div>
+                  {(schedule.displayLocation || schedule.location) && (
+                    <>
+                      <div className="h-4 w-px bg-gray-300"></div>
+                      <div className="flex items-center">
+                        <MapPin size={16} className="mr-1.5 text-indigo-500" />
+                        <span>{schedule.displayLocation || schedule.location}</span>
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
               <div className="flex items-center space-x-2">

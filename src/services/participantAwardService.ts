@@ -2,15 +2,12 @@
 import { z } from 'zod';
 import { Op, Transaction } from 'sequelize';
 import { sequelize } from '@/lib/sequelize';
-import { 
-  ParticipantAward, 
-  Participant, 
-  Award, 
-  EventSchedule, 
-  User, 
-  Event 
-} from '@/models/index';
+import ParticipantAward from '@/models/ParticipantAward';
+import Participant from '@/models/Participant';
+import Award from '@/models/Award';
 import { assignAwardSchema } from '@/utils/validators/awardSchemas';
+import User from '@/models/User';
+import Event from '@/models/Event';
 
 export class ParticipantAwardService {
 
@@ -27,18 +24,7 @@ export class ParticipantAwardService {
         throw new Error('Participant not found.');
       }
       
-      const isParticipantInEvent = await EventSchedule.count({
-        where: { eventId: award.eventId },
-        include: [{
-            model: Participant,
-            where: { id: participantId },
-            required: true,
-            through: { attributes: [] }
-        }],
-        transaction
-      });
-
-      if (isParticipantInEvent === 0) {
+      if (participant.eventId !== award.eventId) {
           throw new Error('Participant and Award do not belong to the same event.');
       }
 
@@ -114,14 +100,6 @@ export class ParticipantAwardService {
     }
 
     return ParticipantAward.findAll({
-      include: [{
-        model: EventSchedule,
-        where: { eventId },
-        required: true
-      }],
-      distinct: true,
-      col: 'id'
-   
       where,
       include: [
         { model: Participant, attributes: ['id', 'firstName', 'lastName', 'email'] },

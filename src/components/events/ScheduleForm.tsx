@@ -36,9 +36,10 @@ const ScheduleForm: React.FC<ScheduleFormProps> = ({ eventId, schedule, onClose 
         scheduleName: schedule.scheduleName,
         startDateTime: new Date(schedule.startDateTime).toISOString(),
         endDateTime: new Date(schedule.endDateTime).toISOString(),
+        location: schedule.location || '',
         maxCapacity: schedule.maxCapacity || 0,
       }
-      : { eventId, maxCapacity: 0 },
+      : { eventId, maxCapacity: 0, location: '' },
   });
 
   const onSubmit = async (data: ScheduleFormInputs) => {
@@ -84,6 +85,18 @@ const ScheduleForm: React.FC<ScheduleFormProps> = ({ eventId, schedule, onClose 
           {errors.scheduleName && <p className="mt-1 text-sm text-red-500">{errors.scheduleName.message}</p>}
         </div>
 
+        <div>
+          <label htmlFor="location" className="block text-sm font-medium text-gray-700 mb-1">Location (Optional)</label>
+          <input
+            type="text"
+            id="location"
+            {...register('location')}
+            className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border"
+            placeholder="Specific location for this schedule"
+          />
+          {errors.location && <p className="mt-1 text-sm text-red-500">{errors.location.message}</p>}
+        </div>
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
             <label htmlFor="startDateTime" className="block text-sm font-medium text-gray-700 mb-1">Start Time</label>
@@ -126,15 +139,15 @@ const ScheduleForm: React.FC<ScheduleFormProps> = ({ eventId, schedule, onClose 
         </div>
 
         <div>
-          <label htmlFor="maxCapacity" className="block text-sm font-medium text-gray-700 mb-1">Max Capacity</label>
+          <label htmlFor="maxCapacity" className="block text-sm font-medium text-gray-700 mb-1">Max Capacity (Optional)</label>
           <input
             type="number"
             id="maxCapacity"
             {...register('maxCapacity', {
-              setValueAs: v => v === '' ? undefined : parseInt(v, 10)
+              setValueAs: v => v === '' ? 0 : parseInt(v, 10)
             })}
             className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border"
-            placeholder="Enter max capacity"
+            placeholder="Leave empty to inherit from event"
           />
           {errors.maxCapacity && <p className="mt-1 text-sm text-red-500">{errors.maxCapacity.message}</p>}
         </div>

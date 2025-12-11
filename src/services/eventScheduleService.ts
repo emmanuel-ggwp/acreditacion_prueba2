@@ -64,14 +64,20 @@ export class EventScheduleService {
   async getSchedulesByEvent(eventId: string) {
     const schedules = await EventSchedule.findAll({
       where: { eventId },
-      include: [{
-        model: Accreditation,
-        attributes: [],
-      }],
+      include: [
+        {
+          model: Accreditation,
+          attributes: [],
+        },
+        {
+          model: Event,
+          attributes: ['location', 'maxCapacity'],
+        }
+      ],
       attributes: {
         include: [[fn('COUNT', col('Accreditations.id')), 'accreditedCount']],
       },
-      group: ['id'],
+      group: ['EventSchedule.id', 'Event.id'],
       order: [['startDateTime', 'ASC']],
     });
     return schedules;

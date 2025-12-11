@@ -24,7 +24,8 @@ export const scheduleSchema = z.object({
   scheduleName: z.string().min(3, 'Schedule name must be at least 3 characters'),
   startDateTime: z.iso.datetime({ message: 'Invalid start date format' }),
   endDateTime: z.iso.datetime({ message: 'Invalid end date format' }),
-  maxCapacity: z.number().int().positive('Max capacity must be greater than 0'),
+  maxCapacity: z.number().int().positive('Max capacity must be greater than 0').optional().or(z.literal(0)),
+  location: z.string().optional(),
   isActive: z.boolean().default(true),
 }).refine(data => new Date(data.endDateTime) > new Date(data.startDateTime), {
   message: 'End date must be after start date',

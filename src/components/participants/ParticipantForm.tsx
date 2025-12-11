@@ -50,6 +50,8 @@ const ParticipantForm: React.FC<ParticipantFormProps> = ({ eventId, participant,
       company: participant?.company || '',
       position: participant?.position || '',
       allowedGuests: participant?.allowedGuests || 0,
+      dietaryPreference: participant?.dietaryPreference || 'NONE',
+      dietaryComments: participant?.dietaryComments || '',
       scheduleIds: [],
     },
   });
@@ -96,6 +98,8 @@ const ParticipantForm: React.FC<ParticipantFormProps> = ({ eventId, participant,
       company: p.company || '',
       position: p.position || '',
       allowedGuests: p.allowedGuests,
+      dietaryPreference: p.dietaryPreference || 'NONE',
+      dietaryComments: p.dietaryComments || '',
       scheduleIds: [], 
     });
     setShowResults(false);
@@ -138,6 +142,8 @@ const ParticipantForm: React.FC<ParticipantFormProps> = ({ eventId, participant,
         company: currentParticipant.company || '',
         position: currentParticipant.position || '',
         allowedGuests: currentParticipant.allowedGuests,
+        dietaryPreference: currentParticipant.dietaryPreference || 'NONE',
+        dietaryComments: currentParticipant.dietaryComments || '',
         scheduleIds: scheduleIds,
       });
     }
@@ -209,6 +215,30 @@ const ParticipantForm: React.FC<ParticipantFormProps> = ({ eventId, participant,
             <InputField label="Company" name="company" register={register} error={errors.company} />
             <InputField label="Position" name="position" register={register} error={errors.position} />
             <InputField label="Allowed Guests" name="allowedGuests" type="number" register={register} error={errors.allowedGuests} />
+            
+            <div className="col-span-1 md:col-span-2 border-t pt-4 mt-2">
+               <h3 className="text-sm font-medium text-gray-900 mb-3">Dietary Requirements</h3>
+               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label htmlFor="dietaryPreference" className="block text-sm font-medium text-gray-700">Preference</label>
+                    <select
+                      id="dietaryPreference"
+                      {...register('dietaryPreference')}
+                      className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                    >
+                      <option value="NONE">None</option>
+                      <option value="VEGETARIAN">Vegetarian</option>
+                      <option value="VEGAN">Vegan</option>
+                      <option value="CELIAC">Celiac (Gluten Free)</option>
+                      <option value="KOSHER">Kosher</option>
+                      <option value="HALAL">Halal</option>
+                      <option value="OTHER">Other</option>
+                    </select>
+                    {errors.dietaryPreference && <p className="mt-2 text-sm text-red-600">{errors.dietaryPreference.message}</p>}
+                  </div>
+                  <InputField label="Comments / Allergies" name="dietaryComments" register={register} error={errors.dietaryComments} />
+               </div>
+            </div>
           </div>
 
           <div className="col-span-2">

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import useEventStore from '@/store/eventStore';
 import EventCard from './EventCard';
 import { PlusCircle, CalendarX, ChevronLeft, ChevronRight, Search } from 'lucide-react';
@@ -13,22 +13,58 @@ type FilterType = 'all' | 'active' | 'inactive' | 'mine';
 const EventList = () => {
   const { events, fetchEvents, loading, total, page, limit } = useEventStore();
   const [filter, setFilter] = useState<FilterType>('all');
+  const [siblingCount, setSiblingCount] = useState(1);
+  const paginationContainerRef = useRef<HTMLDivElement>(null);
+  const defaultFetchParams = { page: 1, limit: 9, includeSchedules: true, sortOrder: 'DESC', sortBy: 'startDateTime' };
+
+  const totalPages = Math.ceil(total / limit);
 
   useEffect(() => {
-    const params: any = { page: 1, limit: 10, includeSchedules: true };
+    if (loading || totalPages <= 1) return;
+
+    const updateSiblingCount = () => {
+      if (!paginationContainerRef.current) return;
+      const containerWidth = paginationContainerRef.current.offsetWidth;
+      // Approximate width of "Showing x to y of z results" is around 250px
+      // Each button is approx 40px
+      // Available space for pagination buttons
+      const availableWidth = containerWidth - 280; // 250px text + 30px gap
+      
+      if (availableWidth > 500) {
+        setSiblingCount(3);
+      } else if (availableWidth > 300) {
+        setSiblingCount(2);
+      } else {
+        setSiblingCount(1);
+      }
+    };
+
+    // Run immediately to set initial state
+    updateSiblingCount();
+    
+    const observer = new ResizeObserver(updateSiblingCount);
+    if (paginationContainerRef.current) {
+      observer.observe(paginationContainerRef.current);
+    }
+
+    return () => observer.disconnect();
+  }, [loading, totalPages]);
+
+  useEffect(() => {
+    const params: any = { ...defaultFetchParams };
     if (filter === 'active') params.isActive = true;
     if (filter === 'inactive') params.isActive = false;
     fetchEvents(params);
   }, [fetchEvents, filter]);
 
   const handlePageChange = (newPage: number) => {
-    const params: any = { page: newPage, limit, includeSchedules: true };
+    const params: any = { ...defaultFetchParams, page: newPage };
     if (filter === 'active') params.isActive = true;
     if (filter === 'inactive') params.isActive = false;
     fetchEvents(params);
   };
 
-  const totalPages = Math.ceil(total / limit);
+  
 
   const tabs: { id: FilterType; label: string }[] = [
     { id: 'all', label: 'All Events' },
@@ -152,7 +188,7 @@ const EventList = () => {
 
         {/* Pagination */}
         {!loading && totalPages > 1 && (
-          <div className="flex items-center justify-between border-t border-gray-200 bg-white px-4 py-3 sm:px-6 mt-8 rounded-lg shadow-sm">
+          <div ref={paginationContainerRef} className="flex items-center justify-between border-t border-gray-200 bg-white px-4 py-3 sm:px-6 mt-8 rounded-lg shadow-sm">
             <div className="flex flex-1 justify-between sm:hidden">
               <button
                 onClick={() => handlePageChange(page - 1)}
@@ -187,19 +223,53 @@ const EventList = () => {
                     <span className="sr-only">Previous</span>
                     <ChevronLeft className="h-5 w-5" aria-hidden="true" />
                   </button>
-                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => (
-                    <button
-                      key={p}
-                      onClick={() => handlePageChange(p)}
-                      className={`relative inline-flex items-center px-4 py-2 text-sm font-semibold ${
-                        p === page
-                          ? 'z-10 bg-indigo-600 text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600'
-                          : 'text-gray-900 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0'
-                      }`}
-                    >
-                      {p}
-                    </button>
-                  ))}
+                  {(() => {
+                    const renderPageButton = (p: number) => (
+                      <button
+                        key={p}
+                        onClick={() => handlePageChange(p)}
+                        className={`relative inline-flex items-center px-4 py-2 text-sm font-semibold ${
+                          p === page
+                            ? 'z-10 bg-indigo-600 text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600'
+                            : 'text-gray-900 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0'
+                        }`}
+                      >
+                        {p}
+                      </button>
+                    );
+
+                    const renderEllipsis = (key: string) => (
+                      <span key={key} className="relative inline-flex items-center px-4 py-2 text-sm font-semibold text-gray-700 ring-1 ring-inset ring-gray-300 focus:outline-offset-0">
+                        ...
+                      </span>
+                    );
+
+                    // Threshold for showing all pages without ellipses
+                    // 5 fixed items (first, last, current, 2 ellipses) + 2 * siblingCount
+                    const boundaryCount = 5 + 2 * siblingCount;
+
+                    if (totalPages <= boundaryCount) {
+                      return Array.from({ length: totalPages }, (_, i) => i + 1).map(renderPageButton);
+                    }
+
+                    const pages = [];
+                    pages.push(renderPageButton(1));
+
+                    const start = Math.max(2, page - siblingCount);
+                    const end = Math.min(totalPages - 1, page + siblingCount);
+
+                    if (start > 2) pages.push(renderEllipsis('start-ellipsis'));
+
+                    for (let i = start; i <= end; i++) {
+                      pages.push(renderPageButton(i));
+                    }
+
+                    if (end < totalPages - 1) pages.push(renderEllipsis('end-ellipsis'));
+
+                    if (totalPages > 1) pages.push(renderPageButton(totalPages));
+
+                    return pages;
+                  })()}
                   <button
                     onClick={() => handlePageChange(page + 1)}
                     disabled={page === totalPages}

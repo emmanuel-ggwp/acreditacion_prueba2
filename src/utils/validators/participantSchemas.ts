@@ -11,6 +11,8 @@ export const participantSchema = z.object({
   documentNumber: customValidators.documentNumber.optional().nullable(),
   company: z.string().optional().nullable(),
   position: z.string().optional().nullable(),
+  dietaryPreference: z.enum(['NONE', 'VEGETARIAN', 'VEGAN', 'CELIAC', 'KOSHER', 'HALAL', 'OTHER']).optional(),
+  dietaryComments: z.string().optional().nullable(),
   allowedGuests: z.number().int().min(0).default(0),
   createdBy: z.guid(),
   isAccredited: z.boolean().default(false),

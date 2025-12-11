@@ -4,7 +4,7 @@ import React, { useEffect } from 'react';
 import useParticipantStore from '@/store/participantStore';
 import useAccreditationStore from '@/store/accreditationStore';
 import { useRouter } from 'next/navigation';
-import { User, Mail, FileText, Users, Award, Calendar, CheckCircle } from 'lucide-react';
+import { User, Mail, FileText, Users, Award, Calendar, CheckCircle, Utensils } from 'lucide-react';
 import useAuthStore from '@/store/authStore';
 import GuestList from './GuestList';
 // import AwardList from '../awards/AwardList'; // Assuming this component exists
@@ -86,6 +86,21 @@ const ParticipantDetails = ({ participantId }: { participantId:string }) => {
                 <Calendar size={20} className="mr-3 text-indigo-500" />
                 <span>{`Registered on: ${new Date(currentParticipant.createdAt).toLocaleDateString()}`}</span>
               </div>
+              
+              {(currentParticipant.dietaryPreference !== 'NONE' || currentParticipant.dietaryComments) && (
+                <div className="flex items-start text-gray-600 mt-4 pt-4 border-t border-gray-100">
+                  <Utensils size={20} className="mr-3 text-indigo-500 mt-1" />
+                  <div>
+                    <span className="font-medium block">Dietary Requirements:</span>
+                    <span className="block text-sm bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded inline-block mb-1">
+                      {currentParticipant.dietaryPreference}
+                    </span>
+                    {currentParticipant.dietaryComments && (
+                      <p className="text-sm italic text-gray-500">"{currentParticipant.dietaryComments}"</p>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
             
             <div>

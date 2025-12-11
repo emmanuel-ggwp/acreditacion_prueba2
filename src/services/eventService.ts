@@ -1,15 +1,13 @@
 import { z } from 'zod';
 import { Op, fn, col, literal } from 'sequelize';
-import { 
-  Event,
-  EventSchedule, 
-  Participant, 
-  Accreditation, 
-  Award, 
-  ParticipantAward, 
-  User 
-} from '@/models/index';
+import Event from '@/models/Event';
+import EventSchedule from '@/models/EventSchedule';
+import Participant from '@/models/Participant';
+import Accreditation from '@/models/Accreditation';
+import Award from '@/models/Award';
+import ParticipantAward from '@/models/ParticipantAward';
 import { createEventSchema, updateEventSchema } from '@/utils/validators/eventSchemas';
+import User from '@/models/User';
 
 export class EventService {
   async createEvent(data: z.infer<typeof createEventSchema>, userId: string) {
@@ -43,7 +41,7 @@ export class EventService {
       include: [],
     };
     if (includeSchedules) {
-      options.include.push({ model: EventSchedule });
+      options.include.push({ model: EventSchedule, as: 'schedules' });
     }
     const event = await Event.findByPk(eventId, options);
     if (!event) {
@@ -52,78 +50,28 @@ export class EventService {
     return event;
   }
 
-  async getAllEvents(filters: { 
-    isActive?: boolean; 
-    createdBy?: string; 
-    page?: number; 
-    limit?: number; 
-    includeSchedules?: boolean;
-    search?: string;
-    sortBy?: string;
-    sortOrder?: 'ASC' | 'DESC';
-  }) {
-    const { 
-        isActive, 
-        createdBy, 
-        page = 1, 
-        limit = 10, 
-        includeSchedules = false, 
-        search, 
-        sortBy = 'createdAt', 
-        sortOrder = 'DESC' 
-    } = filters;
-
+  async getAllEvents(filters: { isActive?: boolean; createdBy?: string; page?: number; limit?: number }) {
+    const { isActive, createdBy, page = 1, limit = 10 } = filters;
     const where: any = {};
     if (isActive !== undefined) where.isActive = isActive;
     if (createdBy) where.createdBy = createdBy;
-    
-    if (search) {
-        where[Op.or] = [
-            { name: { [Op.like]: `%${search}%` } },
-            { description: { [Op.like]: `%${search}%` } },
-            { location: { [Op.like]: `%${search}%` } }
-        ];
-    }
 
     // 1. Fetch events with pagination
-    let order: any = [[sortBy, sortOrder]];
-    
-    if (sortBy === 'startDateTime') {
-        order = [[literal(`(
-            SELECT start_date_time 
-            FROM event_schedules 
-            WHERE event_schedules.event_id = \`Event\`.\`id\` 
-            ORDER BY start_date_time ${sortOrder} 
-            LIMIT 1
-        )`), sortOrder]];
-    }
-
     const { count, rows } = await Event.findAndCountAll({
       where,
       limit,
       offset: (page - 1) * limit,
-      order,
-      include: includeSchedules ? [{ model: EventSchedule }] : [],
+      order: [['createdAt', 'DESC']],
     });
 
     // 2. Fetch participant counts for these events
     if (rows.length > 0) {
       const eventIds = rows.map(e => e.id);
-      
-      // Count unique participants per event via EventSchedule
-      const participantCounts = await EventSchedule.findAll({
-        attributes: [
-          'eventId',
-          [fn('COUNT', fn('DISTINCT', col('Participants.id'))), 'count']
-        ],
+      const participantCounts = await Participant.findAll({
+        attributes: ['eventId', [fn('COUNT', col('id')), 'count']],
         where: {
           eventId: eventIds,
         },
-        include: [{
-          model: Participant,
-          attributes: [],
-          through: { attributes: [] }
-        }],
         group: ['eventId'],
         raw: true,
       });
@@ -154,15 +102,7 @@ export class EventService {
       throw new Error('Event not found');
     }
 
-    const totalParticipants = await Participant.count({
-      include: [{
-        model: EventSchedule,
-        where: { eventId },
-        required: true
-      }],
-      distinct: true,
-      col: 'id'
-    });
+    const totalParticipants = await Participant.count({ where: { eventId } });
 
     const accreditedBySchedule = await Accreditation.findAll({
       attributes: [
@@ -200,7 +140,7 @@ export class EventService {
             model: Accreditation,
             attributes: [],
         }],
-        group: ['id'],
+        group: ['EventSchedule.id'],
     });
 
     const stats = {

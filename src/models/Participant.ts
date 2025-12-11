@@ -38,6 +38,8 @@ class Participant extends Model {
   declare public numeroSap: string | null;
   declare public company: string | null;
   declare public position: string | null;
+  declare public dietaryPreference: 'NONE' | 'VEGETARIAN' | 'VEGAN' | 'CELIAC' | 'KOSHER' | 'HALAL' | 'OTHER';
+  declare public dietaryComments: string | null;
   declare public allowedGuests: number;
   declare public createdBy: string;
 
@@ -112,6 +114,16 @@ Participant.init(
     position: {
       type: DataTypes.STRING,
       allowNull: true,
+    },
+    dietaryPreference: {
+      type: DataTypes.ENUM('NONE', 'VEGETARIAN', 'VEGAN', 'CELIAC', 'KOSHER', 'HALAL', 'OTHER'),
+      defaultValue: 'NONE',
+      allowNull: false,
+    },
+    dietaryComments: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      comment: 'Detalles de alergias o especificaciones adicionales',
     },
     allowedGuests: {
       type: DataTypes.INTEGER,

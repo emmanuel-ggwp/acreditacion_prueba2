@@ -1,8 +1,17 @@
 Agregar la locacion al schedule tomar por defecto la del event y en caso exista la del schedule tomar esa
 
+Tener en cuenta opcionesAlimentaria
+
+En la lista de eventos search events no esta funcionando
+
+Que se pueda crear un evento con un template y genere una url en la cual personas de cualquier parte se puedan registrar como Participantes
+Considerar el hecho de tener una propiedad como nuevo para saber cuando fue visto por alguien del sistema
+
+Un acceso rapido en la barra superior de los eventos de ayer hoy y mañana
+
 Fecha de inscripcion fecha de acreditacion
 
-Participantes con multiples schedules
+Replicar el formato de api de getAllEvents para todas las url
 
 # TODO List
 

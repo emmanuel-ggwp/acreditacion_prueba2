@@ -135,8 +135,6 @@ const seedData = async () => {
             eventsData.push({
                 name: `Event ${generateRandomString(5)}`,
                 description: `Description for event ${i}`,
-                startDate: randomDate(new Date(2025, 0, 1), new Date(2025, 11, 31)),
-                endDate: randomDate(new Date(2026, 0, 1), new Date(2026, 11, 31)),
                 location: `Location ${i}`,
                 maxCapacity: randomInt(50, 500),
                 isActive: true,
@@ -151,12 +149,17 @@ const seedData = async () => {
         const schedulesData = [];
         for (const event of allEvents) {
             const numSchedules = randomInt(1, 3);
-            let startDate = new Date(randomDate(new Date('2022-01-01'), new Date('2025-12-31')));
+            
+            // Generate a random base date for this event's schedules (sometime in 2025)
+            const baseDate = randomDate(new Date(2025, 0, 1), new Date(2025, 11, 31));
+            let currentScheduleDate = new Date(baseDate);
+            
             for (let j = 0; j < numSchedules; j++) {
-                const start = new Date(startDate);
-                start.setHours(randomInt(8, 18), 0, 0);
+                const start = new Date(currentScheduleDate);
+                start.setHours(randomInt(8, 18), 0, 0); // Start between 8am and 6pm
+                
                 const end = new Date(start);
-                end.setHours(start.getHours() + randomInt(1, 4));
+                end.setHours(start.getHours() + randomInt(1, 4)); // Duration 1-4 hours
 
                 schedulesData.push({
                     eventId: event.id,
@@ -167,7 +170,9 @@ const seedData = async () => {
                     isActive: true,
                     createdBy: adminId
                 });
-                startDate = randomDate(new Date(startDate.getTime() + 86400000), new Date('2025-12-31'));
+                
+                // Move to next day for the next schedule
+                currentScheduleDate = new Date(currentScheduleDate.getTime() + 86400000);
             }
         }
         await bulkCreateInBatches(EventSchedule, schedulesData);
@@ -259,35 +264,57 @@ const seedData = async () => {
 
         // 8. Accreditations
         const accreditationsData = [];
-        const accreditationSet = new Set<string>(); // To ensure uniqueness: scheduleId-participantId or scheduleId-guestId
-
+        const accreditationSet = new Set<string>(); 
         const participantScheduleUpdates = [];
-        // We want ~100,000 accreditations.
-        // We should pick random (Schedule, Person) pairs.
-        // Person can be Participant or Guest.
         
+        // Map participants to their guests for quick lookup
+        const participantGuestsMap = new Map<string, any[]>();
+        allGuests.forEach(g => {
+             if (!participantGuestsMap.has(g.participantId)) {
+                 participantGuestsMap.set(g.participantId, []);
+             }
+             const guests = participantGuestsMap.get(g.participantId);
+             if (guests) {
+                 guests.push(g);
+             }
+        });
+
+        // Map schedules for date access
+        const scheduleMap = new Map(allSchedules.map(s => [s.id, s]));
+
         let attempts = 0;
-        const MAX_ATTEMPTS = 200000; // Safety break
+        const MAX_ATTEMPTS = 200000;
+        
+        // We want to generate accreditations based on actual registrations (ParticipantSchedules)
+        // to ensure data consistency.
         
         while (accreditationsData.length < 100000 && attempts < MAX_ATTEMPTS) {
             attempts++;
-            const schedule = randomElement(allSchedules);
-            const isGuest = Math.random() > 0.7 && allGuests.length > 0;
             
-            let participantId = null;
+            // Pick a random valid registration
+            if (participantSchedulesData.length === 0) break;
+            const registration = randomElement(participantSchedulesData);
+            const schedule = scheduleMap.get(registration.scheduleId);
+            
+            if (!schedule) continue;
+
+            let isGuestAccreditation = Math.random() > 0.7;
+            const participantId = registration.participantId;
             let guestId = null;
 
-            if (isGuest) {
-                const guest = randomElement(allGuests);
-                guestId = guest.id;
-                participantId = guest.participantId; // Assuming guest is linked to participant
-            } else {
-                const participant = randomElement(allParticipants);
-                participantId = participant.id;
+            if (isGuestAccreditation) {
+                const guests = participantGuestsMap.get(participantId);
+                if (guests && guests.length > 0) {
+                    const guest = randomElement(guests);
+                    guestId = guest.id;
+                } else {
+                    // No guests for this participant, fallback to accrediting the participant themselves
+                    isGuestAccreditation = false; 
+                }
             }
 
-            // Unique constraint is on (participantId, eventScheduleId)
-            const key = `S${schedule.id}-P${participantId}`;
+            // Unique constraint key: Schedule + Participant + Guest
+            const key = `S${schedule.id}-P${participantId}-G${guestId || 'null'}`;
 
             if (!accreditationSet.has(key)) {
                 accreditationSet.add(key);
@@ -305,12 +332,14 @@ const seedData = async () => {
                     accreditedBy: adminId
                 });
 
-                // Update ParticipantSchedule to set isAccredited = true
-                participantScheduleUpdates.push({
-                    participantId: participantId,
-                    scheduleId: schedule.id,
-                    isAccredited: true
-                });
+                // Update ParticipantSchedule to set isAccredited = true ONLY if it's the participant
+                if (!isGuestAccreditation) {
+                    participantScheduleUpdates.push({
+                        participantId: participantId,
+                        scheduleId: schedule.id,
+                        isAccredited: true
+                    });
+                }
             }
         }
         

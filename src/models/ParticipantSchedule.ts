@@ -62,7 +62,6 @@ ParticipantSchedule.init(
     modelName: 'ParticipantSchedule',
     tableName: 'participant_schedules',
     timestamps: true,
-    underscored: true,
     indexes: [
       {
         unique: true,
