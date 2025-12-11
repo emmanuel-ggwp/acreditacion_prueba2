@@ -32,6 +32,11 @@ class Event extends Model {
   declare public maxGuestsPerParticipant: number;
   declare public createdBy: string;
   
+  declare public publicSlug: string | null;
+  declare public publicTemplate: string | null;
+  declare public isPublic: boolean;
+  declare public registrationConfig: any | null;
+
   declare public EventSchedules?: EventSchedule[];
 
   declare public readonly createdAt: Date;
@@ -89,6 +94,24 @@ Event.init(
     maxGuestsPerParticipant: {
       type: DataTypes.INTEGER,
       defaultValue: 2,
+    },
+    publicSlug: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      unique: true,
+    },
+    publicTemplate: {
+      type: DataTypes.STRING,
+      defaultValue: 'default',
+      allowNull: true,
+    },
+    isPublic: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
+    },
+    registrationConfig: {
+      type: DataTypes.JSON,
+      allowNull: true,
     },
     createdBy: {
       type: DataTypes.UUID,

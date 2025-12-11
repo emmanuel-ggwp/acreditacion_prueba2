@@ -3,13 +3,14 @@ import RoleGuard from '@/components/auth/RoleGuard';
 import { ROLES } from '@/utils/constants';
 
 interface PageProps {
-  params: { eventId: string };
+  params: Promise<{ eventId: string }>;
 }
 
-export default function EventReportsPage({ params }: PageProps) {
+export default async function EventReportsPage({ params }: PageProps) {
+  const { eventId } = await params;
   return (
     <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.MANAGER]}>
-      <EventReport eventId={params.eventId} />
+      <EventReport eventId={eventId} />
     </RoleGuard>
   );
 }

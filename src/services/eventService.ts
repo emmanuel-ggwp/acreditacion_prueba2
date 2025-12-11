@@ -8,10 +8,26 @@ import Award from '@/models/Award';
 import ParticipantAward from '@/models/ParticipantAward';
 import { createEventSchema, updateEventSchema } from '@/utils/validators/eventSchemas';
 import User from '@/models/User';
+import { slugify } from '@/utils/formatters';
 
 export class EventService {
   async createEvent(data: z.infer<typeof createEventSchema>, userId: string) {
     const validatedData = createEventSchema.parse(data);
+    
+    // Auto-generate slug if public and missing
+    if (validatedData.isPublic && !validatedData.publicSlug) {
+      let baseSlug = slugify(validatedData.name);
+      let slug = baseSlug;
+      let counter = 1;
+      
+      // Check for uniqueness
+      while (await Event.findOne({ where: { publicSlug: slug } })) {
+        slug = `${baseSlug}-${counter}`;
+        counter++;
+      }
+      validatedData.publicSlug = slug;
+    }
+
     const event = await Event.create({ ...validatedData, createdBy: userId });
     return event;
   }
@@ -22,6 +38,29 @@ export class EventService {
     if (!event) {
       throw new Error('Event not found');
     }
+
+    // Determine if the event will be public after this update
+    const willBePublic = validatedData.isPublic ?? event.isPublic;
+
+    // Check if we need to generate a slug:
+    // 1. It will be public
+    // 2. AND (publicSlug is explicitly cleared/empty in this update OR (it's not in update AND missing in DB))
+    const slugIsCleared = validatedData.publicSlug === '' || validatedData.publicSlug === null;
+    const slugIsMissing = validatedData.publicSlug === undefined && !event.publicSlug;
+
+    if (willBePublic && (slugIsCleared || slugIsMissing)) {
+       let baseSlug = slugify(validatedData.name || event.name);
+       let slug = baseSlug;
+       let counter = 1;
+       
+       // Check for uniqueness (excluding current event)
+       while (await Event.findOne({ where: { publicSlug: slug, id: { [Op.ne]: eventId } } })) {
+         slug = `${baseSlug}-${counter}`;
+         counter++;
+       }
+       validatedData.publicSlug = slug;
+    }
+
     await event.update(validatedData);
     return event;
   }

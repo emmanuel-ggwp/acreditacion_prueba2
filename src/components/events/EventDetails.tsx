@@ -1,20 +1,17 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
 import useEventStore from '@/store/eventStore';
-import { Calendar, Clock, Users, Award, BarChart2, Save, Edit2, X, UserCheck, FileText, ClipboardList } from 'lucide-react';
+import { Calendar, Clock, Users, Award, BarChart2, Edit2, X, UserCheck, FileText } from 'lucide-react';
 import ScheduleList from '@/components/events/ScheduleList';
 import ParticipantList from '@/components/participants/ParticipantList';
 import AccreditationPanel from '@/components/accreditation/AccreditationPanel';
 import EventReport from '@/components/reports/EventReport';
-import { createEventSchema, updateEventSchema } from '@/utils/validators/eventSchemas';
 import toast from 'react-hot-toast';
 import { useRouter } from 'next/navigation';
 import { isToday, isYesterday, isTomorrow } from 'date-fns';
 import apiClient from '@/utils/apiClient';
+import EventForm from './EventForm';
 
 // Placeholders for other components
 const AwardsTab = () => <div>Awards Management</div>;
@@ -24,33 +21,12 @@ interface EventDetailsProps {
 }
 
 type Tab = 'info' | 'schedules' | 'participants' | 'awards' | 'reports' | 'accreditation';
-type EventFormData = z.infer<typeof createEventSchema>;
 
 const EventDetails: React.FC<EventDetailsProps> = ({ eventId }) => {
   const router = useRouter();
-  const { currentEvent, fetchEventById, createEvent, updateEvent, loading, EventSchedules, fetchSchedulesForEvent } = useEventStore();
+  const { currentEvent, fetchEventById, loading, EventSchedules, fetchSchedulesForEvent } = useEventStore();
   const [activeTab, setActiveTab] = useState<Tab>('info');
   const [isEditMode, setIsEditMode] = useState(!eventId);
-
-  const {
-    register,
-    handleSubmit,
-    reset,
-    formState: { errors, isSubmitting },
-    watch
-  } = useForm<EventFormData>({
-    resolver: zodResolver(eventId ? updateEventSchema : createEventSchema),
-    defaultValues: {
-      name: '',
-      description: '',
-      location: '',
-      maxCapacity: 0,
-      allowGuests: true,
-      maxGuestsPerParticipant: 0,
-    }
-  });
-
-  const allowGuests = watch('allowGuests');
 
   useEffect(() => {
     if (eventId) {
@@ -60,38 +36,6 @@ const EventDetails: React.FC<EventDetailsProps> = ({ eventId }) => {
       setIsEditMode(true);
     }
   }, [eventId, fetchEventById, fetchSchedulesForEvent]);
-
-  useEffect(() => {
-    if (eventId && currentEvent) {
-      reset({
-        name: currentEvent.name,
-        description: currentEvent.description || '',
-        location: currentEvent.location || '',
-        maxCapacity: currentEvent.maxCapacity || 0,
-        allowGuests: currentEvent.allowGuests,
-        maxGuestsPerParticipant: currentEvent.maxGuestsPerParticipant,
-      });
-    }
-  }, [currentEvent, eventId, reset]);
-
-  const onSubmit = async (data: EventFormData) => {
-    try {
-      if (eventId) {
-        await updateEvent(eventId, data);
-        toast.success('Event updated successfully');
-        setIsEditMode(false);
-      } else {
-        const newEvent = await createEvent(data);
-        toast.success('Event created successfully');
-        if (newEvent?.id) {
-            router.push(`/events/${newEvent.id}`);
-        }
-      }
-    } catch (error) {
-      toast.error('Error saving event');
-      console.error(error);
-    }
-  };
 
   const handleDownloadReport = async () => {
     if (!eventId || !currentEvent) return;
@@ -132,8 +76,6 @@ const EventDetails: React.FC<EventDetailsProps> = ({ eventId }) => {
     return <div className="text-center p-10 text-red-500">Event not found.</div>;
   }
 
-  
-
   const tabs: { id: Tab; label: string; icon: React.ElementType }[] = [
     { id: 'info', label: 'Info', icon: Calendar },
     { id: 'schedules', label: 'Schedules', icon: Clock },
@@ -163,131 +105,91 @@ const EventDetails: React.FC<EventDetailsProps> = ({ eventId }) => {
                     <FileText size={16} className="mr-2"/> Report
                   </button>
                   <button
-                    onClick={() => setIsEditMode(!isEditMode)}
-                    className={`flex items-center px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                      isEditMode 
-                        ? 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50' 
-                        : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100'
-                    }`}
+                    onClick={() => setIsEditMode(true)}
+                    className="flex items-center px-4 py-2 rounded-md text-sm font-medium transition-colors bg-indigo-50 text-indigo-700 hover:bg-indigo-100"
                   >
-                    {isEditMode ? <><X size={16} className="mr-2"/> Cancel</> : <><Edit2 size={16} className="mr-2"/> Edit Details</>}
+                    <Edit2 size={16} className="mr-2"/> Edit Details
                   </button>
                 </div>
               )}
             </div>
             
-            <form onSubmit={handleSubmit(onSubmit)} className="space-y-8 max-w-4xl">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <div className="col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
-                  {isEditMode ? (
-                    <input
-                      {...register('name')}
-                      className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2.5 border"
-                      placeholder="Event Name"
-                    />
-                  ) : (
-                    <p className="text-lg text-gray-900 font-medium">{currentEvent?.name}</p>
-                  )}
-                  {errors.name && <p className="text-red-500 text-xs mt-1">{errors.name.message}</p>}
-                </div>
-
-                <div className="col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-                  {isEditMode ? (
-                    <textarea
-                      {...register('description')}
-                      rows={4}
-                      className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2.5 border"
-                      placeholder="Describe your event..."
-                    />
-                  ) : (
-                    <p className="text-gray-700 whitespace-pre-wrap leading-relaxed">{currentEvent?.description || <span className="text-gray-400 italic">No description provided</span>}</p>
-                  )}
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
-                  {isEditMode ? (
-                    <input
-                      {...register('location')}
-                      className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2.5 border"
-                      placeholder="Event Location"
-                    />
-                  ) : (
-                    <p className="text-gray-900 flex items-center"><span className="inline-block w-2 h-2 rounded-full bg-gray-400 mr-2"></span>{currentEvent?.location || '-'}</p>
-                  )}
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Max Capacity</label>
-                  {isEditMode ? (
-                    <>
-                      <input
-                        type="number"
-                        {...register('maxCapacity')}
-                        placeholder="Leave empty for unlimited"
-                        className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2.5 border"
-                      />
-                      {errors.maxCapacity && <p className="text-red-500 text-xs mt-1">{errors.maxCapacity.message}</p>}
-                    </>
-                  ) : (
-                    <p className="text-gray-900">{currentEvent?.maxCapacity ? `${currentEvent.maxCapacity} attendees` : 'Unlimited capacity'}</p>
-                  )}
-                </div>
-
-                <div className="flex items-center h-full pt-6">
-                   {isEditMode ? (
-                      <div className="flex items-center">
-                        <input
-                          type="checkbox"
-                          id="allowGuests"
-                          {...register('allowGuests')}
-                          className="h-5 w-5 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded cursor-pointer"
-                        />
-                        <label htmlFor="allowGuests" className="ml-3 block text-sm font-medium text-gray-900 cursor-pointer">Allow Guests</label>
-                      </div>
-                   ) : (
-                      <div className="flex items-center px-3 py-1 rounded-full bg-gray-100 w-fit">
-                        <span className={`h-2.5 w-2.5 rounded-full mr-2 ${currentEvent?.allowGuests ? 'bg-green-500' : 'bg-red-500'}`}></span>
-                        <span className="text-sm font-medium text-gray-700">Guests {currentEvent?.allowGuests ? 'Allowed' : 'Not Allowed'}</span>
-                      </div>
-                   )}
-                </div>
-
-                {(allowGuests || (!isEditMode && currentEvent?.allowGuests)) && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Max Guests per Participant</label>
-                    {isEditMode ? (
-                      <>
-                        <input
-                          type="number"
-                          {...register('maxGuestsPerParticipant', { 
-                            setValueAs: (v) => (v === '' || v === null ? 0 : parseInt(v, 10))
-                          })}
-                          className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2.5 border"
-                        />
-                        {errors.maxGuestsPerParticipant && <p className="text-red-500 text-xs mt-1">{errors.maxGuestsPerParticipant.message}</p>}
-                      </>
-                    ) : (
-                      <p className="text-gray-900">{currentEvent?.maxGuestsPerParticipant}</p>
-                    )}
+            {currentEvent && (
+              <div className="space-y-8 max-w-4xl">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  <div className="col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+                    <p className="text-lg text-gray-900 font-medium">{currentEvent.name}</p>
                   </div>
-                )}
-              </div>
 
-              {isEditMode && (
-                <div className="flex justify-end pt-6 border-t border-gray-100">
-                  <button
-                    type="submit"
-                    disabled={isSubmitting}
-                    className="inline-flex justify-center items-center py-2.5 px-6 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors disabled:opacity-70"
-                  >
-                    {isSubmitting ? 'Saving...' : <><Save size={18} className="mr-2"/> Save Changes</>}
-                  </button>
+                  <div className="col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                    <p className="text-gray-700 whitespace-pre-wrap leading-relaxed">{currentEvent.description || <span className="text-gray-400 italic">No description provided</span>}</p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
+                    <p className="text-gray-900 flex items-center"><span className="inline-block w-2 h-2 rounded-full bg-gray-400 mr-2"></span>{currentEvent.location || '-'}</p>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Max Capacity</label>
+                    <p className="text-gray-900">{currentEvent.maxCapacity ? `${currentEvent.maxCapacity} attendees` : 'Unlimited capacity'}</p>
+                  </div>
+
+                  <div className="flex items-center h-full pt-6">
+                      <div className="flex items-center px-3 py-1 rounded-full bg-gray-100 w-fit">
+                        <span className={`h-2.5 w-2.5 rounded-full mr-2 ${currentEvent.allowGuests ? 'bg-green-500' : 'bg-red-500'}`}></span>
+                        <span className="text-sm font-medium text-gray-700">Guests {currentEvent.allowGuests ? 'Allowed' : 'Not Allowed'}</span>
+                      </div>
+                  </div>
+
+                  {currentEvent.allowGuests && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Max Guests per Participant</label>
+                      <p className="text-gray-900">{currentEvent.maxGuestsPerParticipant}</p>
+                    </div>
+                  )}
+
+                  {currentEvent.isPublic && (
+                    <div className="col-span-2 border-t border-gray-100 pt-6 mt-2">
+                        <h4 className="text-md font-medium text-gray-900 mb-2">Public Registration</h4>
+                        <div className="bg-gray-50 p-4 rounded-lg">
+                            <p className="text-sm text-gray-600 mb-1">Public URL:</p>
+                            <a 
+                                href={`/public/events/${currentEvent.publicSlug}`} 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                className="text-indigo-600 hover:text-indigo-800 font-medium break-all"
+                            >
+                                {`${window.location.origin}/public/events/${currentEvent.publicSlug}`}
+                            </a>
+                            <p className="text-xs text-gray-500 mt-2">Template: {currentEvent.publicTemplate || 'Default'}</p>
+                        </div>
+                    </div>
+                  )}
                 </div>
-              )}
-            </form>
+              </div>
+            )}
+
+            {isEditMode && (
+                <EventForm 
+                    event={currentEvent || undefined} 
+                    onClose={() => {
+                        if (!eventId) {
+                            router.back();
+                        } else {
+                            setIsEditMode(false);
+                        }
+                    }}
+                    onSuccess={(newEvent) => {
+                        if (!eventId && newEvent.id) {
+                            router.push(`/events/${newEvent.id}`);
+                        }
+                        setIsEditMode(false);
+                    }}
+                />
+            )}
           </div>
         );
       case 'schedules':
@@ -317,12 +219,12 @@ const EventDetails: React.FC<EventDetailsProps> = ({ eventId }) => {
       </div>
 
       <div className="bg-white rounded-xl shadow-lg overflow-hidden border border-gray-200">
-        <div className="flex border-b border-gray-200 bg-gray-50">
+        <div className="flex border-b border-gray-200 bg-gray-50 overflow-x-auto">
           {tabs.map(({ id, label, icon: Icon }) => (
             <button
               key={id}
               onClick={() => setActiveTab(id)}
-              className={`flex items-center py-4 px-6 text-sm font-medium transition-all ${
+              className={`flex items-center py-4 px-6 text-sm font-medium transition-all whitespace-nowrap ${
                 activeTab === id
                   ? 'border-b-2 border-indigo-600 text-indigo-600 bg-white -mb-px'
                   : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'

@@ -24,8 +24,8 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const toggleSidebarCollapse = () => isMobile ? setIsSidebarOpen(!isSidebarOpen) : setIsSidebarCollapsed(!isSidebarCollapsed);
   const toggleSidebarOpen = () => setIsSidebarOpen(!isSidebarOpen);
 
-  // Don't render layout for auth pages
-  if (['/login', '/register'].includes(pathname)) {
+  // Don't render layout for auth pages or public pages
+  if (['/login', '/register'].includes(pathname) || pathname.startsWith('/public')) {
     return <>{children}</>;
   }
 

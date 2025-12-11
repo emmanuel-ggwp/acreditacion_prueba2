@@ -41,3 +41,14 @@ export const guestSchema = z.object({
 export const createGuestSchema = guestSchema.omit({ id: true, isAccredited: true });
 export const updateGuestSchema = createGuestSchema.partial();
 
+export const publicRegistrationSchema = participantSchema.omit({ 
+  id: true, 
+  createdBy: true, 
+  isAccredited: true, 
+  allowedGuests: true,
+  createdAt: true,
+  updatedAt: true
+}).extend({
+  scheduleIds: z.array(z.string().uuid()).min(1, "At least one schedule is required")
+});
+

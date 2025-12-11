@@ -20,6 +20,9 @@ interface Event {
   maxCapacity: number | null;
   allowGuests: boolean;
   maxGuestsPerParticipant: number;
+  isPublic: boolean;
+  publicSlug: string | null;
+  publicTemplate: string | null;
 }
 
 // Schema for form validation
@@ -28,6 +31,9 @@ const eventFormValidationSchema = createEventSchema.extend({
   //NOTE: These fields are included for avoid errors from react-hook-form
   allowGuests: z.boolean(),
   maxGuestsPerParticipant: z.number().int().min(0),
+  isPublic: z.boolean(),
+  publicSlug: z.string().optional().nullable(),
+  publicTemplate: z.string().optional().nullable(),
 });
 
 type EventFormInputs = z.infer<typeof eventFormValidationSchema>;
@@ -35,9 +41,10 @@ type EventFormInputs = z.infer<typeof eventFormValidationSchema>;
 interface EventFormProps {
   event?: Event;
   onClose?: () => void;
+  onSuccess?: (event: Event) => void;
 }
 
-const EventForm: React.FC<EventFormProps> = ({ event, onClose }) => {
+const EventForm: React.FC<EventFormProps> = ({ event, onClose, onSuccess }) => {
   const router = useRouter();
   const { createEvent, updateEvent } = useEventStore();
   const isEditMode = !!event;
@@ -57,6 +64,9 @@ const EventForm: React.FC<EventFormProps> = ({ event, onClose }) => {
       maxCapacity: event?.maxCapacity ?? null,
       allowGuests: event?.allowGuests ?? true,
       maxGuestsPerParticipant: event?.maxGuestsPerParticipant ?? 0,
+      isPublic: event?.isPublic ?? false,
+      publicSlug: event?.publicSlug || '',
+      publicTemplate: event?.publicTemplate || 'default',
     },
   });
 
@@ -70,18 +80,26 @@ const EventForm: React.FC<EventFormProps> = ({ event, onClose }) => {
 
   const onSubmit: SubmitHandler<EventFormInputs> = async (data) => {
     try {
+      let resultEvent;
       if (isEditMode && event) {
         // Use updateEventSchema for submission
         const submissionData = updateEventSchema.parse(data);
         await updateEvent(event.id, submissionData);
+        resultEvent = { ...event, ...submissionData } as Event; // Optimistic or fetch fresh? Store updates it.
         toast.success('Event updated successfully');
       } else {
         // Use createEventSchema for submission
         const submissionData = createEventSchema.parse(data);
-        await createEvent(submissionData);
+        const newEvent = await createEvent(submissionData);
+        resultEvent = newEvent as Event;
         toast.success('Event created successfully');
         reset();
       }
+      
+      if (onSuccess && resultEvent) {
+        onSuccess(resultEvent);
+      }
+      
       handleClose();
     } catch (e) {
       const error = errorHandler(e);
@@ -92,10 +110,10 @@ const EventForm: React.FC<EventFormProps> = ({ event, onClose }) => {
 
   return (
     <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm z-50 flex justify-center items-center p-4 animate-in fade-in duration-200">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden transform transition-all animate-in zoom-in-95 duration-200">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[90vh] transform transition-all animate-in zoom-in-95 duration-200">
         
         {/* Header */}
-        <div className="bg-white px-8 py-6 border-b border-gray-100 flex justify-between items-center">
+        <div className="bg-white px-8 py-6 border-b border-gray-100 flex justify-between items-center flex-shrink-0">
           <div>
             <h2 className="text-2xl font-bold text-gray-900">
               {isEditMode ? 'Editar Evento' : 'Crear Nuevo Evento'}
@@ -114,8 +132,8 @@ const EventForm: React.FC<EventFormProps> = ({ event, onClose }) => {
           </button>
         </div>
 
-        <form onSubmit={handleSubmit(onSubmit)}>
-          <div className="p-8 space-y-6">
+        <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col flex-1 overflow-hidden">
+          <div className="p-8 space-y-6 overflow-y-auto flex-1">
             <div className="grid grid-cols-1 gap-y-6 sm:grid-cols-2 sm:gap-x-8">
               
               {/* Name */}
@@ -234,11 +252,78 @@ const EventForm: React.FC<EventFormProps> = ({ event, onClose }) => {
                 />
                 {errors.maxGuestsPerParticipant && <p className="mt-2 text-sm text-red-500">{errors.maxGuestsPerParticipant.message}</p>}
               </div>
+
+              {/* Public Registration Section */}
+              <div className="sm:col-span-2 border-t border-gray-100 pt-6 mt-2">
+                <h3 className="text-lg font-medium text-gray-900 mb-4">Registro Público</h3>
+                
+                <div className="space-y-4">
+                  {/* Is Public Toggle */}
+                  <div className="bg-gray-50 rounded-xl p-4 border border-gray-100">
+                    <div className="flex items-start">
+                      <div className="flex items-center h-5">
+                        <input
+                          id="isPublic"
+                          type="checkbox"
+                          {...register('isPublic')}
+                          className="h-5 w-5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 transition-colors cursor-pointer"
+                        />
+                      </div>
+                      <div className="ml-3">
+                        <label htmlFor="isPublic" className="font-medium text-gray-900 cursor-pointer">
+                          Habilitar Registro Público
+                        </label>
+                        <p className="text-sm text-gray-500">
+                          Permite que cualquier persona se registre a través de un enlace público.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Public Slug */}
+                  <div>
+                    <label htmlFor="publicSlug" className="block text-sm font-semibold text-gray-700 mb-1">
+                      URL Personalizada (Slug)
+                    </label>
+                    <div className="flex rounded-xl shadow-sm">
+                      <span className="inline-flex items-center px-3 rounded-l-xl border border-r-0 border-gray-200 bg-gray-50 text-gray-500 sm:text-sm">
+                        /public/events/
+                      </span>
+                      <input
+                        type="text"
+                        id="publicSlug"
+                        placeholder="mi-evento-2025"
+                        {...register('publicSlug')}
+                        className="flex-1 block w-full min-w-0 rounded-none rounded-r-xl border-gray-200 px-4 py-3 text-gray-900 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                      />
+                    </div>
+                    <p className="mt-1 text-xs text-gray-500">Dejar en blanco para generar automáticamente (si no se proporciona).</p>
+                    {errors.publicSlug && <p className="mt-2 text-sm text-red-500">{errors.publicSlug.message}</p>}
+                  </div>
+
+                  {/* Template Selector */}
+                  <div>
+                    <label htmlFor="publicTemplate" className="block text-sm font-semibold text-gray-700 mb-1">
+                      Plantilla de Diseño
+                    </label>
+                    <select
+                      id="publicTemplate"
+                      {...register('publicTemplate')}
+                      className="block w-full rounded-xl border-gray-200 bg-gray-50 px-4 py-3 text-gray-900 focus:border-indigo-500 focus:bg-white focus:ring-2 focus:ring-indigo-500/20 transition-all duration-200 sm:text-sm"
+                    >
+                      <option value="default">Por Defecto (Estándar)</option>
+                      <option value="modern">Moderno (Oscuro)</option>
+                      <option value="minimal">Minimalista (Limpio)</option>
+                    </select>
+                    <p className="mt-1 text-xs text-gray-500">Elige el diseño para la página de registro público.</p>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
           {/* Footer */}
-          <div className="bg-gray-50 px-8 py-5 border-t border-gray-100 flex justify-end space-x-3">
+          <div className="bg-gray-50 px-8 py-5 border-t border-gray-100 flex justify-end space-x-3 flex-shrink-0">
             <button
               type="button"
               onClick={handleClose}

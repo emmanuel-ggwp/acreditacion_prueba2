@@ -41,6 +41,8 @@ class Participant extends Model {
   declare public dietaryPreference: 'NONE' | 'VEGETARIAN' | 'VEGAN' | 'CELIAC' | 'KOSHER' | 'HALAL' | 'OTHER';
   declare public dietaryComments: string | null;
   declare public allowedGuests: number;
+  declare public registrationSource: 'MANUAL' | 'IMPORT' | 'PUBLIC_FORM';
+  declare public isNew: boolean;
   declare public createdBy: string;
 
   declare public readonly createdAt: Date;
@@ -128,6 +130,15 @@ Participant.init(
     allowedGuests: {
       type: DataTypes.INTEGER,
       defaultValue: 0,
+    },
+    registrationSource: {
+      type: DataTypes.ENUM('MANUAL', 'IMPORT', 'PUBLIC_FORM'),
+      defaultValue: 'MANUAL',
+      allowNull: false,
+    },
+    isNew: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
     },
     createdBy: {
       type: DataTypes.UUID,
