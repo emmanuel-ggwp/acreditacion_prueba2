@@ -140,7 +140,7 @@ export class ParticipantService {
       // include.push({ model: Award, as: 'awards' });
     }
     // Include schedules to see what they are registered for
-    include.push({ model: EventSchedule, through: { attributes: ['attended', 'attendedAt'] } });
+    include.push({ model: EventSchedule, as: 'schedules', through: { attributes: ['attended', 'attendedAt'] } });
 
     const participant = await Participant.findByPk(participantId, { include });
     if (!participant) {
@@ -159,6 +159,7 @@ export class ParticipantService {
         { model: Guest, as: 'guests', attributes: [] },
         { 
             model: EventSchedule, 
+            as: 'schedules',
             where: { eventId }, // This filters the participants to those linked to schedules of this event
             attributes: [],
             through: { attributes: [] },
@@ -202,7 +203,7 @@ export class ParticipantService {
       attributes: {
         include: [
             [fn('COUNT', col('guests.id')), 'guestCount'],
-            [fn('MAX', col('EventSchedules.ParticipantSchedule.attended')), 'accredited']
+            [fn('MAX', col('schedules.ParticipantSchedule.attended')), 'accredited']
         ],
       },
       group: ['Participant.id'],
@@ -237,6 +238,7 @@ export class ParticipantService {
       },
       include: [{
           model: EventSchedule,
+          as: 'schedules',
           where: { eventId },
           attributes: [],
           through: { attributes: [] },

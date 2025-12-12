@@ -83,7 +83,7 @@ EventSchedule.init(
 );
 
 // Associations
-Event.hasMany(EventSchedule, { foreignKey: 'eventId' });
+Event.hasMany(EventSchedule, { foreignKey: 'eventId', as: 'schedules' });
 EventSchedule.belongsTo(Event, { foreignKey: 'eventId' });
 
 // Note: The Many-to-Many association with Participant is defined in Participant.ts to avoid circular dependency issues during initialization order,

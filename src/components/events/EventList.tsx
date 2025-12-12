@@ -13,6 +13,7 @@ type FilterType = 'all' | 'active' | 'inactive' | 'mine';
 const EventList = () => {
   const { events, fetchEvents, loading, total, page, limit } = useEventStore();
   const [filter, setFilter] = useState<FilterType>('all');
+  const [searchTerm, setSearchTerm] = useState('');
   const [siblingCount, setSiblingCount] = useState(1);
   const paginationContainerRef = useRef<HTMLDivElement>(null);
   const defaultFetchParams = { page: 1, limit: 9, includeSchedules: true, sortOrder: 'DESC', sortBy: 'startDateTime' };
@@ -51,14 +52,18 @@ const EventList = () => {
   }, [loading, totalPages]);
 
   useEffect(() => {
-    const params: any = { ...defaultFetchParams };
-    if (filter === 'active') params.isActive = true;
-    if (filter === 'inactive') params.isActive = false;
-    fetchEvents(params);
-  }, [fetchEvents, filter]);
+    const delayDebounceFn = setTimeout(() => {
+      const params: any = { ...defaultFetchParams, search: searchTerm };
+      if (filter === 'active') params.isActive = true;
+      if (filter === 'inactive') params.isActive = false;
+      fetchEvents(params);
+    }, 300);
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [fetchEvents, filter, searchTerm]);
 
   const handlePageChange = (newPage: number) => {
-    const params: any = { ...defaultFetchParams, page: newPage };
+    const params: any = { ...defaultFetchParams, page: newPage, search: searchTerm };
     if (filter === 'active') params.isActive = true;
     if (filter === 'inactive') params.isActive = false;
     fetchEvents(params);
@@ -136,6 +141,8 @@ const EventList = () => {
             <input
               type="text"
               placeholder="Search events..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
               className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition duration-150 ease-in-out"
             />
           </div>

@@ -156,6 +156,7 @@ export class ReportService {
     const totalParticipants = await Participant.count({
         include: [{
             model: EventSchedule,
+            as: 'schedules',
             where: { eventId },
             required: true
         }],
@@ -382,6 +383,7 @@ export class ReportService {
         totalParticipants: await Participant.count({
           include: [{
             model: EventSchedule,
+            as: 'schedules',
             where: { eventId },
             required: true
           }],

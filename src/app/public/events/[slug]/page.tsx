@@ -17,6 +17,7 @@ async function getEvent(slug: string) {
       include: [
         {
           model: EventSchedule,
+          as: 'schedules',
           required: false 
         }
       ],

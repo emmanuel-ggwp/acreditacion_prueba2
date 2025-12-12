@@ -37,7 +37,7 @@ class Event extends Model {
   declare public isPublic: boolean;
   declare public registrationConfig: any | null;
 
-  declare public EventSchedules?: EventSchedule[];
+  declare public schedules?: EventSchedule[];
 
   declare public readonly createdAt: Date;
   declare public readonly updatedAt: Date;
@@ -48,16 +48,16 @@ class Event extends Model {
   declare public createUser: BelongsToCreateAssociationMixin<User>;
 
   // Mixins for EventSchedule
-  declare public getEventSchedules: HasManyGetAssociationsMixin<EventSchedule>;
-  declare public addEventSchedule: HasManyAddAssociationMixin<EventSchedule, string>;
-  declare public addEventSchedules: HasManyAddAssociationsMixin<EventSchedule, string>;
-  declare public setEventSchedules: HasManySetAssociationsMixin<EventSchedule, string>;
-  declare public removeEventSchedule: HasManyRemoveAssociationMixin<EventSchedule, string>;
-  declare public removeEventSchedules: HasManyRemoveAssociationsMixin<EventSchedule, string>;
-  declare public hasEventSchedule: HasManyHasAssociationMixin<EventSchedule, string>;
-  declare public hasEventSchedules: HasManyHasAssociationsMixin<EventSchedule, string>;
-  declare public countEventSchedules: HasManyCountAssociationsMixin;
-  declare public createEventSchedule: HasManyCreateAssociationMixin<EventSchedule>;
+  declare public getSchedules: HasManyGetAssociationsMixin<EventSchedule>;
+  declare public addSchedule: HasManyAddAssociationMixin<EventSchedule, string>;
+  declare public addSchedules: HasManyAddAssociationsMixin<EventSchedule, string>;
+  declare public setSchedules: HasManySetAssociationsMixin<EventSchedule, string>;
+  declare public removeSchedule: HasManyRemoveAssociationMixin<EventSchedule, string>;
+  declare public removeSchedules: HasManyRemoveAssociationsMixin<EventSchedule, string>;
+  declare public hasSchedule: HasManyHasAssociationMixin<EventSchedule, string>;
+  declare public hasSchedules: HasManyHasAssociationsMixin<EventSchedule, string>;
+  declare public countSchedules: HasManyCountAssociationsMixin;
+  declare public createSchedule: HasManyCreateAssociationMixin<EventSchedule>;
 }
 
 Event.init(

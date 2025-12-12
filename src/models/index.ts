@@ -13,8 +13,8 @@ import RefreshToken from './RefreshToken';
 import AuditLog from './AuditLog';
 
 // Define associations here to avoid circular dependencies
-Participant.belongsToMany(EventSchedule, { through: ParticipantSchedule, foreignKey: 'participantId' });
-EventSchedule.belongsToMany(Participant, { through: ParticipantSchedule, foreignKey: 'scheduleId' });
+Participant.belongsToMany(EventSchedule, { through: ParticipantSchedule, foreignKey: 'participantId', as: 'schedules' });
+EventSchedule.belongsToMany(Participant, { through: ParticipantSchedule, foreignKey: 'scheduleId', as: 'participants' });
 
 export {
   User,
