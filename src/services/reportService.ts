@@ -35,7 +35,18 @@ export class ReportService {
     if (!event) throw new Error('Event not found');
 
     // 1. Get all schedules for this event
-    const schedules = await EventSchedule.findAll({ where: { eventId } });
+    const schedules = await EventSchedule.findAll({ 
+        where: { eventId },
+        order: [
+            [literal(`CASE 
+              WHEN status = 'accrediting' THEN 1 
+              WHEN status = 'published' THEN 2 
+              WHEN status = 'accredited' THEN 3 
+              ELSE 4 
+            END`), 'ASC'],
+            ['startDateTime', 'ASC']
+        ]
+    });
     const scheduleIds = schedules.map(s => s.id);
 
     if (scheduleIds.length === 0) {

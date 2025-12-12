@@ -64,6 +64,11 @@ export class AccreditationService {
     if (isAccredited) {
       throw new Error('This person has already been accredited for this schedule.');
     }
+
+    // Update schedule status to 'accrediting' if it is 'published'
+    if (schedule.status === 'published') {
+      await schedule.update({ status: 'accrediting' }, { transaction });
+    }
     
     return { schedule, person };
   }

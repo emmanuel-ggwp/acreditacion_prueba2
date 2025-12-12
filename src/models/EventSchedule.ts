@@ -11,6 +11,12 @@ class EventSchedule extends Model {
   declare public endDateTime: Date;
   declare public maxCapacity: number | null;
   declare public isActive: boolean;
+  // Status:
+  // - published: Visible/Upcoming (default)
+  // - accrediting: Check-in is currently open
+  // - accredited: Event finished, accreditation closed
+  // - cancelled: Schedule cancelled
+  declare public status: 'published' | 'accrediting' | 'accredited' | 'cancelled';
 
   declare public readonly createdAt: Date;
   declare public readonly updatedAt: Date;
@@ -50,6 +56,12 @@ EventSchedule.init(
     isActive: {
       type: DataTypes.BOOLEAN,
       defaultValue: true,
+    },
+    status: {
+      type: DataTypes.STRING,
+      defaultValue: 'published',
+      allowNull: false,
+      comment: 'published: Visible/Upcoming, accrediting: Check-in open, accredited: Finished/Closed, cancelled: Cancelled'
     },
     createdAt: {
       type: DataTypes.DATE,

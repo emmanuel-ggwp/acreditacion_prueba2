@@ -197,7 +197,7 @@ const DashboardStats: React.FC = () => {
   const itemsPerPage = 6;
 
   useEffect(() => {
-    fetchEvents({ page: currentPage, limit: itemsPerPage, sortOrder: 'DESC', sortBy: 'startDateTime' });
+    fetchEvents({ page: currentPage, limit: itemsPerPage });
   }, [fetchEvents, currentPage]);
 
   useEffect(() => {
