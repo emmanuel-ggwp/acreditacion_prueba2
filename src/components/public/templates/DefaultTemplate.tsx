@@ -16,10 +16,10 @@ export default function DefaultTemplate({ event, slug }: TemplateProps) {
           <div className="bg-indigo-600 px-8 py-10 text-white">
             <h1 className="text-3xl font-bold mb-2">{event.name}</h1>
             <div className="flex flex-wrap gap-4 text-indigo-100 text-sm font-medium">
-              {event.EventSchedules && event.EventSchedules.length > 0 && (
+              {event.schedules && event.schedules.length > 0 && (
                 <div className="flex items-center">
                   <Calendar className="mr-2 h-4 w-4" />
-                  {new Date(event.EventSchedules[0].startDateTime).toLocaleDateString(undefined, {
+                  {new Date(event.schedules[0].startDateTime).toLocaleDateString(undefined, {
                     weekday: 'long',
                     year: 'numeric',
                     month: 'long',

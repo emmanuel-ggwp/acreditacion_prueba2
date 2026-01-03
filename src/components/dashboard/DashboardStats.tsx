@@ -5,6 +5,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsive
 import { Users, Calendar, Award, CheckSquare, TrendingUp, ArrowUpRight, Activity, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import apiClient from '@/utils/apiClient';
 import useEventStore from '@/store/eventStore';
+import { ButtonEventReport } from '../events/ButtonEventReport';
 
 interface ScheduleStat {
   id: string;
@@ -113,8 +114,8 @@ const EventStatCard = React.memo(({ stat, viewMode }: { stat: EventStat, viewMod
       <div className="flex-1 pr-4">
         <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">{stat.name}</h4>
       </div>
-      <div className="p-2 rounded-full bg-indigo-600 text-white shadow-md">
-        <Users size={20} />
+      <div className="">
+        <ButtonEventReport eventId={stat.id} eventName={stat.name} size={'large'} />
       </div>
     </div>
     
@@ -213,9 +214,20 @@ const DashboardStats: React.FC = () => {
       }
       
       try {
-        const statsPromises = events.map(async (event) => {
+        // Call batch reports endpoint with all event IDs in a single request
+        const idsParam = events.map(event => event.id).join(',');
+        const reports = await apiClient.get<any[]>(`/api/reports/events?ids=${idsParam}`);
+
+        // Map reports by eventId for quick lookup
+        const reportMap = new Map<string, any>(
+          reports.map((report: any) => [report.eventInfo.id, report])
+        );
+
+        const results = events.map((event) => {
           try {
-            const report = await apiClient.get<any>(`/api/reports/events/${event.id}`);
+            const report = reportMap.get(event.id);
+            if (!report) return null;
+
             const schedules = report.scheduleStats || [];
             let date = 'N/A';
             let scheduleStats: ScheduleStat[] = [];
@@ -258,7 +270,7 @@ const DashboardStats: React.FC = () => {
             return null;
           }
         });
-        const results = await Promise.all(statsPromises);
+
         setEventStats(results.filter(r => r !== null) as EventStat[]);
       } catch (error) {
         console.error(error);
@@ -274,8 +286,8 @@ const DashboardStats: React.FC = () => {
     <div className="space-y-8">
       
 
-      {/* Main Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+      {/* Main Stats Cards display none*/}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6" style={{ display: 'none' }}>
         <StatCard title="Active Events" value={total} icon={Calendar} trend="+2 this week" trendUp={true} />
         <StatCard title="Accreditations Today" value={mainStats.accreditationsToday} icon={CheckSquare} trend="+12% vs yesterday" trendUp={true} />
         <StatCard title="Pending Awards" value={mainStats.pendingAwards} icon={Award} trend="Needs attention" />
@@ -283,7 +295,7 @@ const DashboardStats: React.FC = () => {
       </div>
 
       {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8" style={{ display: 'none' }}>
         {/* Area Chart */}
         <div className="bg-white p-8 rounded-2xl border border-gray-100 shadow-sm">
           <div className="flex justify-between items-center mb-8">

@@ -30,7 +30,7 @@ AuditLog.init(
       },
     },
     action: {
-      type: DataTypes.ENUM('CREATE', 'UPDATE', 'DELETE', 'LOGIN', 'LOGOUT', 'ACCESS', 'REVOKE'),
+      type: DataTypes.ENUM('CREATE', 'UPDATE', 'SYSTEM-BULK-UPDATE', 'DELETE', 'LOGIN', 'LOGOUT', 'ACCESS', 'REVOKE'),
       allowNull: false,
     },
     entity: {

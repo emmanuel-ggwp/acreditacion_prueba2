@@ -26,6 +26,11 @@ const AccreditationItem = ({ acc, ...props }: { acc: RichAccreditation } & any) 
             <Clock size={14} className="mr-1" />
             {new Date(acc.checkInTime).toLocaleTimeString()} by {acc.accreditedByUser?.firstName}
           </p>
+          {acc.notes && (
+            <p className="text-xs text-gray-600 mt-1 italic border-l-2 border-gray-300 pl-2">
+              "{acc.notes}"
+            </p>
+          )}
         </div>
       </div>
     </CSSTransition>

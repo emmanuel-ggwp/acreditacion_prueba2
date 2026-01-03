@@ -14,9 +14,9 @@ export default function MinimalTemplate({ event, slug }: TemplateProps) {
         <div className="text-center mb-12">
             <h1 className="text-3xl font-light text-gray-900 mb-4">{event.name}</h1>
             <div className="flex justify-center gap-6 text-gray-500 text-sm">
-                 {event.EventSchedules && event.EventSchedules.length > 0 && (
+                 {event.schedules && event.schedules.length > 0 && (
                     <span>
-                      {new Date(event.EventSchedules[0].startDateTime).toLocaleDateString()}
+                      {new Date(event.schedules[0].startDateTime).toLocaleDateString()}
                     </span>
                   )}
                   {event.location && (

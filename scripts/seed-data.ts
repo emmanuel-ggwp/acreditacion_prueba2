@@ -45,6 +45,9 @@ const firstNames = ['Juan', 'Maria', 'Pedro', 'Ana', 'Luis', 'Sofia', 'Carlos', 
 const lastNames = ['Garcia', 'Rodriguez', 'Martinez', 'Hernandez', 'Lopez', 'Gonzalez', 'Perez', 'Sanchez', 'Ramirez', 'Torres', 'Flores', 'Rivera', 'Gomez', 'Diaz', 'Reyes'];
 const companies = ['TechCorp', 'InnovateLtda', 'GlobalSolutions', 'CreativeMinds', 'FutureSystems', 'AlphaIndustries', 'BetaLogistics', 'OmegaServices'];
 const positions = ['Developer', 'Manager', 'Designer', 'Director', 'Analyst', 'Consultant', 'Engineer', 'Coordinator'];
+const dietaryPreferences = ['NONE', 'VEGETARIAN', 'VEGAN', 'CELIAC', 'KOSHER', 'HALAL', 'OTHER'];
+const registrationSources = ['MANUAL', 'IMPORT', 'PUBLIC_FORM'];
+const scheduleStatuses = ['published', 'accrediting', 'accredited', 'cancelled'];
 
 const generateRandomString = (length: number) => {
     const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
@@ -132,13 +135,18 @@ const seedData = async () => {
         // 2. Events
         const eventsData = [];
         for (let i = 0; i < 100; i++) {
+            const name = `Event ${generateRandomString(5)}`;
             eventsData.push({
-                name: `Event ${generateRandomString(5)}`,
+                name: name,
                 description: `Description for event ${i}`,
                 location: `Location ${i}`,
                 maxCapacity: randomInt(50, 500),
                 isActive: true,
-                createdBy: adminId
+                createdBy: adminId,
+                publicSlug: name.toLowerCase().replace(/\s+/g, '-') + '-' + generateRandomString(4),
+                publicTemplate: 'default',
+                isPublic: Math.random() > 0.5,
+                registrationConfig: { fields: ['firstName', 'lastName', 'email', 'company'] }
             });
         }
         await bulkCreateInBatches(Event, eventsData);
@@ -161,6 +169,14 @@ const seedData = async () => {
                 const end = new Date(start);
                 end.setHours(start.getHours() + randomInt(1, 4)); // Duration 1-4 hours
 
+                const now = new Date();
+                let status = 'published';
+                if (end < now) {
+                    status = 'accredited';
+                } else if (start <= now && now <= end) {
+                    status = 'accrediting';
+                }
+
                 schedulesData.push({
                     eventId: event.id,
                     scheduleName: `Schedule ${j + 1}`,
@@ -168,7 +184,7 @@ const seedData = async () => {
                     endDateTime: end,
                     maxCapacity: event.maxCapacity,
                     isActive: true,
-                    createdBy: adminId
+                    status: status
                 });
                 
                 // Move to next day for the next schedule
@@ -206,7 +222,13 @@ const seedData = async () => {
                 company: randomElement(companies),
                 position: randomElement(positions),
                 allowedGuests: randomInt(0, 2),
-                createdBy: adminId
+                createdBy: adminId,
+                documentNumber: generateRandomString(10),
+                numeroSap: generateRandomString(8),
+                dietaryPreference: randomElement(dietaryPreferences),
+                dietaryComments: null,
+                registrationSource: randomElement(registrationSources),
+                isNew: Math.random() > 0.8
             });
         }
         await bulkCreateInBatches(Participant, participantsData);
@@ -218,17 +240,7 @@ const seedData = async () => {
         // 6. Participant Schedules
         const participantSchedulesData = [];
         
-        // Optimization: Pre-calculate schedule IDs to avoid accessing property in loop
-        // const allScheduleIds = allSchedules.map(s => s.id); // Not strictly needed if we use objects, but cleaner.
-        
         for (const participant of allParticipants) {
-            // Assign random number of schedules (e.g., 1 to 5, or up to allSchedules.length)
-            // Original code had randomInt(100, 300) which might be > allSchedules.length.
-            // Let's cap it at allSchedules.length.
-            const maxSchedules = Math.min(allSchedules.length, randomInt(1, 5)); // Reduced for realism/speed, or keep high if needed?
-            // User asked for "cantidad parecida de registros". 
-            // If original was 100-300, and we have ~200 schedules, it means "assign almost all schedules".
-            // Let's assume we want a lot of assignments.
             const targetCount = Math.min(allSchedules.length, randomInt(50, 150)); 
             
             const selectedSchedules = sampleSize(allSchedules, targetCount);
@@ -237,8 +249,8 @@ const seedData = async () => {
                 participantSchedulesData.push({
                     participantId: participant.id,
                     scheduleId: schedule.id,
-                    assignedAt: new Date(),
-                    assignedBy: adminId
+                    attended: false,
+                    attendedAt: null
                 });
             }
         }
@@ -254,8 +266,7 @@ const seedData = async () => {
                 participantId: participant.id,
                 firstName: randomElement(firstNames),
                 lastName: randomElement(lastNames),
-                email: `guest_${generateRandomString(8)}@example.com`,
-                createdBy: adminId
+                documentNumber: generateRandomString(10)
             });
         }
         await bulkCreateInBatches(Guest, guestsData);
@@ -285,9 +296,6 @@ const seedData = async () => {
         let attempts = 0;
         const MAX_ATTEMPTS = 200000;
         
-        // We want to generate accreditations based on actual registrations (ParticipantSchedules)
-        // to ensure data consistency.
-        
         while (accreditationsData.length < 100000 && attempts < MAX_ATTEMPTS) {
             attempts++;
             
@@ -298,84 +306,94 @@ const seedData = async () => {
             
             if (!schedule) continue;
 
-            let isGuestAccreditation = Math.random() > 0.7;
-            const participantId = registration.participantId;
-            let guestId = null;
+            // Check if already accredited for this schedule
+            const key = `${registration.participantId}-${registration.scheduleId}`;
+            if (accreditationSet.has(key)) continue;
 
+            // Determine if we accredit the participant or one of their guests
+            const guests = participantGuestsMap.get(registration.participantId) || [];
+            const isGuestAccreditation = guests.length > 0 && Math.random() > 0.7; // 30% chance if guests exist
+
+            let guestId = null;
             if (isGuestAccreditation) {
-                const guests = participantGuestsMap.get(participantId);
-                if (guests && guests.length > 0) {
-                    const guest = randomElement(guests);
-                    guestId = guest.id;
-                } else {
-                    // No guests for this participant, fallback to accrediting the participant themselves
-                    isGuestAccreditation = false; 
-                }
+                const guest = randomElement(guests);
+                guestId = guest.id;
+                // Guest accreditation key
+                const guestKey = `G-${guest.id}-${registration.scheduleId}`;
+                if (accreditationSet.has(guestKey)) continue;
+                accreditationSet.add(guestKey);
+            } else {
+                accreditationSet.add(key);
             }
 
-            // Unique constraint key: Schedule + Participant + Guest
-            const key = `S${schedule.id}-P${participantId}-G${guestId || 'null'}`;
+            const checkInTime = new Date(schedule.startDateTime.getTime() + randomInt(-30 * 60000, 60 * 60000)); // -30m to +60m
+            
+            accreditationsData.push({
+                participantId: registration.participantId,
+                guestId: guestId,
+                eventScheduleId: registration.scheduleId,
+                accreditedBy: adminId,
+                accreditedAt: checkInTime,
+                checkInTime: checkInTime,
+                checkOutTime: Math.random() > 0.5 ? new Date(checkInTime.getTime() + randomInt(30 * 60000, 4 * 60 * 60000)) : null,
+                notes: Math.random() > 0.9 ? 'Late arrival' : null
+            });
 
-            if (!accreditationSet.has(key)) {
-                accreditationSet.add(key);
-
-                // Generate checkInTime within schedule bounds
-                const minTime = new Date(schedule.startDateTime).getTime();
-                const maxTime = new Date(schedule.endDateTime).getTime();
-                const checkInTime = new Date(minTime + Math.random() * (maxTime - minTime));
-
-                accreditationsData.push({
-                    eventScheduleId: schedule.id,
-                    participantId: participantId,
-                    guestId: guestId,
-                    checkInTime: checkInTime,
-                    accreditedBy: adminId
+            // If it's the participant (not guest), update their schedule status
+            if (!guestId) {
+                participantScheduleUpdates.push({
+                    participantId: registration.participantId,
+                    scheduleId: registration.scheduleId,
+                    attended: true,
+                    attendedAt: checkInTime
                 });
-
-                // Update ParticipantSchedule to set isAccredited = true ONLY if it's the participant
-                if (!isGuestAccreditation) {
-                    participantScheduleUpdates.push({
-                        participantId: participantId,
-                        scheduleId: schedule.id,
-                        isAccredited: true
-                    });
-                }
             }
         }
-        
+
         await bulkCreateInBatches(Accreditation, accreditationsData);
-        await bulkUpdateInBatches(ParticipantSchedule, participantScheduleUpdates, ['participantId', 'scheduleId']);
         console.log(`Created ${accreditationsData.length} accreditations.`);
 
-        // 9. Participant Awards
+        // Update ParticipantSchedule statuses
+        await bulkUpdateInBatches(ParticipantSchedule, participantScheduleUpdates, ['participantId', 'scheduleId']);
+
+        // 9. Participant Awards (Randomly assign awards to accredited participants)
         const participantAwardsData = [];
-        const usedPairs = new Set();
+        const accreditedParticipants = accreditationsData.filter(a => !a.guestId); // Only participants get awards
+        const assignedAwards = new Set<string>();
+        
+        for (const acc of accreditedParticipants) {
+            if (Math.random() > 0.8) { // 20% chance to get an award
+                // Find awards for this event
+                const schedule = scheduleMap.get(acc.eventScheduleId);
+                if (!schedule) continue;
+                
+                const eventAwards = allAwards.filter(a => a.eventId === schedule.eventId);
+                if (eventAwards.length === 0) continue;
 
-        for (let i = 0; i < 100; i++) {
-            const award = randomElement(allAwards);
-            const participant = randomElement(allParticipants);
-            const key = `${participant.id}-${award.id}`;
+                const award = randomElement(eventAwards);
+                const key = `${acc.participantId}-${award.id}`;
 
-            if (!usedPairs.has(key)) {
-                usedPairs.add(key);
+                if (assignedAwards.has(key)) continue;
+                assignedAwards.add(key);
+                
                 participantAwardsData.push({
-                    participantId: participant.id,
+                    participantId: acc.participantId,
                     awardId: award.id,
                     assignedBy: adminId,
-                    deliveredAt: Math.random() > 0.5 ? new Date() : null,
-                    deliveredBy: Math.random() > 0.5 ? adminId : null
+                    deliveredAt: new Date(),
+                    deliveredBy: adminId
                 });
             }
         }
         await bulkCreateInBatches(ParticipantAward, participantAwardsData);
-        console.log(`Created participant awards.`);
+        console.log(`Created ${participantAwardsData.length} participant awards.`);
 
-        console.log('Seeding completed successfully.');
         await transactions.commit();
+        console.log('Seed completed successfully.');
         process.exit(0);
     } catch (error) {
-        console.error('Error seeding data:', error);
         await transactions.rollback();
+        console.error('Seed failed:', error);
         process.exit(1);
     }
 };

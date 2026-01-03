@@ -5,6 +5,7 @@ import { Search, UserCheck } from 'lucide-react';
 import useParticipantStore from '@/store/participantStore';
 import { debounce } from 'lodash';
 import Participant from '@/models/Participant';
+import apiClient from '@/utils/apiClient';
 
 interface ParticipantSearchProps {
   eventId: string;
@@ -15,6 +16,7 @@ const ParticipantSearch: React.FC<ParticipantSearchProps> = ({ eventId, onSelect
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<Participant[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const { searchParticipants: storeSearchParticipants } = useParticipantStore();
 
   // This would ideally call a dedicated search service/store function
   const searchParticipants = async (searchQuery: string) => {
@@ -23,11 +25,15 @@ const ParticipantSearch: React.FC<ParticipantSearchProps> = ({ eventId, onSelect
       return;
     }
     setIsLoading(true);
-    // Mock search function - replace with actual API call
-    console.log(`Searching for "${searchQuery}" in event ${eventId}`);
-    // const foundParticipants = await participantService.search(eventId, searchQuery);
-    // setResults(foundParticipants);
-    setIsLoading(false);
+    try {
+        const { participants } = await storeSearchParticipants(eventId, searchQuery);
+        setResults(participants);
+    } catch (error) {
+        console.error("Search failed", error);
+        setResults([]);
+    } finally {
+        setIsLoading(false);
+    }
   };
 
   const debouncedSearch = useCallback(debounce(searchParticipants, 300), [eventId]);

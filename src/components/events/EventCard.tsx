@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { format } from 'date-fns';
-import { Calendar as CalendarIcon, MapPin, Users, CheckSquare, Trash2, Edit, ArrowRight, FileText, ClipboardList } from 'lucide-react';
+import { Calendar as CalendarIcon, MapPin, Users, CheckSquare, Trash2, Edit, ArrowRight, ClipboardList } from 'lucide-react';
 import Link from 'next/link';
 import Event from '@/models/Event';
 import RoleGuard from '../auth/RoleGuard';
@@ -10,8 +10,8 @@ import { ROLES } from '@/utils/constants';
 import useEventStore from '@/store/eventStore';
 import { formatCapacity, formatEventDate } from '@/utils/formatters';
 import { EventStatusBadge } from './EventStatusBadge';
-import apiClient from '@/utils/apiClient';
 import toast from 'react-hot-toast';
+import { ButtonEventReport } from '@/components/events/ButtonEventReport';
 
 interface EventCardProps {
   event: Event & { participantCount?: number; accreditedCount?: number };
@@ -26,32 +26,9 @@ const EventCard: React.FC<EventCardProps> = ({ event }) => {
     }
   };
 
-  const handleDownloadReport = async () => {
-    try {
-        const response = await apiClient.get(`/api/reports/events/${event.id}?type=general`, {
-            responseType: 'blob'
-        });
-        
-        // Create a blob from the response
-        const blob = new Blob([response as any], { type: 'text/csv' });
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `event_report_${event.name.replace(/\s+/g, '_')}.csv`;
-        document.body.appendChild(a);
-        a.click();
-        window.URL.revokeObjectURL(url);
-        document.body.removeChild(a);
-        toast.success('Report downloaded successfully');
-    } catch (error) {
-        console.error('Error downloading report:', error);
-        toast.error('Failed to download report');
-    }
-  };
-
   // Assuming event dates are stored in schedules. For simplicity, we'll show created date.
-  const startDate = event.EventSchedules?.[0]?.startDateTime;
-  const endDate = event.EventSchedules?.[event.EventSchedules.length - 1]?.endDateTime;
+  const startDate = event.schedules?.[0]?.startDateTime;
+  const endDate = event.schedules?.[0]?.endDateTime;
 
   const eventDate = startDate && endDate
     ? formatEventDate(startDate, endDate)
@@ -71,13 +48,7 @@ const EventCard: React.FC<EventCardProps> = ({ event }) => {
           </div>
           <RoleGuard allowedRoles={[ROLES.ADMIN]}>
             <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
-              <button 
-                onClick={handleDownloadReport}
-                className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-md transition-colors"
-                title="Download General Report"
-              >
-                <FileText size={16} />
-              </button>
+              <ButtonEventReport eventId={event.id} eventName={event.name} />
               <Link href={`/events/${event.id}`}>
                 <button className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-md transition-colors">
                   <Edit size={16} />

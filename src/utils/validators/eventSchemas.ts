@@ -48,5 +48,6 @@ export const eventFilterSchema = z.object({
   search: z.string().optional(),
   sortBy: z.enum(['name', 'createdAt', 'updatedAt', 'startDateTime']).optional(),
   sortOrder: z.enum(['ASC', 'DESC']).optional(),
+  filter: z.enum(['all', 'accredited', 'accrediting', 'upcoming', 'cancelled']).optional(),
 });
 

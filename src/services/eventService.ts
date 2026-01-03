@@ -9,6 +9,7 @@ import ParticipantAward from '@/models/ParticipantAward';
 import { createEventSchema, updateEventSchema } from '@/utils/validators/eventSchemas';
 import User from '@/models/User';
 import { slugify } from '@/utils/formatters';
+import { AuditLog } from '../models';
 
 export class EventService {
   async createEvent(data: z.infer<typeof createEventSchema>, userId: string) {
@@ -89,9 +90,9 @@ export class EventService {
         separate: true,
         order: [
           [literal(`CASE 
-            WHEN schedules.status = 'accrediting' THEN 1 
-            WHEN schedules.status = 'published' THEN 2 
-            WHEN schedules.status = 'accredited' THEN 3 
+            WHEN EventSchedule.status = 'accrediting' THEN 1 
+            WHEN EventSchedule.status = 'published' THEN 2 
+            WHEN EventSchedule.status = 'accredited' THEN 3 
             ELSE 4 
           END`), 'ASC'],
           ['startDateTime', 'ASC']
@@ -114,11 +115,44 @@ export class EventService {
     sortBy?: string;
     sortOrder?: 'ASC' | 'DESC';
     includeSchedules?: boolean;
+    filter?: 'all' | 'accredited' | 'accrediting' | 'upcoming' | 'cancelled';
   }) {
-    const { isActive, createdBy, page = 1, limit = 10, search, sortBy, sortOrder = 'DESC', includeSchedules = false } = filters;
+    const { isActive, createdBy, page = 1, limit = 10, search, sortBy, sortOrder = 'DESC', includeSchedules = false, filter } = filters;
     const where: any = {};
     if (isActive !== undefined) where.isActive = isActive;
     if (createdBy) where.createdBy = createdBy;
+
+    await this._updateScheduleStatuses();
+
+    if (filter) {
+        if (filter === 'accrediting') {
+             where[Op.and] = [
+                ...(where[Op.and] || []),
+                literal(`EXISTS (SELECT 1 FROM event_schedules es WHERE es.event_id = Event.id AND es.status = 'accrediting')`)
+             ];
+             where.isActive = true;
+        } else if (filter === 'accredited') {
+             where[Op.and] = [
+                ...(where[Op.and] || []),
+                literal(`EXISTS (SELECT 1 FROM event_schedules es WHERE es.event_id = Event.id AND es.status = 'accredited')`),
+                literal(`NOT EXISTS (SELECT 1 FROM event_schedules es WHERE es.event_id = Event.id AND es.status IN ('published', 'accrediting'))`)
+             ];
+             where.isActive = true;
+        } else if (filter === 'upcoming') {
+             const now = new Date();
+             const sevenDaysFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+             const nowStr = now.toISOString();
+             const sevenDaysStr = sevenDaysFromNow.toISOString();
+             
+             where[Op.and] = [
+                ...(where[Op.and] || []),
+                literal(`EXISTS (SELECT 1 FROM event_schedules es WHERE es.event_id = Event.id AND es.status = 'published' AND es.start_date_time BETWEEN '${nowStr}' AND '${sevenDaysStr}')`)
+             ];
+             where.isActive = true;
+        } else if (filter === 'cancelled') {
+             where.isActive = false;
+        }
+    }
 
     if (search) {
       where[Op.or] = [
@@ -131,17 +165,7 @@ export class EventService {
     let order: any = [];
 
     if (sortBy) {
-      if (sortBy === 'startDateTime') {
-        order = [[literal(`(
-          SELECT start_date_time 
-          FROM event_schedules 
-          WHERE event_schedules.event_id = Event.id 
-          ORDER BY start_date_time ${sortOrder} 
-          LIMIT 1
-        )`), sortOrder]];
-      } else {
-        order = [[sortBy, sortOrder]];
-      }
+      order = [[sortBy, sortOrder]];
     } else {
       order = [
         // 1. Priority by status: Accrediting > Published > Accredited
@@ -182,9 +206,9 @@ export class EventService {
         separate: true,
         order: [
           [literal(`CASE 
-            WHEN schedules.status = 'accrediting' THEN 1 
-            WHEN schedules.status = 'published' THEN 2 
-            WHEN schedules.status = 'accredited' THEN 3 
+            WHEN EventSchedule.status = 'accrediting' THEN 1 
+            WHEN EventSchedule.status = 'published' THEN 2 
+            WHEN EventSchedule.status = 'accredited' THEN 3 
             ELSE 4 
           END`), 'ASC'],
           ['startDateTime', 'ASC']
@@ -208,9 +232,10 @@ export class EventService {
       
       // Count distinct participants per event via EventSchedule
       const participantCounts = await EventSchedule.findAll({
-        attributes: ['eventId', [fn('COUNT', fn('DISTINCT', col('Participants.id'))), 'count']],
+        attributes: ['eventId', [fn('COUNT', fn('DISTINCT', col('participants.id'))), 'count']],
         include: [{
           model: Participant,
+          as: 'participants',
           attributes: [],
           through: { attributes: [] }
         }],
@@ -263,6 +288,7 @@ export class EventService {
       col: 'id',
       include: [{
         model: EventSchedule,
+        as: 'schedules',
         where: { eventId },
         required: true
       }]
@@ -335,32 +361,71 @@ export class EventService {
     return stats;
   }
 
-  private async _updateScheduleStatuses(eventId: string) {
+  private async _updateScheduleStatuses(eventId?: string) {
     const now = new Date();
-    
-    // 1. Update 'published' to 'accrediting' if start time has passed
+
+    if (!eventId) {
+      const FIVE_MINUTES = 5 * 60 * 1000;
+
+      const lastBulk = await AuditLog.findOne({
+        where: {
+          action: 'SYSTEM-BULK-UPDATE',
+          entity: 'EventSchedule',
+        },
+        order: [['createdAt', 'DESC']],
+      });
+
+      console.log('Last bulk update log:', lastBulk);
+      console.log('Current time:', now);
+      console.log('Time since last bulk (ms):', lastBulk ? now.getTime() - lastBulk.createdAt.getTime() : 'N/A');
+      console.log('Five minutes in ms:', FIVE_MINUTES);
+      console.log('Should skip bulk update:', lastBulk ? (now.getTime() - lastBulk.createdAt.getTime() > FIVE_MINUTES) : false);
+
+      if (lastBulk && now.getTime() - lastBulk.createdAt.getTime() > FIVE_MINUTES) {
+        return;
+      }
+    }
+
+    const publishedWhere: any = {
+      status: 'published',
+      startDateTime: { [Op.lte]: now },
+    };
+
+    const accreditingWhere: any = {
+      status: 'accrediting',
+      endDateTime: { [Op.lte]: now },
+    };
+
+    // Si se pasa eventId, filtramos por ese evento; si no, se actualizan todos
+    if (eventId) {
+      publishedWhere.eventId = eventId;
+      accreditingWhere.eventId = eventId;
+    }
+
+    // 1. Update 'published' -> 'accrediting'
     await EventSchedule.update(
       { status: 'accrediting' },
-      {
-        where: {
-          eventId,
-          status: 'published',
-          startDateTime: { [Op.lte]: now }
-        }
-      }
+      { where: publishedWhere }
     );
 
-    // 2. Update 'accrediting' to 'accredited' if end time has passed
+    // 2. Update 'accrediting' -> 'accredited'
     await EventSchedule.update(
       { status: 'accredited' },
-      {
-        where: {
-          eventId,
-          status: 'accrediting',
-          endDateTime: { [Op.lte]: now }
-        }
-      }
+      { where: accreditingWhere }
     );
+
+    if (!eventId) {
+      await AuditLog.create({
+        userId: '90eb6c3a-6654-449a-b1d4-a2f05b9f80f1',
+        action: 'SYSTEM-BULK-UPDATE',
+        entity: 'EventSchedule',
+        entityId: null,
+        details: {
+          scope: 'all-events',
+          executedAt: now.toISOString(),
+        },
+      });
+    }
   }
 }
 

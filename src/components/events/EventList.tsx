@@ -8,7 +8,7 @@ import Link from 'next/link';
 import RoleGuard from '../auth/RoleGuard';
 import { ROLES } from '@/utils/constants';
 
-type FilterType = 'all' | 'active' | 'inactive' | 'mine';
+type FilterType = 'all' | 'accredited' | 'accrediting' | 'upcoming' | 'cancelled';
 
 const EventList = () => {
   const { events, fetchEvents, loading, total, page, limit } = useEventStore();
@@ -16,7 +16,7 @@ const EventList = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [siblingCount, setSiblingCount] = useState(1);
   const paginationContainerRef = useRef<HTMLDivElement>(null);
-  const defaultFetchParams = { page: 1, limit: 9, includeSchedules: true, sortOrder: 'DESC', sortBy: 'startDateTime' };
+  const defaultFetchParams = { page: 1, limit: 9, includeSchedules: true };
 
   const totalPages = Math.ceil(total / limit);
 
@@ -54,8 +54,9 @@ const EventList = () => {
   useEffect(() => {
     const delayDebounceFn = setTimeout(() => {
       const params: any = { ...defaultFetchParams, search: searchTerm };
-      if (filter === 'active') params.isActive = true;
-      if (filter === 'inactive') params.isActive = false;
+      if (filter !== 'all') {
+        params.filter = filter;
+      }
       fetchEvents(params);
     }, 300);
 
@@ -64,18 +65,20 @@ const EventList = () => {
 
   const handlePageChange = (newPage: number) => {
     const params: any = { ...defaultFetchParams, page: newPage, search: searchTerm };
-    if (filter === 'active') params.isActive = true;
-    if (filter === 'inactive') params.isActive = false;
+    if (filter !== 'all') {
+      params.filter = filter;
+    }
     fetchEvents(params);
   };
 
   
 
   const tabs: { id: FilterType; label: string }[] = [
-    { id: 'all', label: 'All Events' },
-    { id: 'active', label: 'Active' },
-    { id: 'inactive', label: 'Inactive' },
-    { id: 'mine', label: 'My Events' },
+    { id: 'all', label: 'Todos' },
+    { id: 'accrediting', label: 'Acreditando' },
+    { id: 'upcoming', label: 'Próximos' },
+    { id: 'accredited', label: 'Acreditados' },
+    { id: 'cancelled', label: 'Cancelados' },
   ];
 
   return (
@@ -100,37 +103,19 @@ const EventList = () => {
         {/* Filters and Search */}
         <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
           <div className="bg-white p-1 rounded-xl shadow-sm border border-gray-200 inline-flex">
-            {tabs.map((tab) => {
-              if (tab.id === 'mine') {
-                return (
-                  <RoleGuard key={tab.id} allowedRoles={[ROLES.ADMIN, ROLES.OPERATOR]}>
-                    <button
-                      onClick={() => setFilter(tab.id)}
-                      className={`px-4 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${
-                        filter === tab.id
-                          ? 'bg-indigo-50 text-indigo-700 shadow-sm'
-                          : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
-                      }`}
-                    >
-                      {tab.label}
-                    </button>
-                  </RoleGuard>
-                );
-              }
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => setFilter(tab.id)}
-                  className={`px-4 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${
-                    filter === tab.id
-                      ? 'bg-indigo-50 text-indigo-700 shadow-sm'
-                      : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
-                  }`}
-                >
-                  {tab.label}
-                </button>
-              );
-            })}
+            {tabs.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setFilter(tab.id)}
+                className={`px-4 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${
+                  filter === tab.id
+                    ? 'bg-indigo-50 text-indigo-700 shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
           </div>
           
           {/* Placeholder for search - visual only for now */}

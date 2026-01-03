@@ -77,12 +77,12 @@ const AccreditationPanel = ({ eventId, scheduleId }: AccreditationPanelProps) =>
   };
 
   useEffect(() => {
+    console.log('Fasdsadasd');
     const timer = setTimeout(() => {
-      if (filteredSchedules.length === 1) {
-        const schedule = filteredSchedules[0];
-        if (selectedScheduleId !== schedule.id) {
-          handleScheduleSelect(schedule);
-        }
+      const schedule = filteredSchedules.find(s => s.status === 'accrediting') || filteredSchedules[0];
+      console.log('Auto-selecting schedule:', schedule.id, selectedScheduleId);
+      if (selectedScheduleId !== schedule.id) {
+        handleScheduleSelect(schedule);
       }
     }, 500);
 
@@ -95,11 +95,13 @@ const AccreditationPanel = ({ eventId, scheduleId }: AccreditationPanelProps) =>
 
   const selectedSchedule = EventSchedules.find((s: EventSchedule) => s.id === selectedScheduleId) || searchedSchedules.find((s: EventSchedule) => s.id === selectedScheduleId);
 
+  console.log('Selected Schedule:', selectedSchedule, selectedScheduleId, 'a');
   useEffect(() => {
     if (selectedSchedule && !searchTerm) {
       setSearchTerm(selectedSchedule.scheduleName);
     }
   }, [selectedSchedule, searchTerm]);
+
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 p-8 bg-gray-50 min-h-screen">

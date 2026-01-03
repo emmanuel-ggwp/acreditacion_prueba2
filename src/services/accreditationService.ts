@@ -201,7 +201,7 @@ export class AccreditationService {
           attributes: ['id', 'firstName', 'lastName'],
           include: [{ model: Participant, attributes: ['id', 'firstName', 'lastName'] }] 
         },
-        { model: EventSchedule, attributes: ['id', 'name', 'startTime', 'endTime'] },
+        { model: EventSchedule, attributes: ['id', 'scheduleName', 'startDateTime', 'endDateTime'] },
         { model: User, as: 'accreditedByUser', attributes: ['id', 'firstName', 'lastName'] }
       ],
     });
@@ -227,7 +227,7 @@ export class AccreditationService {
           model: EventSchedule, 
           where: scheduleWhere, 
           required: !!eventId, 
-          attributes: ['id', 'name'] 
+          attributes: ['id', 'scheduleName'] 
         },
         { 
           model: Participant, 

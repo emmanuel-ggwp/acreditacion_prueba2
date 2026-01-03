@@ -121,15 +121,12 @@ const useAccreditationStore = create<AccreditationState>()(
       getAccreditationStats: async (eventId: string) => {
         set({ loading: true, error: null });
         try {
-          // TODO: Implement getAccreditationStats in the service.
-          // This is a placeholder.
-          console.log('getAccreditationStats needs to be implemented in the service for event:', eventId);
-          // const stats = await accreditationService.getAccreditationStats(eventId);
-          // set({
-          //   totalAccreditations: stats.totalAccreditations,
-          //   accreditationsToday: stats.accreditationsToday,
-          //   loading: false,
-          // });
+          const stats = await apiClient.get<{ totalAccreditations: number; accreditationsToday: number }>(`/api/accreditations/stats?eventId=${eventId}`);
+          set({
+            totalAccreditations: stats.totalAccreditations,
+            accreditationsToday: stats.accreditationsToday,
+            loading: false,
+          });
         } catch (error: any) {
           set({ error: error.message, loading: false });
         }

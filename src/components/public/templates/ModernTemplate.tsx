@@ -23,12 +23,12 @@ export default function ModernTemplate({ event, slug }: TemplateProps) {
           )}
 
           <div className="space-y-4 text-slate-300">
-             {event.EventSchedules && event.EventSchedules.length > 0 && (
+             {event.schedules && event.schedules.length > 0 && (
                 <>
                 <div className="flex items-center">
                   <Calendar className="mr-3 h-5 w-5 text-blue-400" />
                   <span>
-                  {new Date(event.EventSchedules[0].startDateTime).toLocaleDateString(undefined, {
+                  {new Date(event.schedules[0].startDateTime).toLocaleDateString(undefined, {
                     weekday: 'long',
                     year: 'numeric',
                     month: 'long',
@@ -39,7 +39,7 @@ export default function ModernTemplate({ event, slug }: TemplateProps) {
                 <div className="flex items-center">
                     <Clock className="mr-3 h-5 w-5 text-blue-400" />
                     <span>
-                        {new Date(event.EventSchedules[0].startDateTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                        {new Date(event.schedules[0].startDateTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                     </span>
                 </div>
                 </>

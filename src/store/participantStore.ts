@@ -18,7 +18,7 @@ interface ParticipantState {
   error: string | null;
   total: number;
   fetchParticipantsByEvent: (eventId: string, page?: number, limit?: number, filters?: any) => Promise<void>;
-  fetchParticipantById: (id: string) => Promise<void>;
+  fetchParticipantById: (id: string, params?: { includeGuests?: boolean; includeAwards?: boolean; includeSchedules?: boolean }) => Promise<void>;
   searchParticipants: (eventId: string, query: string) => Promise<Participant[]>;
   createParticipant: (participantData: z.infer<typeof createParticipantSchema>) => Promise<void>;
   updateParticipant: (id: string, participantData: z.infer<typeof updateParticipantSchema>) => Promise<void>;
@@ -56,10 +56,19 @@ const useParticipantStore = create<ParticipantState>()(
         }
       },
 
-      fetchParticipantById: async (id) => {
+      fetchParticipantById: async (id, params = {}) => {
+        const { includeGuests = false, includeAwards = false, includeSchedules = false } = params;
         set({ loading: true, error: null });
         try {
-          const participant = await apiClient.get<any>(`/api/participants/${id}`);
+          const queryParams = new URLSearchParams();
+          if (includeGuests) queryParams.append('includeGuests', 'true');
+          if (includeAwards) queryParams.append('includeAwards', 'true');
+          if (includeSchedules) queryParams.append('includeSchedules', 'true');
+
+          const queryString = queryParams.toString();
+          const url = queryString ? `/api/participants/${id}?${queryString}` : `/api/participants/${id}`;
+
+          const participant = await apiClient.get<any>(url);
           set({ currentParticipant: participant, loading: false });
         } catch (error: any) {
           set({ error: error.message, loading: false });
@@ -68,7 +77,13 @@ const useParticipantStore = create<ParticipantState>()(
 
       searchParticipants: async (eventId, query) => {
         try {
-          const response = await apiClient.get<{ participants: Participant[] }>(`/api/events/${eventId}/participants?search=${query}`);
+          const response = await apiClient.get<
+            {
+              participants: Participant[];
+            }
+          >(
+            `/api/events/${eventId}/participants?search=${encodeURIComponent(query)}`
+          );
           return response.participants;
         } catch (error: any) {
           console.error('Error searching participants:', error);

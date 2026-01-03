@@ -14,6 +14,7 @@ export interface FetchEventsParams {
   sortOrder?: 'ASC' | 'DESC';
   includeSchedules?: boolean;
   isActive?: boolean;
+  filter?: 'all' | 'accredited' | 'accrediting' | 'upcoming' | 'cancelled';
 }
 
 interface EventState {
@@ -53,7 +54,7 @@ const useEventStore = create<EventState>()(
       limit: 10,
 
       fetchEvents: async (params = {}) => {
-        const { page = 1, limit = 10, includeSchedules = false, search, sortBy, sortOrder, isActive } = params;
+        const { page = 1, limit = 10, includeSchedules = false, search, sortBy, sortOrder, isActive, filter } = params;
         set({ loading: true, error: null });
         try {
           const queryParams = new URLSearchParams();
@@ -64,6 +65,7 @@ const useEventStore = create<EventState>()(
           if (sortBy) queryParams.append('sortBy', sortBy);
           if (sortOrder) queryParams.append('sortOrder', sortOrder);
           if (isActive !== undefined) queryParams.append('isActive', isActive.toString());
+          if (filter) queryParams.append('filter', filter);
 
           const response = await apiClient.get<{ events: Event[]; total: number }>(`/api/events?${queryParams.toString()}`);
           set({ events: response.events, total: response.total, page, limit, loading: false });

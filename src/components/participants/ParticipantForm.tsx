@@ -12,6 +12,7 @@ import { errorHandler } from '@/utils/errors';
 import { Clock } from 'lucide-react';
 import EventSchedule from '@/models/EventSchedule';
 import { showToast } from '@/components/ui/Toast';
+import GuestList from './GuestList';
 
 const participantFormSchema = createParticipantSchema.extend({
   id: z.guid().optional(),
@@ -61,8 +62,8 @@ const ParticipantForm: React.FC<ParticipantFormProps> = ({ eventId, participant,
   const [showResults, setShowResults] = useState(false);
 
   const documentNumberValue = watch('documentNumber');
-  const formId = watch('id');
-  const isEffectiveEditMode = isEditMode || !!formId;
+  const participantId = watch('id');
+  const isEffectiveEditMode = isEditMode || !!participantId;
 
   useEffect(() => {
     const search = async () => {
@@ -125,13 +126,13 @@ const ParticipantForm: React.FC<ParticipantFormProps> = ({ eventId, participant,
 
   useEffect(() => {
     if (participant?.id) {
-      fetchParticipantById(participant.id);
+      fetchParticipantById(participant.id, { includeGuests: true, includeSchedules: true });
     }
   }, [participant?.id, fetchParticipantById]);
 
   useEffect(() => {
     if (participant && currentParticipant && currentParticipant.id === participant.id) {
-      const scheduleIds = (currentParticipant as any).EventSchedules?.map((s: any) => s.id) || [];
+      const scheduleIds = (currentParticipant as any).schedules?.map((s: any) => s.id) || [];
       reset({
         id: currentParticipant.id,
         firstName: currentParticipant.firstName,
@@ -269,6 +270,16 @@ const ParticipantForm: React.FC<ParticipantFormProps> = ({ eventId, participant,
             </div>
             {errors.scheduleIds && <p className="mt-2 text-sm text-red-600">{errors.scheduleIds.message}</p>}
           </div>
+
+          {isEffectiveEditMode && participantId && (
+            <div className="col-span-2 border-t pt-4">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-sm font-medium text-gray-900">Guests</h3>
+                <p className="text-xs text-gray-500">Allowed: {watch('allowedGuests') || 0}</p>
+              </div>
+              <GuestList participantId={participantId} allowedGuests={watch('allowedGuests') || 0} />
+            </div>
+          )}
 
           <div className="flex justify-end space-x-4 pt-4">
             <button

@@ -39,7 +39,7 @@ export default function PublicRegistrationForm({ event, slug }: PublicRegistrati
     resolver: zodResolver(publicRegistrationSchema),
     defaultValues: {
       allowedGuests: 0,
-      scheduleIds: event.EventSchedules && event.EventSchedules.length > 0 ? [event.EventSchedules[0].id] : []
+      scheduleIds: event.schedules && event.schedules.length > 0 ? [event.schedules[0].id] : []
     }
   });
 
@@ -260,11 +260,11 @@ export default function PublicRegistrationForm({ event, slug }: PublicRegistrati
 
       {/* Hidden field for scheduleIds - assuming single schedule for now or pre-selected */}
       {/* If multiple schedules are available, we should list them here as checkboxes */}
-      {event.EventSchedules && event.EventSchedules.length > 1 && (
+      {event.schedules && event.schedules.length > 1 && (
         <div className="mt-6">
           <label className="block text-sm font-medium text-gray-700 mb-2">Select Schedules *</label>
           <div className="space-y-2">
-            {event.EventSchedules.map((schedule) => (
+            {event.schedules.map((schedule) => (
               <div key={schedule.id} className="flex items-start">
                 <div className="flex items-center h-5">
                   <input

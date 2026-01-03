@@ -3,7 +3,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { Search } from 'lucide-react';
 import { debounce } from 'lodash';
-import apiClient from '@/utils/apiClient';
+import useParticipantStore from '@/store/participantStore';
 import Participant from '@/models/Participant';
 import Guest from '@/models/Guest';
 
@@ -16,26 +16,25 @@ const SearchParticipant: React.FC<SearchParticipantProps> = ({ eventId, onSelect
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<(Participant | Guest)[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const { searchParticipants } = useParticipantStore();
 
-  const searchPeople = async (searchQuery: string) => {
+  const searchPeopleHandler = async (searchQuery: string) => {
     if (searchQuery.length < 3) {
       setResults([]);
       return;
     }
     setIsLoading(true);
     try {
-      const response = await apiClient.get<{ participants: Participant[]; guests: Guest[] }>(
-        `/api/events/${eventId}/search?query=${encodeURIComponent(searchQuery)}`
-      );
-      // Combine participants and guests if needed
-      setResults([...(response.participants || []), ...(response.guests || [])]);
+      const response = await searchParticipants(eventId, searchQuery);
+
+      setResults([...(response || [])]);
     } catch (error) {
       setResults([]);
     }
     setIsLoading(false);
   };
 
-  const debouncedSearch = useCallback(debounce(searchPeople, 400), [eventId]);
+  const debouncedSearch = useCallback(debounce(searchPeopleHandler, 400), [eventId]);
 
   useEffect(() => {
     debouncedSearch(query);
