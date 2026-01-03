@@ -26,7 +26,7 @@ const ParticipantSearch: React.FC<ParticipantSearchProps> = ({ eventId, onSelect
     }
     setIsLoading(true);
     try {
-        const { participants } = await storeSearchParticipants(eventId, searchQuery);
+        const participants = await storeSearchParticipants(eventId, searchQuery);
         setResults(participants);
     } catch (error) {
         console.error("Search failed", error);
