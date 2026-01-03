@@ -377,11 +377,13 @@ export class EventService {
 
       console.log('Last bulk update log:', lastBulk);
       console.log('Current time:', now);
-      console.log('Time since last bulk (ms):', lastBulk ? now.getTime() - lastBulk.createdAt.getTime() : 'N/A');
+      console.log('Time (ms):', lastBulk ? lastBulk.createdAt.getTime() : 'N/A');
+      console.log('Current time (ms):', now.getTime());
+      console.log('Time difference (ms):', lastBulk ? now.getTime() - lastBulk.createdAt.getTime() : 'N/A');
       console.log('Five minutes in ms:', FIVE_MINUTES);
-      console.log('Should skip bulk update:', lastBulk ? (now.getTime() - lastBulk.createdAt.getTime() > FIVE_MINUTES) : false);
+      console.log('Should skip bulk update:', lastBulk ? (now.getTime() - lastBulk.createdAt.getTime() < FIVE_MINUTES) : false);
 
-      if (lastBulk && now.getTime() - lastBulk.createdAt.getTime() > FIVE_MINUTES) {
+      if (lastBulk && now.getTime() - lastBulk.createdAt.getTime() < FIVE_MINUTES) {
         return;
       }
     }
