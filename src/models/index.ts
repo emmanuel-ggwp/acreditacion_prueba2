@@ -11,10 +11,25 @@ import ParticipantAward from './ParticipantAward';
 import Accreditation from './Accreditation';
 import RefreshToken from './RefreshToken';
 import AuditLog from './AuditLog';
+import EmailTemplate from './EmailTemplate';
+import GiftCampaign from './GiftCampaign';
+import GiftType from './GiftType';
+import GiftEmployee from './GiftEmployee';
+import GiftDelivery from './GiftDelivery';
 
 // Define associations here to avoid circular dependencies
 Participant.belongsToMany(EventSchedule, { through: ParticipantSchedule, foreignKey: 'participantId', as: 'schedules' });
 EventSchedule.belongsToMany(Participant, { through: ParticipantSchedule, foreignKey: 'scheduleId', as: 'participants' });
+
+// Regalos Navidad
+GiftCampaign.hasMany(GiftType, { foreignKey: 'campaignId', as: 'types' });
+GiftType.belongsTo(GiftCampaign, { foreignKey: 'campaignId' });
+GiftCampaign.hasMany(GiftEmployee, { foreignKey: 'campaignId', as: 'employees' });
+GiftEmployee.belongsTo(GiftCampaign, { foreignKey: 'campaignId' });
+GiftEmployee.hasMany(GiftDelivery, { foreignKey: 'employeeId', as: 'deliveries' });
+GiftDelivery.belongsTo(GiftEmployee, { foreignKey: 'employeeId', as: 'employee' });
+GiftType.hasMany(GiftDelivery, { foreignKey: 'giftTypeId', as: 'deliveries' });
+GiftDelivery.belongsTo(GiftType, { foreignKey: 'giftTypeId', as: 'giftType' });
 
 export {
   User,
@@ -27,5 +42,10 @@ export {
   ParticipantAward,
   Accreditation,
   RefreshToken,
-  AuditLog
+  AuditLog,
+  EmailTemplate,
+  GiftCampaign,
+  GiftType,
+  GiftEmployee,
+  GiftDelivery
 };

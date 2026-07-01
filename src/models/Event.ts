@@ -35,7 +35,12 @@ class Event extends Model {
   declare public publicSlug: string | null;
   declare public publicTemplate: string | null;
   declare public isPublic: boolean;
+  declare public registrationOpen: boolean;
   declare public registrationConfig: any | null;
+  declare public logoUrl: string | null;
+  declare public backgroundImageUrl: string | null;
+  declare public emailTemplateId: string | null;
+  declare public allowMultipleSchedules: boolean;
 
   declare public schedules?: EventSchedule[];
 
@@ -109,9 +114,32 @@ Event.init(
       type: DataTypes.BOOLEAN,
       defaultValue: false,
     },
+    registrationOpen: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: true,
+      comment: 'Si es false, la landing pública muestra "Inscripciones cerradas" y rechaza nuevos registros',
+    },
     registrationConfig: {
       type: DataTypes.JSON,
       allowNull: true,
+    },
+    logoUrl: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    backgroundImageUrl: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    emailTemplateId: {
+      type: DataTypes.UUID,
+      allowNull: true,
+      comment: 'Plantilla de correo (EmailTemplate) seleccionada para este evento',
+    },
+    allowMultipleSchedules: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
+      comment: 'Si es true, un participante puede inscribirse en varias fechas de este evento',
     },
     createdBy: {
       type: DataTypes.UUID,

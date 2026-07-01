@@ -42,13 +42,13 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles 
     // Redirect to an unauthorized page or show a message
     return (
       <div className="flex flex-col items-center justify-center h-screen text-center">
-        <h1 className="text-4xl font-bold text-red-600">Access Denied</h1>
-        <p className="mt-4 text-lg">You do not have permission to view this page.</p>
+        <h1 className="text-4xl font-bold text-red-600">Acceso Denegado</h1>
+        <p className="mt-4 text-lg">No tienes permiso para ver esta página.</p>
         <button
           onClick={() => router.push('/')}
           className="mt-6 px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700"
         >
-          Go to Homepage
+          Ir al inicio
         </button>
       </div>
     );

@@ -15,8 +15,10 @@ const syncDatabase = async () => {
 
     // Show tables as seen by this connection
     try {
-      const [rows] = await sequelize.query("SHOW TABLES");
-      console.log('SHOW TABLES result:', JSON.stringify(rows, null, 2));
+      const [rows] = await sequelize.query(
+        "SELECT tablename FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename;"
+      );
+      console.log('Tables result:', JSON.stringify(rows, null, 2));
       if (Array.isArray(rows) && rows.length > 0) {
         console.log('Tables in the database:');
       } else {

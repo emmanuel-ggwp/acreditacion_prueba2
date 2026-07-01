@@ -40,7 +40,7 @@ export const PUT = withAuth(async (req: AuthenticatedRequest, { params }: Params
     }
     const body = await req.json();
     const validatedData = updateEventSchema.parse(body);
-    const updatedEvent = await eventService.updateEvent(eventId, validatedData);
+    const updatedEvent = await eventService.updateEvent(eventId, validatedData, req.user?.id);
     return NextResponse.json(updatedEvent);
   } catch (error: any) {
     if (error instanceof z.ZodError) {
@@ -57,7 +57,8 @@ export const DELETE = withAuth(async (req: AuthenticatedRequest, { params }: Par
     if (!eventId?.length) {
       return NextResponse.json({ message: 'Invalid event ID' }, { status: 400 });
     }
-    await eventService.deleteEvent(eventId);
+    const reason = new URL(req.url).searchParams.get('reason') || undefined;
+    await eventService.deleteEvent(eventId, req.user?.id, reason);
     return NextResponse.json({ message: 'Event deleted successfully' });
   } catch (error: any) {
     return NextResponse.json({ message: error.message }, { status: 500 });

@@ -7,6 +7,23 @@ export const ROLES = {
 
 export type Role = typeof ROLES[keyof typeof ROLES];
 
+// Nombres y descripción de acceso de cada rol (para la pantalla de Usuarios).
+export const ROLE_LABELS: Record<Role, string> = {
+  ADMIN: 'Administrador',
+  MANAGER: 'Gerente',
+  OPERATOR: 'Operador',
+  GUARDIA: 'Acreditador Eventos',
+};
+
+export const ROLE_DESCRIPTIONS: Record<Role, string> = {
+  ADMIN: 'Acceso total (incluye Configuración, Usuarios y Actividad).',
+  MANAGER: 'Gestión completa: Panel, Eventos, Participantes, Acreditación, Premios, Reportes, Regalos.',
+  OPERATOR: 'Operación: Eventos, Participantes, Acreditación, Premios, Reportes, Regalos.',
+  GUARDIA: 'Panel, Acreditación y Regalos.',
+};
+
+export const ASSIGNABLE_ROLES: Role[] = [ROLES.ADMIN, ROLES.GUARD];
+
 export const API_ENDPOINTS = {
   // Auth
   LOGIN: '/api/auth/login',
@@ -40,28 +57,4 @@ export const DATE_FORMATS = {
   DATETIME: 'dd/MM/yyyy HH:mm:ss',
   TIME: 'HH:mm:ss',
   ISO: 'yyyy-MM-dd',
-};
-
-export const PAGINATION_DEFAULTS = {
-  PAGE: 1,
-  LIMIT: 10,
-  MAX_LIMIT: 100,
-};
-
-export const ERROR_MESSAGES = {
-  UNAUTHORIZED: 'You are not authorized to perform this action.',
-  AUTHENTICATION_FAILED: 'Authentication failed. Please log in again.',
-  NOT_FOUND: 'The requested resource was not found.',
-  CONFLICT: 'A conflict occurred. The resource may already exist.',
-  VALIDATION_ERROR: 'Please check the form for errors.',
-  SERVER_ERROR: 'An unexpected server error occurred.',
-  NETWORK_ERROR: 'A network error occurred. Please check your connection.',
-};
-
-export const SUCCESS_MESSAGES = {
-  LOGIN_SUCCESS: 'Logged in successfully.',
-  LOGOUT_SUCCESS: 'Logged out successfully.',
-  CREATE_SUCCESS: (item: string) => `${item} created successfully.`,
-  UPDATE_SUCCESS: (item: string) => `${item} updated successfully.`,
-  DELETE_SUCCESS: (item: string) => `${item} deleted successfully.`,
 };

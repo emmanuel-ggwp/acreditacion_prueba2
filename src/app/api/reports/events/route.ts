@@ -4,7 +4,7 @@ import { reportService } from '@/services/reportService';
 import { AuthenticatedRequest } from '@/types/auth';
 import { ROLES } from '@/utils/constants';
 
-const { ADMIN, OPERATOR } = ROLES;
+const { ADMIN, OPERATOR, GUARD } = ROLES;
 
 export const GET = withAuth(async (req: AuthenticatedRequest) => {
   try {
@@ -52,4 +52,4 @@ export const GET = withAuth(async (req: AuthenticatedRequest) => {
       { status: 500 }
     );
   }
-}, [ADMIN, OPERATOR]);
+}, [ADMIN, OPERATOR, GUARD]);

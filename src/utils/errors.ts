@@ -11,46 +11,34 @@ class AppError extends Error {
 }
 
 export class AuthenticationError extends AppError {
-  constructor(message = 'Authentication failed') {
+  constructor(message = 'Error de autenticación') {
     super(message, 401);
-  }
-}
-
-export class AuthorizationError extends AppError {
-  constructor(message = 'You do not have permission to perform this action') {
-    super(message, 403);
   }
 }
 
 export class ValidationError extends AppError {
   public readonly errors: Record<string, string[]>;
 
-  constructor(message = 'Validation failed', errors: Record<string, string[]> = {}) {
+  constructor(message = 'La validación falló', errors: Record<string, string[]> = {}) {
     super(message, 422);
     this.errors = errors;
   }
 }
 
 export class NotFoundError extends AppError {
-  constructor(message = 'Resource not found') {
+  constructor(message = 'Recurso no encontrado') {
     super(message, 404);
   }
 }
 
-export class ConflictError extends AppError {
-  constructor(message = 'A conflict occurred') {
-    super(message, 409);
-  }
-}
-
 export class ServerError extends AppError {
-  constructor(message = 'An internal server error occurred') {
+  constructor(message = 'Ocurrió un error interno del servidor') {
     super(message, 500);
   }
 }
 
 export class NetworkError extends AppError {
-  constructor(message = 'A network error occurred. Please check your connection.') {
+  constructor(message = 'Ocurrió un error de red. Por favor, verifica tu conexión.') {
     super(message, 503); // Service Unavailable is a reasonable code
   }
 }
@@ -73,7 +61,7 @@ export const errorHandler = (error: any): { message: string; details?: any } => 
     // Handle errors from axios or similar HTTP clients
     const { data } = error.response;
     return {
-      message: data.message || 'An API error occurred',
+      message: data.message || 'Ocurrió un error en la API',
       details: data.errors,
     };
   }
@@ -82,5 +70,5 @@ export const errorHandler = (error: any): { message: string; details?: any } => 
     return { message: error.message };
   }
 
-  return { message: 'An unknown error occurred' };
+  return { message: 'Ocurrió un error desconocido' };
 };

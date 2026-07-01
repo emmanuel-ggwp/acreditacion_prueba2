@@ -10,10 +10,10 @@ export const accreditationSchema = z.object({
   checkInTime: z.iso.datetime(),
   checkOutTime: z.iso.datetime().nullable(),
   notes: z.string().optional().nullable(),
-  createdAt: z.iso.datetime({ message: 'Invalid createdAt date format' }).optional(),
-  updatedAt: z.iso.datetime({ message: 'Invalid updatedAt date format' }).optional(),
+  createdAt: z.iso.datetime({ message: 'Formato de fecha de creación inválido' }).optional(),
+  updatedAt: z.iso.datetime({ message: 'Formato de fecha de actualización inválido' }).optional(),
 }).refine(data => data.participantId || data.guestId, {
-  message: "Either participantId or guestId must be provided",
+  message: "Debe proporcionarse participantId o guestId",
   path: ["participantId"],
 });
 
@@ -25,7 +25,7 @@ const bulkAccreditationItemSchema = z.object({
     guestId: z.guid().optional(),
     eventScheduleId: z.guid(),
 }).refine(data => (data.type === 'participant' && data.participantId) || (data.type === 'guest' && data.guestId), {
-    message: 'A valid ID for the selected type must be provided.',
+    message: 'Debe proporcionarse un ID válido para el tipo seleccionado.',
     path: ['participantId', 'guestId'],
 });
 

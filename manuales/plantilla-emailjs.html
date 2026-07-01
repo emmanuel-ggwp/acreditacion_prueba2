@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <title>Confirmación de inscripción</title>
+    <meta name="x-apple-disable-message-reformatting">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <!-- Soporte de modo claro / oscuro -->
+    <meta name="color-scheme" content="light dark">
+    <meta name="supported-color-schemes" content="light dark">
+    <style>
+      :root { color-scheme: light dark; supported-color-schemes: light dark; }
+      body { margin:0; padding:0; }
+      a { color:#1E3A8A; }
+
+      /* ---- Responsive ---- */
+      @media (max-width:600px){
+        .content-pad { padding:22px !important; }
+        .header-pad  { padding:22px !important; }
+        .email-title { font-size:18px !important; }
+      }
+
+      /* ---- Modo oscuro (clientes compatibles: Apple Mail, iOS, etc.) ---- */
+      @media (prefers-color-scheme: dark){
+        .email-bg, .wrapper       { background:#0b0f1a !important; }
+        .email-card               { background:#121826 !important; border-color:#222b3d !important; }
+        .email-body, .email-body p, .email-greeting { color:#e5e7eb !important; }
+        .email-box                { background:#1a2232 !important; border-color:#2a3447 !important; }
+        .email-label              { color:#93b4ff !important; }
+        .email-value              { color:#e5e7eb !important; }
+        .email-divider            { background:#232c3d !important; }
+        .email-footer, .email-footer td { color:#8a93a3 !important; }
+        .email-link               { color:#93b4ff !important; }
+      }
+    </style>
+  </head>
+  <body class="email-bg" style="margin:0; padding:0; background:#eceef2; font-family:'Segoe UI', Arial, Helvetica, sans-serif;">
+    <div class="email-bg wrapper" style="width:100%; background:#eceef2; padding:28px 0;">
+      <table role="presentation" class="email-card" cellpadding="0" cellspacing="0" width="100%" style="width:100%; max-width:600px; margin:0 auto; background:#ffffff; border:1px solid #e7e9ef; border-radius:12px; overflow:hidden;">
+
+        <!-- Encabezado -->
+        <tr>
+          <td class="header-pad" style="background:#1E3A8A; padding:26px 28px; text-align:center;">
+            <!-- Opcional: agrega tu logo poniendo la URL absoluta en src y quitando los comentarios
+            <img src="https://TU-DOMINIO/logo.png" alt="Logo" width="160" style="max-width:160px; height:auto; display:inline-block; margin-bottom:12px;">
+            -->
+            <div class="email-title" style="color:#ffffff; font-size:20px; font-weight:700; letter-spacing:.2px; margin:0;">
+              Confirmación de inscripción
+            </div>
+          </td>
+        </tr>
+
+        <!-- Contenido -->
+        <tr>
+          <td class="email-card content-pad email-body" style="padding:28px; color:#1f2937; font-size:15px; line-height:1.6;">
+            <p class="email-greeting" style="margin:0; font-size:16px; color:#1f2937;">
+              Hola <strong>{{nombre}}</strong>,
+            </p>
+
+            <p style="margin:12px 0 0;">
+              Tu inscripción a <strong>{{event_name}}</strong> quedó registrada correctamente.
+              Te compartimos los detalles:
+            </p>
+
+            <!-- Detalle del evento -->
+            <table role="presentation" class="email-box" cellpadding="0" cellspacing="0" width="100%" style="width:100%; border:1px solid #e5e7eb; border-left:4px solid #1E3A8A; border-radius:8px; background:#f8fafc; margin:18px 0;">
+              <tr><td style="padding:14px 16px 0;">
+                <span class="email-label" style="color:#1E3A8A; font-weight:700;">Evento:</span>
+                <span class="email-value" style="color:#1f2937;"> {{event_name}}</span>
+              </td></tr>
+              <tr><td style="padding:6px 16px 0;">
+                <span class="email-label" style="color:#1E3A8A; font-weight:700;">Fecha:</span>
+                <span class="email-value" style="color:#1f2937;"> {{fechaEvento}}</span>
+              </td></tr>
+              <tr><td style="padding:6px 16px 0;">
+                <span class="email-label" style="color:#1E3A8A; font-weight:700;">Lugar:</span>
+                <span class="email-value" style="color:#1f2937;"> {{lugarEvento}}</span>
+              </td></tr>
+              <tr><td style="padding:6px 16px 14px;">
+                <span class="email-label" style="color:#1E3A8A; font-weight:700;">Invitados:</span>
+                <span class="email-value" style="color:#1f2937;"> {{guests_count}}</span>
+              </td></tr>
+            </table>
+
+            <p style="margin:0;">
+              Si tienes cualquier duda, escríbenos a
+              <a class="email-link" href="mailto:confirmaciones@grupolocastillo.com" style="color:#1E3A8A; font-weight:700; text-decoration:none;">confirmaciones@grupolocastillo.com</a>.
+            </p>
+
+            <div class="email-divider" style="height:1px; background:#ececf1; margin:22px 0;"></div>
+
+            <p style="margin:0; font-size:16px;">¡Te esperamos!</p>
+          </td>
+        </tr>
+
+        <!-- Pie -->
+        <tr>
+          <td class="email-footer" style="text-align:center; color:#9aa1ad; font-size:12px; line-height:1.6; padding:4px 28px 24px;">
+            © 2025 Grupo LoCastillo. Todos los derechos reservados.<br>
+            Este es un correo informativo. No respondas a esta dirección.
+          </td>
+        </tr>
+
+      </table>
+    </div>
+  </body>
+</html>

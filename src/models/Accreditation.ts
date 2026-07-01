@@ -16,7 +16,7 @@ import User from './User';
 
 class Accreditation extends Model {
   declare public id: string;
-  declare public participantId: string;
+  declare public participantId: string | null;
   declare public guestId: string | null;
   declare public eventScheduleId: string;
   declare public accreditedBy: string;
@@ -58,7 +58,7 @@ Accreditation.init(
     },
     participantId: {
       type: DataTypes.UUID,
-      allowNull: false,
+      allowNull: true,
       references: {
         model: Participant,
         key: 'id',

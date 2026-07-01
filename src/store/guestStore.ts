@@ -12,7 +12,7 @@ interface GuestState {
   fetchGuests: (participantId: string) => Promise<void>;
   createGuest: (participantId: string, data: z.infer<typeof createGuestSchema>) => Promise<void>;
    updateGuest: (guestId: string, data: Partial<Guest>) => Promise<void>;
-  deleteGuest: (guestId: string) => Promise<void>;
+  deleteGuest: (guestId: string, reason?: string) => Promise<void>;
 }
 
 const useGuestStore = create<GuestState>()(
@@ -59,10 +59,11 @@ const useGuestStore = create<GuestState>()(
       }
     },
 
-    deleteGuest: async (guestId) => {
+    deleteGuest: async (guestId, reason) => {
       set({ loading: true, error: null });
       try {
-        await apiClient.delete(`/api/guests/${guestId}`);
+        const rq = reason ? `?reason=${encodeURIComponent(reason)}` : '';
+        await apiClient.delete(`/api/guests/${guestId}${rq}`);
         set((state) => ({ guests: state.guests.filter((g) => g.id !== guestId), loading: false }));
       } catch (error: any) {
         set({ error: error.message, loading: false });

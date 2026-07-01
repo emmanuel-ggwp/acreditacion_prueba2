@@ -26,6 +26,7 @@ import {
 import { sequelize } from '../lib/sequelize';
 import User from './User';
 import EventSchedule from './EventSchedule';
+import Event from './Event';
 import type Guest from './Guest';
 
 class Participant extends Model {
@@ -38,11 +39,18 @@ class Participant extends Model {
   declare public numeroSap: string | null;
   declare public company: string | null;
   declare public position: string | null;
-  declare public dietaryPreference: 'NONE' | 'VEGETARIAN' | 'VEGAN' | 'CELIAC' | 'KOSHER' | 'HALAL' | 'OTHER';
+  declare public dietaryPreference: string;
   declare public dietaryComments: string | null;
   declare public allowedGuests: number;
   declare public registrationSource: 'MANUAL' | 'IMPORT' | 'PUBLIC_FORM';
   declare public isNew: boolean;
+  declare public eventId: string | null;
+  declare public birthDate: string | null;
+  declare public age: number | null;
+  declare public customData: Record<string, any> | null;
+  declare public isAwarded: boolean;
+  declare public awardReason: string | null;
+  declare public allowMultipleSchedules: boolean;
   declare public createdBy: string;
 
   declare public readonly createdAt: Date;
@@ -118,7 +126,7 @@ Participant.init(
       allowNull: true,
     },
     dietaryPreference: {
-      type: DataTypes.ENUM('NONE', 'VEGETARIAN', 'VEGAN', 'CELIAC', 'KOSHER', 'HALAL', 'OTHER'),
+      type: DataTypes.STRING,
       defaultValue: 'NONE',
       allowNull: false,
     },
@@ -139,6 +147,43 @@ Participant.init(
     isNew: {
       type: DataTypes.BOOLEAN,
       defaultValue: false,
+    },
+    // Nullable por ahora (Plan 2). La carga masiva (Plan 5.5) y la landing (Plan 5)
+    // siempre lo poblarán; luego puede endurecerse a NOT NULL.
+    eventId: {
+      type: DataTypes.UUID,
+      allowNull: true,
+      references: {
+        model: Event,
+        key: 'id',
+      },
+    },
+    birthDate: {
+      type: DataTypes.DATEONLY,
+      allowNull: true,
+    },
+    age: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
+    customData: {
+      type: DataTypes.JSONB,
+      allowNull: true,
+      comment: 'Valores de campos personalizados definidos por el evento',
+    },
+    isAwarded: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
+    },
+    awardReason: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      comment: 'Motivo de premiación (opcional)',
+    },
+    allowMultipleSchedules: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
+      comment: 'Override: este participante puede inscribirse en varias fechas aunque el evento no lo permita',
     },
     createdBy: {
       type: DataTypes.UUID,
@@ -180,5 +225,7 @@ Participant.init(
 // Associations
 User.hasMany(Participant, { foreignKey: 'createdBy' });
 Participant.belongsTo(User, { foreignKey: 'createdBy' });
+Event.hasMany(Participant, { foreignKey: 'eventId', as: 'participants' });
+Participant.belongsTo(Event, { foreignKey: 'eventId', as: 'event' });
 
 export default Participant;

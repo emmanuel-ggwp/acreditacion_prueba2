@@ -8,19 +8,19 @@ import { ROLES } from '@/utils/constants';
 const { ADMIN, OPERATOR, GUARD} = ROLES;
 
 interface Params {
-  params: { participantAwardId: string };
+  params: Promise<{ participantAwardId: string }>;
 }
 
 export const DELETE = withAuth(async (req: AuthenticatedRequest, { params }: Params) => {
   try {
-    const participantAwardId = parseInt(params.participantAwardId, 10);
-    if (isNaN(participantAwardId)) {
+    const { participantAwardId } = await params;
+    if (!participantAwardId?.length) {
       return NextResponse.json({ message: 'Invalid participant award ID' }, { status: 400 });
     }
     await participantAwardService.cancelAwardAssignment(participantAwardId, req.user.id);
     return NextResponse.json({ message: 'Award assignment cancelled successfully' });
   } catch (error: any) {
-    console.error(`Error cancelling award assignment ${params.participantAwardId}:`, error);
+    console.error('Error cancelling award assignment:', error);
     return NextResponse.json({ message: 'Error cancelling award assignment', error: error.message }, { status: 500 });
   }
 }, [ADMIN, OPERATOR]);

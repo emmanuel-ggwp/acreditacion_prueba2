@@ -14,9 +14,8 @@ interface TokenPayload {
 }
 
 export const generateTokens = (payload: TokenPayload) => {
-  // TODO: Re-add expiration dates. The `expiresIn` option is causing typing issues.
-  const accessToken = jwt.sign(payload, JWT_SECRET);
-  const refreshToken = jwt.sign(payload, REFRESH_TOKEN_SECRET);
+  const accessToken = jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN } as jwt.SignOptions);
+  const refreshToken = jwt.sign(payload, REFRESH_TOKEN_SECRET, { expiresIn: REFRESH_TOKEN_EXPIRES_IN } as jwt.SignOptions);
   return { accessToken, refreshToken };
 };
 

@@ -10,6 +10,10 @@ class EventSchedule extends Model {
   declare public startDateTime: Date;
   declare public endDateTime: Date;
   declare public maxCapacity: number | null;
+  declare public location: string | null;
+  declare public blockType: 'SINGLE' | 'AM' | 'PM' | 'FULL_DAY' | 'CUSTOM';
+  declare public label: string | null;
+  declare public imageUrl: string | null;
   declare public isActive: boolean;
   // Status:
   // - published: Visible/Upcoming (default)
@@ -52,6 +56,26 @@ EventSchedule.init(
     maxCapacity: {
       type: DataTypes.INTEGER,
       allowNull: true,
+    },
+    location: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      comment: 'Ubicación específica del bloque; si es null, hereda la del evento',
+    },
+    blockType: {
+      type: DataTypes.ENUM('SINGLE', 'AM', 'PM', 'FULL_DAY', 'CUSTOM'),
+      defaultValue: 'SINGLE',
+      allowNull: false,
+    },
+    label: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      comment: 'Etiqueta visible del bloque (ej. Mañana, Tarde)',
+    },
+    imageUrl: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      comment: 'Imagen opcional para la tarjeta de fecha en la landing',
     },
     isActive: {
       type: DataTypes.BOOLEAN,

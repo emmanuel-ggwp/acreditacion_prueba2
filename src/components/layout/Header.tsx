@@ -6,6 +6,7 @@ import { Bell, User, LogOut, Menu, X } from 'lucide-react';
 import useAuthStore from '@/store/authStore';
 import { ROLES } from '@/utils/constants';
 import RoleGuard from '../auth/RoleGuard';
+import { LogoMark } from '@/components/ui/Logo';
 
 const Header: React.FC<{ onToggleSidebar: () => void; isSidebarOpen: boolean }> = ({ onToggleSidebar, isSidebarOpen }) => {
   const { user, logout } = useAuthStore();
@@ -22,20 +23,20 @@ const Header: React.FC<{ onToggleSidebar: () => void; isSidebarOpen: boolean }> 
         <button onClick={onToggleSidebar} className="text-gray-600 md:hidden mr-4">
           {isSidebarOpen ? <X /> : <Menu />}
         </button>
-        <Link href="/dashboard" className="text-2xl font-bold text-indigo-600">
-          Accredit
+        <Link href="/dashboard" className="flex items-center" aria-label="AcreditaPro — Inicio">
+          <LogoMark size={32} className="rounded-lg" />
         </Link>
       </div>
 
       <nav className="hidden md:flex items-center space-x-6">
         <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.MANAGER]}>
-          <Link href="/dashboard" className="text-gray-600 hover:text-indigo-600">Dashboard</Link>
+          <Link href="/dashboard" className="text-gray-600 hover:text-indigo-600">Panel</Link>
         </RoleGuard>
         <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.MANAGER, ROLES.OPERATOR]}>
-          <Link href="/events" className="text-gray-600 hover:text-indigo-600">Events</Link>
+          <Link href="/events" className="text-gray-600 hover:text-indigo-600">Eventos</Link>
         </RoleGuard>
         <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.MANAGER]}>
-           <Link href="/users" className="text-gray-600 hover:text-indigo-600">Users</Link>
+           <Link href="/users" className="text-gray-600 hover:text-indigo-600">Usuarios</Link>
         </RoleGuard>
       </nav>
 
@@ -56,10 +57,10 @@ const Header: React.FC<{ onToggleSidebar: () => void; isSidebarOpen: boolean }> 
                 <p className="font-semibold">{user?.username}</p>
                 <p className="text-xs text-gray-500">{user?.role}</p>
               </div>
-              <Link href="/profile" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">My Profile</Link>
+              <Link href="/profile" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Mi perfil</Link>
               <button onClick={handleLogout} className="w-full text-left flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
                 <LogOut className="mr-2 h-4 w-4" />
-                Logout
+                Cerrar sesión
               </button>
             </div>
           )}

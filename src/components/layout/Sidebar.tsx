@@ -3,10 +3,11 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Calendar, Users, Award, BarChart, Shield, Settings, ChevronLeft, LogOut, User } from 'lucide-react';
+import { Home, Calendar, Users, Award, BarChart, Shield, Settings, ChevronLeft, LogOut, User, Gift, History, UserCog } from 'lucide-react';
 import useAuthStore from '@/store/authStore';
 import { ROLES, Role } from '@/utils/constants';
 import RoleGuard from '../auth/RoleGuard';
+import { LogoMark, BrandDots } from '@/components/ui/Logo';
 
 interface NavItem {
   href: string;
@@ -16,13 +17,16 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { href: '/dashboard', label: 'Dashboard', icon: Home, allowedRoles: [ROLES.ADMIN, ROLES.MANAGER] },
-  { href: '/events', label: 'Events', icon: Calendar, allowedRoles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.OPERATOR] },
-  { href: '/accreditation', label: 'Accreditation', icon: Shield, allowedRoles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.OPERATOR, ROLES.GUARD] },
-  { href: '/participants', label: 'Participants', icon: Users, allowedRoles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.OPERATOR] },
-  { href: '/awards', label: 'Awards', icon: Award, allowedRoles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.OPERATOR, ROLES.GUARD] },
-  { href: '/reports', label: 'Reports', icon: BarChart, allowedRoles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.OPERATOR] },
-  { href: '/settings', label: 'Settings', icon: Settings, allowedRoles: [ROLES.ADMIN] },
+  { href: '/dashboard', label: 'Panel', icon: Home, allowedRoles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.GUARD] },
+  { href: '/events', label: 'Eventos', icon: Calendar, allowedRoles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.OPERATOR] },
+  { href: '/accreditation', label: 'Acreditación', icon: Shield, allowedRoles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.OPERATOR, ROLES.GUARD] },
+  { href: '/participants', label: 'Participantes', icon: Users, allowedRoles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.OPERATOR] },
+  { href: '/awards', label: 'Premios', icon: Award, allowedRoles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.OPERATOR] },
+  { href: '/reports', label: 'Reportes', icon: BarChart, allowedRoles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.OPERATOR] },
+  { href: '/gifts', label: 'Regalos Navidad', icon: Gift, allowedRoles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.OPERATOR, ROLES.GUARD] },
+  { href: '/audit', label: 'Actividad', icon: History, allowedRoles: [ROLES.ADMIN] },
+  { href: '/users', label: 'Usuarios', icon: UserCog, allowedRoles: [ROLES.ADMIN] },
+  { href: '/settings', label: 'Configuración', icon: Settings, allowedRoles: [ROLES.ADMIN] },
 ];
 
 const NavLink: React.FC<{ item: NavItem; isCollapsed: boolean }> = ({ item, isCollapsed }) => {
@@ -88,21 +92,18 @@ const Sidebar: React.FC<{ isCollapsed: boolean; onToggle: () => void; isOpen: bo
         <div onClick={onToggle} className="flex items-center justify-between h-16 px-4 border-b border-gray-200/50 bg-gradient-to-r from-white to-gray-50">
           {!isCollapsed && (
             <div className="flex items-center space-x-2">
-              <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-md shadow-indigo-500/20">
-                <Shield className="h-4 w-4 text-white" />
-              </div>
+              <LogoMark size={32} className="rounded-lg shadow-md shadow-indigo-500/20" />
               <div>
-                <span className="text-lg font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
-                  EventPro
+                <span className="text-lg font-bold bg-gradient-to-r from-blue-900 to-indigo-700 bg-clip-text text-transparent">
+                  AcreditaPro
                 </span>
-                <p className="text-[10px] text-gray-500 mt-0.5">Management</p>
+                <p className="text-[10px] text-gray-500 mt-0.5">Acreditación</p>
+                <BrandDots size={5} gap={4} className="mt-1" />
               </div>
             </div>
           )}
           {isCollapsed && (
-            <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-md shadow-indigo-500/20 mx-auto">
-              <Shield className="h-4 w-4 text-white" />
-            </div>
+            <LogoMark size={32} className="rounded-lg shadow-md shadow-indigo-500/20 mx-auto" />
           )}
           <button 
             
@@ -116,7 +117,7 @@ const Sidebar: React.FC<{ isCollapsed: boolean; onToggle: () => void; isOpen: bo
         <nav className="p-3 flex-1 overflow-y-auto">
           <div className="mb-4">
             {!isCollapsed && (
-              <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-2 px-2">Navigation</p>
+              <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-2 px-2">Navegación</p>
             )}
             <ul className="space-y-0.5">
               {navItems.map((item) => (
@@ -148,7 +149,7 @@ const Sidebar: React.FC<{ isCollapsed: boolean; onToggle: () => void; isOpen: bo
               className="mt-2 w-full flex items-center justify-center space-x-1.5 p-2 rounded-lg text-gray-600 hover:text-red-600 hover:bg-gradient-to-r hover:from-red-50 hover:to-red-100 transition-all duration-300 group"
             >
               <LogOut className="h-3.5 w-3.5" />
-              <span className="text-sm font-medium">Logout</span>
+              <span className="text-sm font-medium">Cerrar sesión</span>
             </button>
           </div>
         )}

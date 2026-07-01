@@ -15,10 +15,10 @@ export const ButtonEventReport: React.FC<ButtonEventReportProps> = ({ eventId, e
     const handleClick = async () => {
         try {
             await downloadEventGeneralReport(eventId, eventName);
-            toast.success('Report downloaded successfully');
+            toast.success('Reporte descargado correctamente');
         } catch (error) {
             console.error('Error downloading report:', error);
-            toast.error('Failed to download report');
+            toast.error('No se pudo descargar el reporte');
         }
     };
 
@@ -26,7 +26,7 @@ export const ButtonEventReport: React.FC<ButtonEventReportProps> = ({ eventId, e
         <button
             onClick={handleClick}
             className={`p-${size === 'small' ? '1.5' : size === 'medium' ? '2' : '3'} text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-md transition-colors`}
-            title="Download General Report"
+            title="Descargar Reporte General"
             style={size === 'large' ? {'marginTop': 'calc(var(--spacing) * -3)', 'marginRight': 'calc(var(--spacing) * -3)'} : {}}
         >
             <FileText size={16} />

@@ -1,15 +1,15 @@
 import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
 import './globals.css';
 import { ToastProvider } from '@/components/ui/Toast';
 import MainLayout from '@/components/layout/MainLayout';
 import AuthProvider from '@/components/auth/AuthProvider';
 
-const inter = Inter({ subsets: ['latin'] });
+// Nota: se usa la fuente del sistema (font-sans) en lugar de next/font/google
+// porque este entorno no tiene acceso a fonts.gstatic.com (falla la descarga).
 
 export const metadata: Metadata = {
-  title: 'Accreditation System',
-  description: 'Event Accreditation Management',
+  title: 'AcreditaPro',
+  description: 'AcreditaPro — Acreditación y gestión de eventos',
 };
 
 export default function RootLayout({
@@ -18,8 +18,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body className={inter.className}>
+    <html lang="es">
+      <body className="font-sans antialiased">
         <AuthProvider>
           <MainLayout>
             {children}

@@ -36,19 +36,19 @@ const AwardList: React.FC<AwardListProps> = ({ eventId }) => {
     fetchAwardsByEvent(eventId); // Refresh list after form close
   };
 
-  if (loading) return <p>Loading awards...</p>;
+  if (loading) return <p>Cargando premios…</p>;
   if (error) return <p className="text-red-500">{error}</p>;
 
   return (
     <div className="p-6 bg-white rounded-lg shadow-md">
       <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-bold">Awards Management</h2>
+        <h2 className="text-2xl font-bold">Gestión de Premios</h2>
         <button
           onClick={handleAddNew}
           className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 flex items-center gap-2"
         >
           <PlusCircle size={20} />
-          New Award
+          Nuevo Premio
         </button>
       </div>
 
@@ -72,7 +72,7 @@ const AwardList: React.FC<AwardListProps> = ({ eventId }) => {
         ))}
       </div>
       {awards.length === 0 && !loading && (
-        <p className="text-center text-gray-500 py-8">No awards found for this event. Add one to get started.</p>
+        <p className="text-center text-gray-500 py-8">No se encontraron premios para este evento. Agrega uno para comenzar.</p>
       )}
     </div>
   );

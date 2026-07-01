@@ -4,7 +4,7 @@ import { z } from 'zod';
 export const awardSchema = z.object({
   id: z.guid(),
   eventId: z.guid(),
-  name: z.string().min(3, 'Award name must be at least 3 characters'),
+  name: z.string().min(3, 'El nombre del premio debe tener al menos 3 caracteres'),
   description: z.string().optional().nullable(),
   quantity: z.number().int().min(0),
 });

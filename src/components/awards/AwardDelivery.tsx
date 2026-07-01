@@ -30,7 +30,7 @@ const AwardDelivery = ({ eventId }: { eventId: string }) => {
   };
 
   const handleConfirmDelivery = async () => {
-    if (window.confirm(`Confirm delivery of ${awardsToDeliver.length} award(s)?`)) {
+    if (window.confirm(`¿Confirmar la entrega de ${awardsToDeliver.length} premio(s)?`)) {
       for (const awardId of awardsToDeliver) {
         await deliverAward(awardId);
       }
@@ -46,19 +46,19 @@ const AwardDelivery = ({ eventId }: { eventId: string }) => {
 
   return (
     <div className="p-6 bg-white rounded-lg shadow-md">
-      <h2 className="text-2xl font-bold mb-4">Award Delivery</h2>
+      <h2 className="text-2xl font-bold mb-4">Entrega de Premios</h2>
       
       <div className="mb-6">
-        <label className="block text-sm font-medium text-gray-700 mb-1">Search Participant</label>
+        <label className="block text-sm font-medium text-gray-700 mb-1">Buscar Participante</label>
         <ParticipantSearch eventId={eventId} onSelect={(p) => handleParticipantSelect(p as Participant)} />
       </div>
 
       {selectedParticipant && (
         <div>
           <h3 className="text-xl font-semibold mb-3">
-            Pending Awards for {selectedParticipant.firstName} {selectedParticipant.lastName}
+            Premios Pendientes de {selectedParticipant.firstName} {selectedParticipant.lastName}
           </h3>
-          {loading && !pendingAwards.length && <p>Loading...</p>}
+          {loading && !pendingAwards.length && <p>Cargando…</p>}
           <div className="space-y-2">
             {pendingAwards.length > 0 ? (
               pendingAwards.map((pa: ParticipantAward) => (
@@ -76,7 +76,7 @@ const AwardDelivery = ({ eventId }: { eventId: string }) => {
                 </div>
               ))
             ) : (
-              <p className="text-gray-500">No pending awards for this participant.</p>
+              <p className="text-gray-500">No hay premios pendientes para este participante.</p>
             )}
           </div>
 
@@ -88,7 +88,7 @@ const AwardDelivery = ({ eventId }: { eventId: string }) => {
                 className="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 disabled:bg-green-300 flex items-center justify-center ml-auto"
               >
                 {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-5 w-5" />}
-                Confirm Delivery ({awardsToDeliver.length})
+                Confirmar Entrega ({awardsToDeliver.length})
               </button>
             </div>
           )}

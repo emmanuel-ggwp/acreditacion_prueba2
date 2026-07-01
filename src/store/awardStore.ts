@@ -17,7 +17,7 @@ interface AwardState {
   fetchAwardsByEvent: (eventId: string) => Promise<void>;
   createAward: (awardData: z.infer<typeof createAwardSchema>) => Promise<void>;
   updateAward: (awardId: string, awardData: z.infer<typeof updateAwardSchema>) => Promise<void>;
-  deleteAward: (awardId: string) => Promise<void>;
+  deleteAward: (awardId: string, reason?: string) => Promise<void>;
   assignAward: (awardId: string, participantId: string, notes?: string) => Promise<void>;
   fetchAwardsForParticipant: (participantId: string) => Promise<void>;
   deliverAward: (participantAwardId: string) => Promise<void>;
@@ -71,12 +71,13 @@ const useAwardStore = create<AwardState>()(
         }
       },
 
-      deleteAward: async (awardId) => {
+      deleteAward: async (awardId, reason) => {
         const { user } = useAuthStore.getState();
         if (!user) throw new Error('User not authenticated');
         set({ loading: true, error: null });
         try {
-          await apiClient.delete(`/api/awards/${awardId}?userId=${user.id}`);
+          const rq = reason ? `&reason=${encodeURIComponent(reason)}` : '';
+          await apiClient.delete(`/api/awards/${awardId}?userId=${user.id}${rq}`);
           set((state) => ({
             awards: state.awards.filter((a) => a.id !== awardId),
             loading: false,

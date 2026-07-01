@@ -48,3 +48,7 @@ jest-coverage/
 
 # Generated files
 *.generated.*
+
+# Uploaded files (keep the folder, ignore its contents)
+/public/uploads/*
+!/public/uploads/.gitkeep

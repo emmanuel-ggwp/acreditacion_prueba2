@@ -5,20 +5,20 @@ import { participantAwardService } from '@/services/participantAwardService';
 import { AuthenticatedRequest } from '@/types/auth';
 
 interface Params {
-  params: { participantAwardId: string };
+  params: Promise<{ participantAwardId: string }>;
 }
 
 export const PATCH = withAuth(async (req: AuthenticatedRequest, { params }: Params) => {
   try {
-    const participantAwardId = parseInt(params.participantAwardId, 10);
-    if (isNaN(participantAwardId)) {
+    const { participantAwardId } = await params;
+    if (!participantAwardId?.length) {
       return NextResponse.json({ message: 'Invalid participant award ID' }, { status: 400 });
     }
     const deliveredBy = req.user.id;
     const delivery = await participantAwardService.deliverAward(participantAwardId, deliveredBy);
     return NextResponse.json(delivery);
   } catch (error: any) {
-    console.error(`Error delivering award ${params.participantAwardId}:`, error);
+    console.error('Error delivering award:', error);
     return NextResponse.json({ message: 'Error delivering award', error: error.message }, { status: 500 });
   }
 });

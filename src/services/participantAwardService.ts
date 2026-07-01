@@ -11,7 +11,7 @@ import Event from '@/models/Event';
 
 export class ParticipantAwardService {
 
-  async assignAward(participantId: number, awardId: number, assignedBy: string, notes?: string) {
+  async assignAward(participantId: string, awardId: string, assignedBy: string, notes?: string) {
 
     return sequelize.transaction(async (transaction) => {
       const award = await Award.findByPk(awardId, { lock: transaction.LOCK.UPDATE, transaction });
@@ -49,7 +49,7 @@ export class ParticipantAwardService {
     });
   }
 
-  async deliverAward(participantAwardId: number, deliveredBy: string) {
+  async deliverAward(participantAwardId: string, deliveredBy: string) {
     const participantAward = await ParticipantAward.findByPk(participantAwardId);
     if (!participantAward) {
       throw new Error('Award assignment not found.');
@@ -65,7 +65,7 @@ export class ParticipantAwardService {
     return participantAward;
   }
 
-  async cancelAwardAssignment(participantAwardId: number, userId: string) {
+  async cancelAwardAssignment(participantAwardId: string, userId: string) {
     const participantAward = await ParticipantAward.findByPk(participantAwardId);
     if (!participantAward) {
       throw new Error('Award assignment not found.');
@@ -79,7 +79,7 @@ export class ParticipantAwardService {
     return { message: 'Award assignment cancelled successfully.' };
   }
 
-  async listParticipantAwards(participantId: number) {
+  async listParticipantAwards(participantId: string) {
     return ParticipantAward.findAll({
       where: { participantId },
       include: [

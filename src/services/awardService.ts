@@ -2,11 +2,15 @@ import { z } from 'zod';
 import { Op } from 'sequelize';
 import { Award, ParticipantAward } from '@/models/index';
 import { createAwardSchema, updateAwardSchema } from '@/utils/validators/awardSchemas';
+import { auditLogService } from './auditLogService';
 
 export class AwardService {
   async createAward(eventId: string, data: z.infer<typeof createAwardSchema>, createdBy: string) {
     const validatedData = createAwardSchema.parse(data);
     const award = await Award.create({ ...validatedData, eventId, createdBy });
+    if (createdBy) {
+      await auditLogService.log({ userId: createdBy, action: 'CREATE', entity: 'Award', entityId: award.id, details: { name: (award as any).name } });
+    }
     return award;
   }
 
@@ -17,9 +21,6 @@ export class AwardService {
       throw new Error('Award not found');
     }
 
-    // Basic permission check (can be expanded)
-    // For example, check if userId is admin or created the event associated with the award
-    
     if (validatedData.quantity !== undefined) {
       const assignedCount = await ParticipantAward.count({ where: { awardId } });
       if (validatedData.quantity < assignedCount) {
@@ -27,11 +28,18 @@ export class AwardService {
       }
     }
 
+    const before: any = JSON.parse(JSON.stringify(award.get({ plain: true })));
     await award.update(validatedData);
+    if (userId) {
+      const changes = auditLogService.buildChanges(before, award.get({ plain: true }), Object.keys(validatedData));
+      if (Object.keys(changes).length) {
+        await auditLogService.log({ userId, action: 'UPDATE', entity: 'Award', entityId: award.id, details: { name: (award as any).name, changes } });
+      }
+    }
     return award;
   }
 
-  async deleteAward(awardId: string, userId: string) {
+  async deleteAward(awardId: string, userId: string, reason?: string) {
     // Basic permission check
     const assignedCount = await ParticipantAward.count({ where: { awardId } });
     if (assignedCount > 0) {
@@ -43,7 +51,11 @@ export class AwardService {
       throw new Error('Award not found');
     }
 
+    const name = (award as any).name;
     await award.destroy();
+    if (userId) {
+      await auditLogService.log({ userId, action: 'DELETE', entity: 'Award', entityId: awardId, details: { name, reason: reason || null } });
+    }
     return { message: 'Award deleted successfully' };
   }
 
@@ -88,45 +100,6 @@ export class AwardService {
     });
 
     return newAssignment;
-  }
-
-  async getAwardsForParticipant(participantId: string) {
-    return ParticipantAward.findAll({
-      where: { participantId },
-      include: [Award],
-      order: [['createdAt', 'DESC']],
-    });
-  }
-
-  async markAwardAsDelivered(participantAwardId: string, deliveredBy: string) {
-    const assignment = await ParticipantAward.findByPk(participantAwardId);
-    if (!assignment) {
-      throw new Error('Award assignment not found.');
-    }
-    if (assignment.deliveredAt) {
-      throw new Error('Award has already been delivered.');
-    }
-
-    assignment.deliveredAt = new Date();
-    assignment.deliveredBy = deliveredBy;
-    await assignment.save();
-    return assignment;
-  }
-
-  async cancelAwardAssignment(participantAwardId: string, userId: string) {
-    const assignment = await ParticipantAward.findByPk(participantAwardId);
-    if (!assignment) {
-      throw new Error('Award assignment not found.');
-    }
-
-    // Add permission check here if necessary, e.g., only admin or assigner can cancel
-    
-    if (assignment.deliveredAt) {
-      throw new Error('Cannot cancel an award that has already been delivered.');
-    }
-
-    await assignment.destroy();
-    return { message: 'Award assignment cancelled successfully.' };
   }
 }
 

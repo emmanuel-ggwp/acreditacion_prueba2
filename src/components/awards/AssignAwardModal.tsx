@@ -20,7 +20,7 @@ const AssignAwardModal: React.FC<AssignAwardModalProps> = ({ eventId, onClose })
 
   const handleAssign = async () => {
     if (!selectedParticipant || !selectedAwardId) {
-      alert('Please select a participant and an award.');
+      alert('Por favor selecciona un participante y un premio.');
       return;
     }
     try {
@@ -34,11 +34,11 @@ const AssignAwardModal: React.FC<AssignAwardModalProps> = ({ eventId, onClose })
   return (
     <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
       <div className="bg-white rounded-lg shadow-xl p-8 w-full max-w-lg">
-        <h2 className="text-2xl font-bold mb-6">Assign Award</h2>
+        <h2 className="text-2xl font-bold mb-6">Asignar Premio</h2>
         
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Search Participant</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Buscar Participante</label>
             <ParticipantSearch eventId={eventId} onSelect={(p) => setSelectedParticipant(p as Participant)} />
           </div>
 
@@ -50,14 +50,14 @@ const AssignAwardModal: React.FC<AssignAwardModalProps> = ({ eventId, onClose })
           )}
 
           <div>
-            <label htmlFor="award-select" className="block text-sm font-medium text-gray-700">Select Award</label>
+            <label htmlFor="award-select" className="block text-sm font-medium text-gray-700">Seleccionar Premio</label>
             <select
               id="award-select"
               value={selectedAwardId}
               onChange={(e) => setSelectedAwardId(e.target.value)}
               className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
             >
-              <option value="">-- Select an award --</option>
+              <option value="">-- Selecciona un premio --</option>
               {awards.map((award: Award) => (
                 <option key={award.id} value={award.id}>
                   {award.name} (Stock: {award.quantity})
@@ -67,7 +67,7 @@ const AssignAwardModal: React.FC<AssignAwardModalProps> = ({ eventId, onClose })
           </div>
 
           <div>
-            <label htmlFor="notes" className="block text-sm font-medium text-gray-700">Notes (optional)</label>
+            <label htmlFor="notes" className="block text-sm font-medium text-gray-700">Notas (opcional)</label>
             <textarea
               id="notes"
               value={notes}
@@ -82,7 +82,7 @@ const AssignAwardModal: React.FC<AssignAwardModalProps> = ({ eventId, onClose })
 
         <div className="flex justify-end space-x-4 mt-6">
           <button onClick={onClose} disabled={loading} className="bg-gray-200 text-gray-800 px-6 py-2 rounded-lg hover:bg-gray-300">
-            Cancel
+            Cancelar
           </button>
           <button
             onClick={handleAssign}
@@ -90,7 +90,7 @@ const AssignAwardModal: React.FC<AssignAwardModalProps> = ({ eventId, onClose })
             className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 disabled:bg-blue-300 flex items-center"
           >
             {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Assign
+            Asignar
           </button>
         </div>
       </div>
