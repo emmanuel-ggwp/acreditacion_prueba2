@@ -24,7 +24,7 @@ const seedUsers = async () => {
         password: 'password123',
         firstName: 'Acreditador',
         lastName: 'User',
-        role: 'ACREDITADOR' as const,
+        role: 'GUARDIA' as const,
         isActive: true,
       },
       {
