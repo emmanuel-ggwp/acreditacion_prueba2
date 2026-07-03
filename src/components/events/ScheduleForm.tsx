@@ -13,7 +13,8 @@ import toast from 'react-hot-toast';
 import { uploadImage } from '@/utils/upload';
 import { UploadCloud, X as XIcon, Loader2, Image as ImageIcon } from 'lucide-react';
 
-type ScheduleFormInputs = z.infer<typeof createScheduleSchema>;
+type ScheduleFormInputs = z.input<typeof createScheduleSchema>;
+type ScheduleFormOutput = z.output<typeof createScheduleSchema>;
 
 interface ScheduleFormProps {
   eventId: string;
@@ -32,7 +33,7 @@ const ScheduleForm: React.FC<ScheduleFormProps> = ({ eventId, schedule, onClose 
     setValue,
     watch,
     formState: { errors },
-  } = useForm<ScheduleFormInputs>({
+  } = useForm<ScheduleFormInputs, any, ScheduleFormOutput>({
     resolver: zodResolver(createScheduleSchema),
     defaultValues: isEditMode
       ? {
@@ -66,7 +67,7 @@ const ScheduleForm: React.FC<ScheduleFormProps> = ({ eventId, schedule, onClose 
     }
   };
 
-  const onSubmit = async (data: ScheduleFormInputs) => {
+  const onSubmit = async (data: ScheduleFormOutput) => {
     console.log('Submitting schedule data:', data);
     try {
       if (isEditMode) {

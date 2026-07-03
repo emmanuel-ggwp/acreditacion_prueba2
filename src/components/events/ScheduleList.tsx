@@ -115,14 +115,14 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ eventId }) => {
                   <div className="h-4 w-px bg-gray-300"></div>
                   <div className="flex items-center">
                     <Users size={16} className="mr-1.5 text-indigo-500" />
-                    <span>{schedule.displayMaxCapacity ? `${schedule.displayMaxCapacity} de capacidad` : 'Capacidad ilimitada'}</span>
+                    <span>{(schedule as any).displayMaxCapacity ? `${(schedule as any).displayMaxCapacity} de capacidad` : 'Capacidad ilimitada'}</span>
                   </div>
-                  {(schedule.displayLocation || schedule.location) && (
+                  {((schedule as any).displayLocation || schedule.location) && (
                     <>
                       <div className="h-4 w-px bg-gray-300"></div>
                       <div className="flex items-center">
                         <MapPin size={16} className="mr-1.5 text-indigo-500" />
-                        <span>{schedule.displayLocation || schedule.location}</span>
+                        <span>{(schedule as any).displayLocation || schedule.location}</span>
                       </div>
                     </>
                   )}

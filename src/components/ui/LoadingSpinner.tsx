@@ -16,7 +16,7 @@ const spinnerVariants = tv({
   },
 });
 
-interface SpinnerProps extends LucideProps, VariantProps<typeof spinnerVariants> {}
+interface SpinnerProps extends Omit<LucideProps, 'size'>, VariantProps<typeof spinnerVariants> {}
 
 const LoadingSpinner: React.FC<SpinnerProps> = ({ size, className, ...props }) => {
   return <Loader2 className={spinnerVariants({ size, className })} {...props} />;

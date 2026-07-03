@@ -76,7 +76,6 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
   } = useForm<PublicRegistrationFormData>({
     resolver: zodResolver(publicRegistrationSchema),
     defaultValues: {
-      allowedGuests: 0,
       // Con una sola fecha disponible se pre-selecciona; con varias se deja vacío
       // para que el asistente abra el modal y elija (más claro).
       scheduleIds: availableSchedules.length === 1 ? [availableSchedules[0].id] : []

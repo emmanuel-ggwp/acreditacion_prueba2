@@ -8,7 +8,7 @@ import DeleteReasonModal from '@/components/ui/DeleteReasonModal';
 
 interface AwardCardProps {
   award: Award;
-  onEdit: () => void;
+  onEdit: (award: Award) => void;
 }
 
 const AwardCard: React.FC<AwardCardProps> = ({ award, onEdit }) => {
@@ -33,7 +33,7 @@ const AwardCard: React.FC<AwardCardProps> = ({ award, onEdit }) => {
         <div className="flex justify-between items-start">
           <h3 className="text-lg font-bold text-gray-800">{award.name}</h3>
           <div className="flex items-center gap-2">
-            <button onClick={onEdit} className="text-blue-500 hover:text-blue-700"><Edit size={18} /></button>
+            <button onClick={() => onEdit(award)} className="text-blue-500 hover:text-blue-700"><Edit size={18} /></button>
             <button onClick={() => setShowDelete(true)} className="text-red-500 hover:text-red-700"><Trash2 size={18} /></button>
           </div>
         </div>

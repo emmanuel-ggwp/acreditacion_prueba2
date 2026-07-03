@@ -7,7 +7,7 @@ const rateLimiter = new RateLimiterMemory({
 });
 
 export async function rateLimitMiddleware(request: NextRequest) {
-  const ip = request.ip ?? request.headers.get('x-forwarded-for') ?? '127.0.0.1';
+  const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? request.headers.get('x-real-ip') ?? '127.0.0.1';
   try {
     await rateLimiter.consume(ip);
     return null;
@@ -15,7 +15,7 @@ export async function rateLimitMiddleware(request: NextRequest) {
     return new NextResponse('Too many requests', {
       status: 429,
       headers: {
-        'Retry-After': (e as any).msBeforeNext / 1000,
+        'Retry-After': String((e as any).msBeforeNext / 1000),
       },
     });
   }

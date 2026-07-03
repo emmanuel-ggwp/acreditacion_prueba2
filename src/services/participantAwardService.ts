@@ -11,7 +11,7 @@ import Event from '@/models/Event';
 
 export class ParticipantAwardService {
 
-  async assignAward(participantId: string, awardId: string, assignedBy: string, notes?: string) {
+  async assignAward(participantId: string, awardId: string, assignedBy: string, notes?: string | null) {
 
     return sequelize.transaction(async (transaction) => {
       const award = await Award.findByPk(awardId, { lock: transaction.LOCK.UPDATE, transaction });

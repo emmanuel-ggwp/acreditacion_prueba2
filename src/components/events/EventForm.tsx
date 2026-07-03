@@ -162,7 +162,7 @@ const EventForm: React.FC<EventFormProps> = ({ event, onClose, onSuccess }) => {
       name: event?.name || '',
       description: event?.description || '',
       location: event?.location || '',
-      maxCapacity: event?.maxCapacity ?? null,
+      maxCapacity: event?.maxCapacity ?? undefined,
       allowGuests: event?.allowGuests ?? true,
       maxGuestsPerParticipant: event?.maxGuestsPerParticipant ?? 0,
       isPublic: event?.isPublic ?? false,
