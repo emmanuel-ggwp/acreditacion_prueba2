@@ -9,6 +9,7 @@ import Event from '@/models/Event';
 import { bulkAccreditationSchema } from '@/utils/validators/accreditationSchemas';
 import User from '@/models/User';
 import { auditLogService } from './auditLogService';
+import { dietaryFull, dietaryLabel } from '@/utils/dietary';
 
 export class AccreditationService {
 
@@ -249,6 +250,144 @@ export class AccreditationService {
     const awarded = await Participant.count({ where: { eventId: (schedule as any).eventId, isAwarded: true } });
 
     return { participants, guests, total: participants + guests, awarded };
+  }
+
+  // Resumen de asistencia por fecha del evento: participantes e invitados acreditados
+  // en cada horario, más los totales generales.
+  async getEventScheduleStats(eventId: string) {
+    const schedules = await EventSchedule.findAll({
+      where: { eventId },
+      order: [['startDateTime', 'ASC']],
+    });
+    const scheduleIds = schedules.map((s: any) => s.id);
+
+    const counts: Record<string, { participants: number; guests: number }> = {};
+    if (scheduleIds.length) {
+      const rows = await Accreditation.findAll({
+        where: { eventScheduleId: { [Op.in]: scheduleIds } },
+        attributes: [
+          'eventScheduleId',
+          [fn('COUNT', fn('DISTINCT', col('participant_id'))), 'participants'],
+          [fn('COUNT', fn('DISTINCT', col('guest_id'))), 'guests'],
+        ],
+        group: ['eventScheduleId'],
+        raw: true,
+      }) as unknown as Array<{ eventScheduleId: string; participants: any; guests: any }>;
+      for (const r of rows) {
+        counts[r.eventScheduleId] = { participants: Number(r.participants || 0), guests: Number(r.guests || 0) };
+      }
+    }
+
+    const perSchedule = schedules.map((s: any) => {
+      const c = counts[s.id] || { participants: 0, guests: 0 };
+      return {
+        scheduleId: s.id,
+        label: s.scheduleName,
+        startDateTime: s.startDateTime,
+        location: s.location,
+        participants: c.participants,
+        guests: c.guests,
+        total: c.participants + c.guests,
+      };
+    });
+
+    const totals = perSchedule.reduce(
+      (acc, s) => ({
+        participants: acc.participants + s.participants,
+        guests: acc.guests + s.guests,
+        total: acc.total + s.total,
+      }),
+      { participants: 0, guests: 0, total: 0 }
+    );
+
+    return { perSchedule, totals };
+  }
+
+  // Lista de premiados del evento con su estado de acreditación en el horario dado.
+  async getAwardedList(scheduleId: string) {
+    const schedule = await EventSchedule.findByPk(scheduleId);
+    if (!schedule) throw new Error('Schedule not found');
+    const eventId = (schedule as any).eventId;
+
+    const awarded = await Participant.findAll({
+      where: { eventId, isAwarded: true },
+      attributes: ['id', 'firstName', 'lastName', 'documentNumber', 'awardReason'],
+      order: [['lastName', 'ASC'], ['firstName', 'ASC']],
+    });
+    const ids = awarded.map((p: any) => p.id);
+
+    const accMap: Record<string, Date> = {};
+    if (ids.length) {
+      const accs = await Accreditation.findAll({
+        where: { eventScheduleId: scheduleId, participantId: { [Op.in]: ids } },
+        attributes: ['participantId', 'checkInTime'],
+        raw: true,
+      }) as unknown as Array<{ participantId: string; checkInTime: Date }>;
+      for (const a of accs) accMap[a.participantId] = a.checkInTime;
+    }
+
+    return awarded.map((p: any) => ({
+      id: p.id,
+      firstName: p.firstName,
+      lastName: p.lastName,
+      documentNumber: p.documentNumber,
+      awardReason: p.awardReason,
+      isAccredited: !!accMap[p.id],
+      checkInTime: accMap[p.id] || null,
+    }));
+  }
+
+  // Lista de personas (participantes e invitados) con requerimiento alimentario en el evento
+  // del horario dado, con su estado de acreditación en ese horario.
+  async getDietaryList(scheduleId: string) {
+    const schedule = await EventSchedule.findByPk(scheduleId);
+    if (!schedule) throw new Error('Schedule not found');
+    const eventId = (schedule as any).eventId;
+    const notNone = { [Op.notIn]: ['NONE', ''], [Op.ne]: null } as any;
+
+    const [participants, guests, accs] = await Promise.all([
+      Participant.findAll({
+        where: { eventId, dietaryPreference: notNone },
+        attributes: ['id', 'firstName', 'lastName', 'documentNumber', 'dietaryPreference', 'dietaryComments'],
+        order: [['lastName', 'ASC'], ['firstName', 'ASC']],
+      }),
+      Guest.findAll({
+        where: { dietaryPreference: notNone },
+        attributes: ['id', 'firstName', 'lastName', 'documentNumber', 'dietaryPreference'],
+        include: [{ model: Participant, as: 'participant', where: { eventId }, attributes: ['id', 'firstName', 'lastName'] }],
+      }),
+      Accreditation.findAll({
+        where: { eventScheduleId: scheduleId },
+        attributes: ['participantId', 'guestId'],
+        raw: true,
+      }) as unknown as Array<{ participantId: string | null; guestId: string | null }>,
+    ]);
+
+    const accP = new Set(accs.filter((a) => a.participantId).map((a) => a.participantId));
+    const accG = new Set(accs.filter((a) => a.guestId).map((a) => a.guestId));
+
+    const items = [
+      ...participants.map((p: any) => ({
+        id: p.id,
+        type: 'Participante' as const,
+        name: `${p.firstName || ''} ${p.lastName || ''}`.trim(),
+        documentNumber: p.documentNumber || null,
+        dietary: dietaryFull(p.dietaryPreference, p.dietaryComments),
+        belongsTo: null as string | null,
+        isAccredited: accP.has(p.id),
+      })),
+      ...guests.map((g: any) => ({
+        id: g.id,
+        type: 'Invitado' as const,
+        name: `${g.firstName || ''} ${g.lastName || ''}`.trim(),
+        documentNumber: g.documentNumber || null,
+        dietary: dietaryLabel(g.dietaryPreference),
+        belongsTo: g.participant ? `${g.participant.firstName || ''} ${g.participant.lastName || ''}`.trim() : null,
+        isAccredited: accG.has(g.id),
+      })),
+    ];
+
+    return items;
   }
 
   async verifyAccreditation(type: 'participant' | 'guest', id: string, scheduleId: string, transaction?: Transaction) {

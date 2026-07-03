@@ -344,6 +344,8 @@ export class ParticipantService {
             [fn('COUNT', col('guests.id')), 'guestCount'],
             [fn('BOOL_OR', col('schedules.ParticipantSchedule.attended')), 'accredited'],
             [sequelize.literal('(EXISTS (SELECT 1 FROM "participant_schedules" ps WHERE ps."participant_id" = "Participant"."id"))'), 'registered'],
+            // Hora de acreditación (la más temprana registrada en el evento).
+            [sequelize.literal('(SELECT MIN(a."check_in_time") FROM "accreditations" a WHERE a."participant_id" = "Participant"."id")'), 'accreditedAt'],
         ],
       },
       group: ['Participant.id'],
@@ -377,7 +379,11 @@ export class ParticipantService {
           { documentNumber: { [Op.iLike]: `%${query}%` } },
         ],
       },
-      include: [{ model: Guest, as: 'guests' }],
+      include: [
+        { model: Guest, as: 'guests' },
+        // Fechas en que el participante se inscribió (para avisar si acredita en otra fecha).
+        { model: EventSchedule, as: 'schedules', through: { attributes: [] } },
+      ],
       limit: 10,
     });
     return participants;

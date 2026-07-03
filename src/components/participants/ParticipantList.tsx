@@ -14,6 +14,13 @@ import { showToast } from '@/components/ui/Toast';
 import { exportParticipantsToExcel } from '@/utils/exportParticipants';
 import DeleteReasonModal from '@/components/ui/DeleteReasonModal';
 
+const fmtAccreditedAt = (d?: string | null) => {
+  if (!d) return null;
+  try {
+    return new Date(d).toLocaleString('es-CL', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+  } catch { return null; }
+};
+
 const ParticipantList = ({ eventId }: { eventId: string }) => {
   const router = useRouter();
   const { 
@@ -181,6 +188,7 @@ const ParticipantList = ({ eventId }: { eventId: string }) => {
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Correo</th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Documento</th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Hora acreditación</th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Premiado</th>
               <th scope="col" className="relative px-6 py-3">
                 <span className="sr-only">Acciones</span>
@@ -200,6 +208,9 @@ const ParticipantList = ({ eventId }: { eventId: string }) => {
                     ) : (
                       <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">Precargado</span>
                     )}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    {fmtAccreditedAt((participant as any).accreditedAt) || <span className="text-gray-300">—</span>}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm">
                     {(participant as any).isAwarded ? (
@@ -237,7 +248,7 @@ const ParticipantList = ({ eventId }: { eventId: string }) => {
               ))
             ) : (
               <tr>
-                <td colSpan={6} className="px-6 py-10 text-center text-gray-500">
+                <td colSpan={7} className="px-6 py-10 text-center text-gray-500">
                   No se encontraron participantes. Agrega uno para comenzar.
                 </td>
               </tr>

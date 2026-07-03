@@ -6,7 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { publicRegistrationSchema } from '@/utils/validators/participantSchemas';
 import { getFormFields, guestDietaryEnabled } from '@/utils/formFields';
-import { getDietaryOptions } from '@/utils/dietary';
+import { getDietaryOptions, isFreeTextDiet, dietaryFull } from '@/utils/dietary';
 import { sendConfirmationEmail } from '@/lib/emailjs';
 import DateSelectModal from '@/components/public/DateSelectModal';
 import { CONTACT_EMAIL } from '@/utils/contact';
@@ -62,8 +62,8 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
   const dietOpts = getDietaryOptions((event as any).registrationConfig);
   const maxGuests = Number((event as any).maxGuestsPerParticipant) || 0;
   const allowGuests = (event as any).allowGuests !== false;
-  const [openGuests, setOpenGuests] = useState<{ firstName: string; lastName: string; dietaryPreference?: string }[]>([]);
-  const addGuest = () => setOpenGuests((g) => (g.length < maxGuests ? [...g, { firstName: '', lastName: '', dietaryPreference: 'NONE' }] : g));
+  const [openGuests, setOpenGuests] = useState<{ firstName: string; lastName: string; dietaryPreference?: string; dietaryComments?: string }[]>([]);
+  const addGuest = () => setOpenGuests((g) => (g.length < maxGuests ? [...g, { firstName: '', lastName: '', dietaryPreference: 'NONE', dietaryComments: '' }] : g));
   const removeGuest = (i: number) => setOpenGuests((g) => g.filter((_, idx) => idx !== i));
   const updateGuest = (i: number, k: string, v: string) => setOpenGuests((g) => g.map((x, idx) => (idx === i ? { ...x, [k]: v } : x)));
 
@@ -107,7 +107,17 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
 
       const guests = openGuests
         .filter((g) => g.firstName.trim())
-        .map((g) => ({ firstName: g.firstName.trim(), lastName: g.lastName.trim() || undefined, guestType: 'ACOMPANANTE', ...(guestDiet ? { dietaryPreference: g.dietaryPreference || 'NONE' } : {}) }));
+        .map((g) => {
+          const gd: any = {};
+          if (guestDiet) {
+            // El invitado no tiene columna de comentarios: si eligió Alergia/Otro y escribió,
+            // guardamos el detalle dentro de dietaryPreference (ej.: "Alergia: maní").
+            gd.dietaryPreference = isFreeTextDiet(g.dietaryPreference) && (g.dietaryComments || '').trim()
+              ? dietaryFull(g.dietaryPreference, g.dietaryComments)
+              : (g.dietaryPreference || 'NONE');
+          }
+          return { firstName: g.firstName.trim(), lastName: g.lastName.trim() || undefined, guestType: 'ACOMPANANTE', ...gd };
+        });
       const response = await fetch(`/api/public/events/${slug}/register`, {
         method: 'POST',
         headers: {
@@ -374,10 +384,10 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
         </div>
         )}
 
-        {ff.dietary.enabled && watch('dietaryPreference') === 'OTHER' && (
+        {ff.dietary.enabled && isFreeTextDiet(watch('dietaryPreference')) && (
           <div className="sm:col-span-2">
             <label htmlFor="dietaryComments" className="block text-sm font-medium text-gray-700">
-              Especifica tus requerimientos alimentarios
+              {String(watch('dietaryPreference')).toUpperCase().includes('ALERG') ? 'Especifica tu alergia' : 'Especifica tus requerimientos alimentarios'}
             </label>
             <div className="mt-1">
               <textarea
@@ -408,6 +418,14 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
                   <select value={g.dietaryPreference || 'NONE'} onChange={(e) => updateGuest(i, 'dietaryPreference', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white">
                     {dietOpts.map((o) => <option key={o.value} value={o.value}>Preferencia alimenticia: {o.label}</option>)}
                   </select>
+                )}
+                {guestDiet && isFreeTextDiet(g.dietaryPreference) && (
+                  <input
+                    value={g.dietaryComments || ''}
+                    onChange={(e) => updateGuest(i, 'dietaryComments', e.target.value)}
+                    placeholder={String(g.dietaryPreference).toUpperCase().includes('ALERG') ? 'Especifica la alergia' : 'Especifica el requerimiento'}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                  />
                 )}
               </div>
             ))}

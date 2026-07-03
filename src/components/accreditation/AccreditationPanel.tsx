@@ -5,9 +5,11 @@ import useEventStore from '@/store/eventStore';
 import apiClient from '@/utils/apiClient';
 import SearchParticipant from './SearchParticipant';
 import ParticipantCard from './ParticipantCard';
+import AwardedModal from './AwardedModal';
+import DietaryModal from './DietaryModal';
 import Participant from '@/models/Participant';
 import Guest from '@/models/Guest';
-import { Clock, MapPin, Users, UserCheck, UsersRound, Award, DoorOpen, DoorClosed, Calendar } from 'lucide-react';
+import { Clock, MapPin, Users, UserCheck, UsersRound, Award, DoorOpen, DoorClosed, Calendar, ChevronRight, Utensils } from 'lucide-react';
 
 interface AccreditationPanelProps {
   eventId?: string;
@@ -15,6 +17,8 @@ interface AccreditationPanelProps {
 }
 
 interface Stats { participants: number; guests: number; total: number; awarded: number }
+interface ScheduleStat { scheduleId: string; label: string; startDateTime: string; location?: string; participants: number; guests: number; total: number }
+interface EventStats { perSchedule: ScheduleStat[]; totals: { participants: number; guests: number; total: number } }
 
 const STATUS: Record<string, { label: string; cls: string }> = {
   accrediting: { label: 'En acreditación', cls: 'bg-green-100 text-green-700' },
@@ -25,13 +29,19 @@ const STATUS: Record<string, { label: string; cls: string }> = {
 const fmtTime = (d: string) => { try { return new Date(d).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' }); } catch { return ''; } };
 const fmtDate = (d: string) => { try { return new Date(d).toLocaleDateString('es-CL', { weekday: 'short', day: '2-digit', month: 'short' }); } catch { return ''; } };
 
-const StatCard: React.FC<{ icon: React.ElementType; label: string; value: React.ReactNode; color: string }> = ({ icon: Icon, label, value, color }) => (
-  <div className="bg-white border border-gray-200 rounded-xl p-3 text-center">
-    <Icon className={`h-5 w-5 mx-auto mb-1 ${color}`} />
-    <p className={`text-2xl font-bold ${color}`}>{value}</p>
-    <p className="text-xs text-gray-500">{label}</p>
-  </div>
-);
+const StatCard: React.FC<{ icon: React.ElementType; label: string; value: React.ReactNode; color: string; onClick?: () => void }> = ({ icon: Icon, label, value, color, onClick }) => {
+  const cls = `bg-white border border-gray-200 rounded-xl p-3 text-center ${onClick ? 'cursor-pointer hover:border-amber-300 hover:shadow-sm transition' : ''}`;
+  const content = (
+    <>
+      <Icon className={`h-5 w-5 mx-auto mb-1 ${color}`} />
+      <p className={`text-2xl font-bold ${color}`}>{value}</p>
+      <p className="text-xs text-gray-500 flex items-center justify-center gap-0.5">{label}{onClick && <ChevronRight size={12} className="text-gray-400" />}</p>
+    </>
+  );
+  return onClick
+    ? <button type="button" onClick={onClick} className={`${cls} w-full`}>{content}</button>
+    : <div className={cls}>{content}</div>;
+};
 
 const AccreditationPanel = ({ eventId: eventIdProp, scheduleId: scheduleIdProp }: AccreditationPanelProps) => {
   const { EventSchedules, fetchSchedulesForEvent, setScheduleStatus } = useEventStore();
@@ -40,6 +50,9 @@ const AccreditationPanel = ({ eventId: eventIdProp, scheduleId: scheduleIdProp }
   const [scheduleId, setScheduleId] = useState(scheduleIdProp || '');
   const [selectedPerson, setSelectedPerson] = useState<{ type: 'participant' | 'guest'; data: Participant | Guest } | null>(null);
   const [stats, setStats] = useState<Stats | null>(null);
+  const [eventStats, setEventStats] = useState<EventStats | null>(null);
+  const [showAwarded, setShowAwarded] = useState(false);
+  const [showDietary, setShowDietary] = useState(false);
 
   useEffect(() => {
     apiClient.get<any>('/api/events?page=1&limit=100')
@@ -61,8 +74,15 @@ const AccreditationPanel = ({ eventId: eventIdProp, scheduleId: scheduleIdProp }
   }, [scheduleId]);
   useEffect(() => { loadStats(); }, [loadStats]);
 
+  const loadEventStats = useCallback(() => {
+    if (!eventId) { setEventStats(null); return; }
+    apiClient.get<EventStats>(`/api/accreditation/event-stats?eventId=${eventId}`).then(setEventStats).catch(() => setEventStats(null));
+  }, [eventId]);
+  useEffect(() => { loadEventStats(); }, [loadEventStats]);
+
   const onAccredited = () => {
     loadStats();
+    loadEventStats();
     if (eventId) fetchSchedulesForEvent(eventId);
   };
 
@@ -71,10 +91,12 @@ const AccreditationPanel = ({ eventId: eventIdProp, scheduleId: scheduleIdProp }
   };
 
   const schedules = EventSchedules as any[];
+  const selectedSchedule = schedules.find((s: any) => s.id === scheduleId);
+  const selectedScheduleLabel = selectedSchedule?.label || selectedSchedule?.scheduleName;
 
   return (
-    <div className="p-6 md:p-8 max-w-4xl mx-auto space-y-6">
-      <h1 className="text-3xl font-bold">Acreditación</h1>
+    <div className="p-4 sm:p-6 md:p-8 max-w-4xl mx-auto space-y-6">
+      <h1 className="text-2xl sm:text-3xl font-bold">Acreditación</h1>
 
       {/* Paso 1: Evento */}
       <div>
@@ -134,6 +156,38 @@ const AccreditationPanel = ({ eventId: eventIdProp, scheduleId: scheduleIdProp }
         </div>
       )}
 
+      {/* Resumen de asistencia por fecha (participantes / invitados / total) */}
+      {eventId && eventStats && eventStats.perSchedule.length > 0 && (
+        <div>
+          <label className="block text-sm font-semibold text-gray-700 mb-2">Asistencia por fecha</label>
+          <div className="border border-gray-200 rounded-xl overflow-hidden">
+            <div className="divide-y divide-gray-100">
+              {eventStats.perSchedule.map((s) => (
+                <div key={s.scheduleId} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 p-3">
+                  <div className="min-w-0">
+                    <p className="font-medium text-gray-800 truncate">{s.label}</p>
+                    <p className="text-xs text-gray-500 capitalize">{fmtDate(s.startDateTime)}</p>
+                  </div>
+                  <div className="flex items-center gap-4 sm:gap-6 text-sm shrink-0">
+                    <div className="text-center min-w-[64px]"><p className="font-bold text-indigo-600">{s.participants}</p><p className="text-[11px] text-gray-500">Participantes</p></div>
+                    <div className="text-center min-w-[56px]"><p className="font-bold text-teal-600">{s.guests}</p><p className="text-[11px] text-gray-500">Invitados</p></div>
+                    <div className="text-center min-w-[44px]"><p className="font-bold text-gray-900">{s.total}</p><p className="text-[11px] text-gray-500">Total</p></div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 p-3 bg-gray-50 border-t border-gray-200">
+              <p className="font-semibold text-gray-800">Totales</p>
+              <div className="flex items-center gap-4 sm:gap-6 text-sm shrink-0">
+                <div className="text-center min-w-[64px]"><p className="font-bold text-indigo-600">{eventStats.totals.participants}</p><p className="text-[11px] text-gray-500">Participantes</p></div>
+                <div className="text-center min-w-[56px]"><p className="font-bold text-teal-600">{eventStats.totals.guests}</p><p className="text-[11px] text-gray-500">Invitados</p></div>
+                <div className="text-center min-w-[44px]"><p className="font-bold text-gray-900">{eventStats.totals.total}</p><p className="text-[11px] text-gray-500">Total</p></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Paso 3: Stats + Buscar participante */}
       {scheduleId && (
         <div className="space-y-4">
@@ -141,8 +195,16 @@ const AccreditationPanel = ({ eventId: eventIdProp, scheduleId: scheduleIdProp }
             <StatCard icon={UserCheck} label="Acreditados" value={stats?.participants ?? '—'} color="text-indigo-600" />
             <StatCard icon={Users} label="Invitados" value={stats?.guests ?? '—'} color="text-teal-600" />
             <StatCard icon={UsersRound} label="Total" value={stats?.total ?? '—'} color="text-gray-900" />
-            {(stats?.awarded ?? 0) > 0 && <StatCard icon={Award} label="Premiados" value={stats?.awarded ?? 0} color="text-amber-600" />}
+            {(stats?.awarded ?? 0) > 0 && <StatCard icon={Award} label="Premiados" value={stats?.awarded ?? 0} color="text-amber-600" onClick={() => setShowAwarded(true)} />}
           </div>
+
+          <button
+            type="button"
+            onClick={() => setShowDietary(true)}
+            className="w-full flex items-center justify-center gap-2 text-sm font-medium text-orange-700 bg-orange-50 border border-orange-200 rounded-lg py-2.5 hover:bg-orange-100 transition"
+          >
+            <Utensils size={16} /> Ver requerimientos alimentarios
+          </button>
 
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-2">3. Buscar participante</label>
@@ -150,9 +212,17 @@ const AccreditationPanel = ({ eventId: eventIdProp, scheduleId: scheduleIdProp }
           </div>
 
           {selectedPerson && (
-            <ParticipantCard person={selectedPerson.data} type={selectedPerson.type} scheduleId={scheduleId} onAccredited={onAccredited} />
+            <ParticipantCard person={selectedPerson.data} type={selectedPerson.type} scheduleId={scheduleId} scheduleLabel={selectedScheduleLabel} onAccredited={onAccredited} />
           )}
         </div>
+      )}
+
+      {showAwarded && scheduleId && (
+        <AwardedModal scheduleId={scheduleId} onClose={() => setShowAwarded(false)} />
+      )}
+
+      {showDietary && scheduleId && (
+        <DietaryModal scheduleId={scheduleId} onClose={() => setShowDietary(false)} />
       )}
     </div>
   );

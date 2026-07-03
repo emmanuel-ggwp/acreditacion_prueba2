@@ -5,6 +5,10 @@ dotenv.config();
 
 console.log('Initializing Sequelize instance...');
 
+// DigitalOcean (y la mayoría de BD administradas) exigen SSL. Se activa en producción
+// o con DB_SSL=true; en local (development) se conecta sin SSL.
+const useSSL = process.env.DB_SSL === 'true' || process.env.NODE_ENV === 'production';
+
 export const sequelize = new Sequelize(process.env.DATABASE_URL || '', {
   dialect: 'postgres',
   protocol: 'postgres',
@@ -20,4 +24,5 @@ export const sequelize = new Sequelize(process.env.DATABASE_URL || '', {
     underscored: true,
   },
   timezone: '+00:00', // UTC
+  dialectOptions: useSSL ? { ssl: { require: true, rejectUnauthorized: false } } : {},
 });
