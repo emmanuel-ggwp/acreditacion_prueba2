@@ -1,9 +1,14 @@
 import * as XLSX from 'xlsx';
 import apiClient from './apiClient';
+import { dietaryFull, dietaryLabel } from './dietary';
 
 const fmtDate = (d?: string) => {
   if (!d) return '';
   try { return new Date(d).toLocaleDateString('es-CL'); } catch { return ''; }
+};
+const fmtDateTime = (d?: string | null) => {
+  if (!d) return '';
+  try { return new Date(d).toLocaleString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }); } catch { return ''; }
 };
 const guestTypeLabel = (t?: string) =>
   t === 'CARGA' ? 'Carga' : t === 'ACOMPANANTE' ? 'Acompañante' : (t || '');
@@ -31,8 +36,11 @@ export async function exportParticipantsToExcel(eventId: string, eventName: stri
       'Cargo': p.position || '',
       'Código SAP': p.numeroSap || '',
       'Estado': schedules.length > 0 ? 'Inscrito' : 'Precargado',
+      'Acreditado': p.isAccredited ? 'Sí' : 'No',
+      'Hora de acreditación': fmtDateTime(p.accreditedAt),
       'Fecha(s)': fechas,
       'Ubicación(es)': lugares,
+      'Requerimiento alimentario': dietaryFull(p.dietaryPreference, p.dietaryComments),
       'Premiado': p.isAwarded ? 'Sí' : 'No',
       'Motivo premio': p.awardReason || '',
       'Cant. invitados': guests.length,
@@ -51,6 +59,9 @@ export async function exportParticipantsToExcel(eventId: string, eventName: stri
         'Apellido invitado': g.lastName || '',
         'Tipo': guestTypeLabel(g.guestType),
         'RUT invitado': g.documentNumber || '',
+        'Acreditado': g.isAccredited ? 'Sí' : 'No',
+        'Hora de acreditación': fmtDateTime(g.accreditedAt),
+        'Requerimiento alimentario': dietaryLabel(g.dietaryPreference),
         'Fecha': fecha,
       });
     });

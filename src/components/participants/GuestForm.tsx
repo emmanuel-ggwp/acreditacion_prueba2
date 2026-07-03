@@ -1,13 +1,13 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { createGuestSchema } from '@/utils/validators/participantSchemas';
 import useGuestStore from '@/store/guestStore';
 import Guest from '@/models/Guest';
-import { DietOption, getDietaryOptions } from '@/utils/dietary';
+import { DietOption, getDietaryOptions, isFreeTextDiet, dietaryFull } from '@/utils/dietary';
 
 type GuestFormData = z.infer<typeof createGuestSchema>;
 
@@ -24,10 +24,20 @@ const GuestForm: React.FC<GuestFormProps> = ({ participantId, guest, guestDietar
   const dietOpts = dietaryOptions && dietaryOptions.length ? dietaryOptions : getDietaryOptions(undefined);
   const { createGuest, updateGuest, loading, error } = useGuestStore();
 
+  // El invitado guarda la alergia/detalle dentro de dietaryPreference (ej.: "Alergia: maní").
+  // Al editar, separamos la etiqueta base del detalle para poblar el select y el input.
+  const storedPref: string = (guest as any)?.dietaryPreference || 'NONE';
+  const encoded = typeof storedPref === 'string' && storedPref.includes(':');
+  const basePref = encoded
+    ? (storedPref.split(':')[0].toUpperCase().includes('ALERG') ? 'ALERGIA' : 'OTHER')
+    : storedPref;
+  const [allergyText, setAllergyText] = useState<string>(encoded ? storedPref.split(':').slice(1).join(':').trim() : '');
+
   const {
     register,
     handleSubmit,
     reset,
+    watch,
     formState: { errors },
   } = useForm<GuestFormData>({
     resolver: zodResolver(createGuestSchema),
@@ -37,23 +47,28 @@ const GuestForm: React.FC<GuestFormProps> = ({ participantId, guest, guestDietar
       lastName: guest?.lastName || '',
       documentNumber: guest?.documentNumber || '',
       guestType: (guest as any)?.guestType || '',
-      dietaryPreference: (guest as any)?.dietaryPreference || 'NONE',
+      dietaryPreference: basePref,
     } as any,
   });
 
+  const resolveDiet = (pref: any) =>
+    isFreeTextDiet(pref) && allergyText.trim() ? dietaryFull(pref, allergyText) : (pref || null);
+
   const onSubmit = async (data: GuestFormData) => {
     try {
+      const dietaryPreference = resolveDiet((data as any).dietaryPreference);
       if (guest) {
         await updateGuest(guest.id, {
           firstName: data.firstName,
           lastName: data.lastName,
           documentNumber: data.documentNumber,
           guestType: (data as any).guestType || null,
-          dietaryPreference: (data as any).dietaryPreference || null,
+          dietaryPreference,
         } as any);
       } else {
-        await createGuest(participantId, data);
+        await createGuest(participantId, { ...data, dietaryPreference } as any);
         reset({ participantId, firstName: '', lastName: '', documentNumber: '', guestType: '', dietaryPreference: 'NONE' } as any);
+        setAllergyText('');
       }
       onSaved();
     } catch (e) {
@@ -121,6 +136,14 @@ const GuestForm: React.FC<GuestFormProps> = ({ participantId, guest, guestDietar
           >
             {dietOpts.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
+          {isFreeTextDiet(watch('dietaryPreference' as any)) && (
+            <input
+              value={allergyText}
+              onChange={(e) => setAllergyText(e.target.value)}
+              placeholder={String(watch('dietaryPreference' as any)).toUpperCase().includes('ALERG') ? 'Especifica la alergia' : 'Especifica el requerimiento'}
+              className="mt-2 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+            />
+          )}
         </div>
       )}
 

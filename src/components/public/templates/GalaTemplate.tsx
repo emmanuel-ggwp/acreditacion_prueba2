@@ -5,7 +5,7 @@ import { Calendar, MapPin, ArrowRight, CheckCircle2, Clock, Loader2, Info, Mail 
 import { isValidRut } from '@/utils/validators/rut';
 import { sendConfirmationEmail } from '@/lib/emailjs';
 import { getFormFields, guestDietaryEnabled } from '@/utils/formFields';
-import { getDietaryOptions } from '@/utils/dietary';
+import { getDietaryOptions, isFreeTextDiet, dietaryFull } from '@/utils/dietary';
 import { hexToRgba } from '@/utils/color';
 import { CONTACT_EMAIL } from '@/utils/contact';
 import { getTitleFont, googleFontHref } from '@/utils/fonts';
@@ -64,7 +64,7 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
   const [allowMultiple, setAllowMultiple] = useState<boolean>(!!event.allowMultipleSchedules);
   const [registeredScheduleIds, setRegisteredScheduleIds] = useState<string[]>([]);
   const [selectedScheduleId, setSelectedScheduleId] = useState<string>(schedules.length === 1 && !schedules[0].full ? schedules[0].id : '');
-  const [form, setForm] = useState({ firstName: '', lastName: '', documentNumber: '', phone: '', email: '', company: '', position: '', numeroSap: '', dietaryPreference: 'NONE' });
+  const [form, setForm] = useState({ firstName: '', lastName: '', documentNumber: '', phone: '', email: '', company: '', position: '', numeroSap: '', dietaryPreference: 'NONE', dietaryComments: '' });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
@@ -80,8 +80,8 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
 
   // Modo abierto: invitados que agrega el asistente (hasta el máximo del evento)
   const maxGuests = Number(event.maxGuestsPerParticipant) || 0;
-  const [openGuests, setOpenGuests] = useState<{ firstName: string; lastName: string; dietaryPreference?: string }[]>([]);
-  const addOpenGuest = () => setOpenGuests((g) => (g.length < maxGuests ? [...g, { firstName: '', lastName: '', dietaryPreference: 'NONE' }] : g));
+  const [openGuests, setOpenGuests] = useState<{ firstName: string; lastName: string; dietaryPreference?: string; dietaryComments?: string }[]>([]);
+  const addOpenGuest = () => setOpenGuests((g) => (g.length < maxGuests ? [...g, { firstName: '', lastName: '', dietaryPreference: 'NONE', dietaryComments: '' }] : g));
   const removeOpenGuest = (i: number) => setOpenGuests((g) => g.filter((_, idx) => idx !== i));
   const updateOpenGuest = (i: number, k: string, v: string) => setOpenGuests((g) => g.map((x, idx) => (idx === i ? { ...x, [k]: v } : x)));
 
@@ -164,13 +164,23 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
       if (missing.length) { setError('Completa los campos obligatorios: ' + missing.join(', ') + '.'); return; }
       const openGuestList = openGuests
         .filter((g) => g.firstName.trim())
-        .map((g) => ({ firstName: g.firstName.trim(), lastName: g.lastName.trim() || undefined, guestType: 'ACOMPANANTE', ...(guestDiet ? { dietaryPreference: g.dietaryPreference || 'NONE' } : {}) }));
+        .map((g) => {
+          const gd: any = {};
+          if (guestDiet) {
+            // El invitado no tiene columna de comentarios: la alergia/detalle se guarda dentro
+            // de dietaryPreference (ej.: "Alergia: maní").
+            gd.dietaryPreference = isFreeTextDiet(g.dietaryPreference) && (g.dietaryComments || '').trim()
+              ? dietaryFull(g.dietaryPreference, g.dietaryComments)
+              : (g.dietaryPreference || 'NONE');
+          }
+          return { firstName: g.firstName.trim(), lastName: g.lastName.trim() || undefined, guestType: 'ACOMPANANTE', ...gd };
+        });
       payload = {
         firstName: form.firstName.trim(), lastName: form.lastName.trim(), email: form.email.trim(),
         phone: form.phone.trim() || undefined, documentNumber: form.documentNumber.trim() || undefined,
         company: form.company.trim() || undefined, position: form.position.trim() || undefined,
         numeroSap: form.numeroSap.trim() || undefined,
-        ...(ff.dietary.enabled ? { dietaryPreference: form.dietaryPreference } : {}),
+        ...(ff.dietary.enabled ? { dietaryPreference: form.dietaryPreference, dietaryComments: form.dietaryComments.trim() || undefined } : {}),
         scheduleIds: [selectedScheduleId],
         guests: openGuestList,
       };
@@ -534,6 +544,15 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
                     <select className={inputClass} style={inputStyle} value={form.dietaryPreference} onChange={(e) => setField('dietaryPreference', e.target.value)}>
                       {dietOpts.map((o) => <option key={o.value} value={o.value} style={{ color: '#111' }}>{o.label}</option>)}
                     </select>
+                    {isFreeTextDiet(form.dietaryPreference) && (
+                      <input
+                        className={`${inputClass} mt-2`}
+                        style={inputStyle}
+                        placeholder={String(form.dietaryPreference).toUpperCase().includes('ALERG') ? 'Especifica tu alergia' : 'Especifica tu requerimiento'}
+                        value={form.dietaryComments}
+                        onChange={(e) => setField('dietaryComments', e.target.value)}
+                      />
+                    )}
                   </div>
                 )}
               </div>
@@ -552,6 +571,15 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
                         <select className={`${inputClass} mt-2`} style={inputStyle} value={g.dietaryPreference || 'NONE'} onChange={(e) => updateOpenGuest(i, 'dietaryPreference', e.target.value)}>
                           {dietOpts.map((o) => <option key={o.value} value={o.value} style={{ color: '#111' }}>{`Preferencia alimenticia: ${o.label}`}</option>)}
                         </select>
+                      )}
+                      {guestDiet && isFreeTextDiet(g.dietaryPreference) && (
+                        <input
+                          className={`${inputClass} mt-2`}
+                          style={inputStyle}
+                          placeholder={String(g.dietaryPreference).toUpperCase().includes('ALERG') ? 'Especifica la alergia' : 'Especifica el requerimiento'}
+                          value={g.dietaryComments || ''}
+                          onChange={(e) => updateOpenGuest(i, 'dietaryComments', e.target.value)}
+                        />
                       )}
                     </div>
                   ))}

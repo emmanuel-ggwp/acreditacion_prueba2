@@ -12,13 +12,15 @@ const DEFAULT_DIET: DietOption[] = [
   { value: 'CELIAC', label: 'Celíaco (sin gluten)' },
   { value: 'KOSHER', label: 'Kosher' },
   { value: 'HALAL', label: 'Halal' },
+  { value: 'ALERGIA', label: 'Alergia' },
   { value: 'OTHER', label: 'Otro' },
 ];
 
 // Etiquetas para los códigos antiguos (datos previos a las opciones configurables).
 const LEGACY_LABELS: Record<string, string> = {
   NONE: 'Ninguna', VEGETARIAN: 'Vegetariano', VEGAN: 'Vegano',
-  CELIAC: 'Celíaco (sin gluten)', KOSHER: 'Kosher', HALAL: 'Halal', OTHER: 'Otro',
+  CELIAC: 'Celíaco (sin gluten)', KOSHER: 'Kosher', HALAL: 'Halal',
+  ALERGIA: 'Alergia', OTHER: 'Otro',
 };
 
 /** Etiquetas por defecto (para precargar el editor del evento). */
@@ -30,12 +32,39 @@ export const DEFAULT_DIET_LABELS: string[] = DEFAULT_DIET.map((o) => o.label);
  */
 export function getDietaryOptions(registrationConfig: any): DietOption[] {
   const custom = registrationConfig?.dietaryOptions;
-  const opts: DietOption[] = Array.isArray(custom) && custom.length
+  const base: DietOption[] = Array.isArray(custom) && custom.length
     ? custom
         .filter((s: any) => typeof s === 'string' && s.trim())
         .map((s: string) => ({ value: s.trim(), label: s.trim() }))
     : DEFAULT_DIET;
+  const opts = [...base];
+  // Garantiza la opción "Alergia" (texto libre) en todos los eventos, aun con opciones personalizadas.
+  if (!opts.some((o) => o.value === 'ALERGIA' || /alerg/i.test(o.label))) {
+    opts.push({ value: 'ALERGIA', label: 'Alergia' });
+  }
   return [{ value: 'NONE', label: 'Ninguna' }, ...opts];
+}
+
+/**
+ * ¿La opción elegida admite/necesita texto libre? (Alergia u Otro).
+ * Se usa para mostrar el campo donde la persona escribe el detalle.
+ */
+export function isFreeTextDiet(value: any): boolean {
+  if (!value) return false;
+  const v = String(value).toUpperCase();
+  return v === 'OTHER' || v === 'ALERGIA' || /ALERG|OTRO/.test(v);
+}
+
+/**
+ * Texto completo de la dieta para mostrar/exportar: etiqueta + detalle libre.
+ * Ej.: ("ALERGIA", "maní") -> "Alergia: maní". Si no hay detalle, solo la etiqueta.
+ */
+export function dietaryFull(pref: any, comments?: any, registrationConfig?: any): string {
+  const label = dietaryLabel(pref, registrationConfig);
+  const c = (comments ?? '').toString().trim();
+  if (!c) return label;
+  if (label.includes(c)) return label;
+  return `${label}: ${c}`;
 }
 
 /**
