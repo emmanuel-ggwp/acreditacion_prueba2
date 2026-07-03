@@ -3,7 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Calendar, Users, Award, BarChart, Shield, Settings, ChevronLeft, LogOut, User, Gift, History, UserCog } from 'lucide-react';
+import { Home, Calendar, Users, BarChart, Shield, Settings, ChevronLeft, LogOut, User, Gift, History, UserCog } from 'lucide-react';
 import useAuthStore from '@/store/authStore';
 import { ROLES, Role } from '@/utils/constants';
 import RoleGuard from '../auth/RoleGuard';
@@ -21,7 +21,6 @@ const navItems: NavItem[] = [
   { href: '/events', label: 'Eventos', icon: Calendar, allowedRoles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.OPERATOR] },
   { href: '/accreditation', label: 'Acreditación', icon: Shield, allowedRoles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.OPERATOR, ROLES.GUARD] },
   { href: '/participants', label: 'Participantes', icon: Users, allowedRoles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.OPERATOR] },
-  { href: '/awards', label: 'Premios', icon: Award, allowedRoles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.OPERATOR] },
   { href: '/reports', label: 'Reportes', icon: BarChart, allowedRoles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.OPERATOR] },
   { href: '/gifts', label: 'Regalos Navidad', icon: Gift, allowedRoles: [ROLES.ADMIN, ROLES.MANAGER, ROLES.OPERATOR, ROLES.GUARD] },
   { href: '/audit', label: 'Actividad', icon: History, allowedRoles: [ROLES.ADMIN] },

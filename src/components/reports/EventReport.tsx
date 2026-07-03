@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import apiClient from '@/utils/apiClient';
-import { dietaryLabel } from '@/utils/dietary';
+import { dietaryLabel, dietaryFull } from '@/utils/dietary';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line } from 'recharts';
 import { Users, Award, CheckCircle, Percent, Download, Utensils } from 'lucide-react';
 import { utils, writeFile } from 'xlsx';
@@ -41,6 +41,11 @@ interface ReportData {
     count: number;
   }[];
 }
+
+const fmtCheckIn = (d?: string | null) => {
+  if (!d) return '';
+  try { return new Date(d).toLocaleString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }); } catch { return ''; }
+};
 
 const EventReport: React.FC<EventReportProps> = ({ eventId }) => {
   const [data, setData] = useState<ReportData | null>(null);
@@ -92,15 +97,15 @@ const EventReport: React.FC<EventReportProps> = ({ eventId }) => {
       rows.push({
         Tipo: 'Participante', Nombre: p.firstName || '', Apellido: p.lastName || '',
         'RUT/Documento': p.documentNumber || '', Empresa: p.company || '', Cargo: p.position || '',
-        'Código SAP': p.numeroSap || '', 'Preferencia alimenticia': dietaryLabel(p.dietaryPreference),
-        Acreditado: p.isAccredited ? 'Sí' : 'No', 'Pertenece a': '',
+        'Código SAP': p.numeroSap || '', 'Preferencia alimenticia': dietaryFull(p.dietaryPreference, p.dietaryComments),
+        Acreditado: p.isAccredited ? 'Sí' : 'No', 'Hora acreditación': fmtCheckIn(p.accreditedAt), 'Pertenece a': '',
       });
       for (const g of (p.guests || [])) {
         rows.push({
           Tipo: 'Invitado', Nombre: g.firstName || '', Apellido: g.lastName || '',
           'RUT/Documento': g.documentNumber || '', Empresa: '', Cargo: '',
-          'Código SAP': '', 'Preferencia alimenticia': dietaryLabel(g.dietaryPreference),
-          Acreditado: '', 'Pertenece a': `${p.firstName || ''} ${p.lastName || ''}`.trim(),
+          'Código SAP': '', 'Preferencia alimenticia': dietaryFull(g.dietaryPreference, (g as any).dietaryComments),
+          Acreditado: g.isAccredited ? 'Sí' : 'No', 'Hora acreditación': fmtCheckIn(g.accreditedAt), 'Pertenece a': `${p.firstName || ''} ${p.lastName || ''}`.trim(),
         });
       }
     }

@@ -5,16 +5,23 @@ import Participant from '@/models/Participant';
 import Guest from '@/models/Guest';
 import useAccreditationStore from '@/store/accreditationStore';
 import useAuthStore from '@/store/authStore';
-import { Check, X, User, Users, Award, Mail, FileText, Loader2 } from 'lucide-react';
+import { Check, X, User, Users, Award, Mail, FileText, Loader2, CalendarClock, Utensils } from 'lucide-react';
+import { dietaryFull, dietaryLabel } from '@/utils/dietary';
 
 interface ParticipantCardProps {
   person: Participant | Guest;
   type: 'participant' | 'guest';
   scheduleId: string;
+  scheduleLabel?: string;
   onAccredited?: () => void;
 }
 
-const ParticipantCard: React.FC<ParticipantCardProps> = ({ person, type, scheduleId, onAccredited }) => {
+const fmtScheduleDate = (d?: string) => {
+  if (!d) return '';
+  try { return new Date(d).toLocaleDateString('es-CL', { weekday: 'long', day: '2-digit', month: 'long' }); } catch { return ''; }
+};
+
+const ParticipantCard: React.FC<ParticipantCardProps> = ({ person, type, scheduleId, scheduleLabel, onAccredited }) => {
   const [guestsToAccredit, setGuestsToAccredit] = useState<string[]>([]);
   const [accreditationStatus, setAccreditationStatus] = useState<{isAccredited: boolean, accreditation?: any}>({ isAccredited: false });
   const [notes, setNotes] = useState('');
@@ -47,6 +54,18 @@ const ParticipantCard: React.FC<ParticipantCardProps> = ({ person, type, schedul
   const name = isParticipant ? `${participant?.firstName} ${participant?.lastName}` : `${guest?.firstName} ${guest?.lastName}`;
   const email = isParticipant ? participant?.email : 'N/A';
   const documentNumber = person.documentNumber;
+
+  // Aviso: el participante se inscribió en otra(s) fecha(s) distinta(s) a la que se está acreditando.
+  const registeredSchedules: any[] = isParticipant ? ((participant as any)?.schedules || []) : [];
+  const registeredHere = registeredSchedules.some((s) => s.id === scheduleId);
+  const showOtherDateWarning = isParticipant && registeredSchedules.length > 0 && !registeredHere;
+  const otherDatesText = registeredSchedules
+    .map((s) => `${s.scheduleName || s.label || 'Fecha'}${s.startDateTime ? ` (${fmtScheduleDate(s.startDateTime)})` : ''}`)
+    .join(', ');
+
+  // Requerimiento alimentario de la persona (para mostrarlo al acreditar).
+  const dietaryText = dietaryFull((person as any).dietaryPreference, (person as any).dietaryComments);
+  const hasDietary = !!dietaryText && dietaryText !== 'Ninguna';
 
   const handleAccredit = async () => {
     if (!user) {
@@ -89,10 +108,10 @@ const ParticipantCard: React.FC<ParticipantCardProps> = ({ person, type, schedul
 
   return (
     <div className="mt-6 bg-white border border-gray-200 rounded-lg shadow-sm">
-      <div className="p-6 border-b">
-        <div className="flex justify-between items-start">
+      <div className="p-4 sm:p-6 border-b">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3">
           <div>
-            <h2 className="text-2xl font-bold">{name}</h2>
+            <h2 className="text-xl sm:text-2xl font-bold break-words">{name}</h2>
             <p className="text-gray-500">{isParticipant ? 'Participante' : 'Invitado'}</p>
             {isParticipant && (participant as any)?.isAwarded && (
               <span className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">
@@ -119,7 +138,31 @@ const ParticipantCard: React.FC<ParticipantCardProps> = ({ person, type, schedul
         </div>
       </div>
       
-      <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+      {showOtherDateWarning && !accreditationStatus.isAccredited && (
+        <div className="mx-4 sm:mx-6 mt-4 p-3 sm:p-4 bg-amber-50 border border-amber-200 rounded-lg flex items-start gap-3">
+          <CalendarClock className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
+          <div className="text-sm text-amber-800">
+            <p className="font-semibold">Se inscribió en otra fecha</p>
+            <p className="mt-0.5">
+              {name.trim()} se inscribió para <span className="font-medium">{otherDatesText}</span>
+              {scheduleLabel ? <>, no para <span className="font-medium">{scheduleLabel}</span></> : null}.
+              ¿Deseas acreditarla en esta fecha de todos modos?
+            </p>
+          </div>
+        </div>
+      )}
+
+      {hasDietary && (
+        <div className="mx-4 sm:mx-6 mt-4 p-3 sm:p-4 bg-orange-50 border border-orange-200 rounded-lg flex items-start gap-3">
+          <Utensils className="h-5 w-5 text-orange-600 flex-shrink-0 mt-0.5" />
+          <div className="text-sm text-orange-800">
+            <p className="font-semibold">Requerimiento alimentario</p>
+            <p className="mt-0.5">{dietaryText}</p>
+          </div>
+        </div>
+      )}
+
+      <div className="p-4 sm:p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
           <h3 className="font-semibold text-lg mb-3">Detalles</h3>
           <div className="space-y-2 text-gray-700">
@@ -146,7 +189,7 @@ const ParticipantCard: React.FC<ParticipantCardProps> = ({ person, type, schedul
       </div>
 
       {isParticipant && participant?.guests && participant.guests.length > 0 && (
-        <div className="p-6 border-t">
+        <div className="p-4 sm:p-6 border-t">
           <div className="flex justify-between items-center mb-3">
             <h3 className="font-semibold text-lg">Invitados</h3>
             {!accreditationStatus.isAccredited && (
@@ -160,8 +203,15 @@ const ParticipantCard: React.FC<ParticipantCardProps> = ({ person, type, schedul
           </div>
           <div className="space-y-2">
             {participant.guests.map((g) => (
-              <div key={g.id} className="flex items-center justify-between bg-gray-50 p-3 rounded-md">
-                <span>{g.firstName} {g.lastName}</span>
+              <div key={g.id} className="flex items-center justify-between bg-gray-50 p-3 rounded-md gap-2">
+                <div className="min-w-0">
+                  <span className="block truncate">{g.firstName} {g.lastName}</span>
+                  {(g as any).dietaryPreference && dietaryLabel((g as any).dietaryPreference) !== 'Ninguna' && (
+                    <span className="mt-0.5 inline-flex items-center gap-1 text-xs text-orange-700">
+                      <Utensils size={11} /> {dietaryLabel((g as any).dietaryPreference)}
+                    </span>
+                  )}
+                </div>
                 {!accreditationStatus.isAccredited && (
                   <input 
                     type="checkbox"
@@ -177,7 +227,7 @@ const ParticipantCard: React.FC<ParticipantCardProps> = ({ person, type, schedul
       )}
 
       {!accreditationStatus.isAccredited && (
-        <div className="p-6 bg-gray-50 border-t">
+        <div className="p-4 sm:p-6 bg-gray-50 border-t">
           <div className="mb-4">
             <label htmlFor="notes" className="block text-sm font-medium text-gray-700 mb-1">
               Notas (opcional)
@@ -195,7 +245,7 @@ const ParticipantCard: React.FC<ParticipantCardProps> = ({ person, type, schedul
             <button
               onClick={handleAccredit}
               disabled={loading}
-              className="bg-indigo-600 text-white font-bold py-3 px-8 rounded-lg hover:bg-indigo-700 transition duration-300 text-lg flex items-center disabled:bg-indigo-400"
+              className="w-full sm:w-auto bg-indigo-600 text-white font-bold py-3 px-6 sm:px-8 rounded-lg hover:bg-indigo-700 transition duration-300 text-base sm:text-lg flex items-center justify-center disabled:bg-indigo-400"
             >
               {loading && <Loader2 className="mr-2 h-5 w-5 animate-spin" />}
               ACREDITAR {guestsToAccredit.length > 0 ? `(+ ${guestsToAccredit.length} Invitados)` : ''}
