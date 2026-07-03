@@ -6,6 +6,16 @@ const nextConfig = {
   turbopack: {
     // Configure Turbopack here if needed
   },
+  async rewrites() {
+    return {
+      // Se ejecutan tras comprobar archivos/páginas: las URLs antiguas
+      // /uploads/<archivo> guardadas en la BD se sirven por el endpoint API,
+      // que lee del disco persistente (y de public/uploads como respaldo).
+      afterFiles: [
+        { source: '/uploads/:file', destination: '/api/uploads/:file' },
+      ],
+    };
+  },
   async headers() {
     return [
       {

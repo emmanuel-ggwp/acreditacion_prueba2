@@ -52,3 +52,5 @@ jest-coverage/
 # Uploaded files (keep the folder, ignore its contents)
 /public/uploads/*
 !/public/uploads/.gitkeep
+# Directorio de subidas en tiempo de ejecución (UPLOADS_DIR por defecto)
+/uploads/
