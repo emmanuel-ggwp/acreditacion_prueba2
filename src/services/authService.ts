@@ -1,4 +1,3 @@
-import { Op } from 'sequelize';
 import { loginSchema, registerSchema } from '@/utils/validators/authSchemas';
 import { User, RefreshToken } from '@/models/index';
 import { generateTokens, verifyRefreshToken } from '@/lib/jwt';
@@ -139,22 +138,6 @@ export class AuthService {
       });
     }
     return { message: 'Logged out successfully' };
-  }
-
-  async revokeAllUserTokens(userId: string) {
-    await RefreshToken.update({ isRevoked: true }, { where: { userId } });
-    return { message: 'All tokens revoked' };
-  }
-
-  async cleanExpiredTokens() {
-    await RefreshToken.destroy({
-      where: {
-        expiresAt: {
-          [Op.lt]: new Date(),
-        },
-      },
-    });
-    console.log('Expired refresh tokens cleaned up.');
   }
 }
 

@@ -7,17 +7,21 @@ import { z } from 'zod';
 import { createGuestSchema } from '@/utils/validators/participantSchemas';
 import useGuestStore from '@/store/guestStore';
 import Guest from '@/models/Guest';
+import { DietOption, getDietaryOptions } from '@/utils/dietary';
 
 type GuestFormData = z.infer<typeof createGuestSchema>;
 
 interface GuestFormProps {
   participantId: string;
   guest?: Guest;
+  guestDietary?: boolean;
+  dietaryOptions?: DietOption[];
   onSaved: () => void;
   onCancel?: () => void;
 }
 
-const GuestForm: React.FC<GuestFormProps> = ({ participantId, guest, onSaved, onCancel }) => {
+const GuestForm: React.FC<GuestFormProps> = ({ participantId, guest, guestDietary, dietaryOptions, onSaved, onCancel }) => {
+  const dietOpts = dietaryOptions && dietaryOptions.length ? dietaryOptions : getDietaryOptions(undefined);
   const { createGuest, updateGuest, loading, error } = useGuestStore();
 
   const {
@@ -32,7 +36,9 @@ const GuestForm: React.FC<GuestFormProps> = ({ participantId, guest, onSaved, on
       firstName: guest?.firstName || '',
       lastName: guest?.lastName || '',
       documentNumber: guest?.documentNumber || '',
-    },
+      guestType: (guest as any)?.guestType || '',
+      dietaryPreference: (guest as any)?.dietaryPreference || 'NONE',
+    } as any,
   });
 
   const onSubmit = async (data: GuestFormData) => {
@@ -42,10 +48,12 @@ const GuestForm: React.FC<GuestFormProps> = ({ participantId, guest, onSaved, on
           firstName: data.firstName,
           lastName: data.lastName,
           documentNumber: data.documentNumber,
-        });
+          guestType: (data as any).guestType || null,
+          dietaryPreference: (data as any).dietaryPreference || null,
+        } as any);
       } else {
         await createGuest(participantId, data);
-        reset({ participantId, firstName: '', lastName: '', documentNumber: '' });
+        reset({ participantId, firstName: '', lastName: '', documentNumber: '', guestType: '', dietaryPreference: 'NONE' } as any);
       }
       onSaved();
     } catch (e) {
@@ -58,7 +66,7 @@ const GuestForm: React.FC<GuestFormProps> = ({ participantId, guest, onSaved, on
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <label htmlFor="guestFirstName" className="block text-sm font-medium text-gray-700">
-            First Name
+            Nombre
           </label>
           <input
             id="guestFirstName"
@@ -69,7 +77,7 @@ const GuestForm: React.FC<GuestFormProps> = ({ participantId, guest, onSaved, on
         </div>
         <div>
           <label htmlFor="guestLastName" className="block text-sm font-medium text-gray-700">
-            Last Name
+            Apellido
           </label>
           <input
             id="guestLastName"
@@ -81,7 +89,7 @@ const GuestForm: React.FC<GuestFormProps> = ({ participantId, guest, onSaved, on
       </div>
       <div>
         <label htmlFor="guestDocumentNumber" className="block text-sm font-medium text-gray-700">
-          Document Number
+          Número de documento
         </label>
         <input
           id="guestDocumentNumber"
@@ -90,6 +98,31 @@ const GuestForm: React.FC<GuestFormProps> = ({ participantId, guest, onSaved, on
         />
         {errors.documentNumber && <p className="mt-1 text-sm text-red-600">{errors.documentNumber.message}</p>}
       </div>
+      <div>
+        <label htmlFor="guestType" className="block text-sm font-medium text-gray-700">Tipo de invitado</label>
+        <select
+          id="guestType"
+          {...register('guestType' as any)}
+          className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+        >
+          <option value="">Sin especificar</option>
+          <option value="CARGA">Carga</option>
+          <option value="ACOMPANANTE">Acompañante</option>
+        </select>
+      </div>
+
+      {guestDietary && (
+        <div>
+          <label htmlFor="guestDiet" className="block text-sm font-medium text-gray-700">Preferencia alimenticia</label>
+          <select
+            id="guestDiet"
+            {...register('dietaryPreference' as any)}
+            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+          >
+            {dietOpts.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        </div>
+      )}
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 
@@ -100,14 +133,14 @@ const GuestForm: React.FC<GuestFormProps> = ({ participantId, guest, onSaved, on
           className="bg-gray-200 text-gray-700 px-3 py-1 rounded-lg hover:bg-gray-300 text-sm"
           disabled={loading}
         >
-          Cancel
+          Cancelar
         </button>
           <button
             type="submit"
             className="bg-blue-600 text-white px-3 py-1 rounded-lg hover:bg-blue-700 disabled:opacity-50 text-sm"
             disabled={loading}
           >
-            {loading ? 'Saving...' : guest ? 'Update Guest' : 'Save Guest'}
+            {loading ? 'Guardando...' : guest ? 'Actualizar invitado' : 'Guardar invitado'}
           </button>
       </div>
     </form>

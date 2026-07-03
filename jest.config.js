@@ -15,9 +15,7 @@ module.exports = {
   coverageDirectory: 'coverage',
   collectCoverageFrom: [
     'src/services/**/*.ts',
-    'src/pages/api/**/*.ts',
-    '!src/pages/api/socket.ts',
-    '!src/services/socketService.ts',
+    'src/app/api/**/*.ts',
   ],
   coverageThreshold: {
     global: {

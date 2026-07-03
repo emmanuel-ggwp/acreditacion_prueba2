@@ -1,32 +1,17 @@
 import { Op, fn, col, literal, Sequelize, QueryTypes } from 'sequelize';
-import { startOfHour, endOfHour, eachHourOfInterval, format, startOfDay, endOfDay, subMinutes, parseISO } from 'date-fns';
+import { startOfHour, endOfHour, eachHourOfInterval, format, startOfDay, endOfDay, subMinutes } from 'date-fns';
 import { stringify } from 'csv-stringify/sync';
 import { sequelize } from '../lib/sequelize';
 
 import { 
   Event, 
   EventSchedule, 
-  Participant, 
+  Participant,
   ParticipantSchedule,
-  Guest, 
-  Accreditation, 
-  Award, 
-  ParticipantAward, 
-  User 
+  Accreditation,
+  Award,
+  ParticipantAward
 } from '@/models/index';
-
-// Define interfaces for filters to ensure type safety
-interface IAttendanceReportFilters {
-  eventId?: string;
-  scheduleId?: string;
-  startDate?: string;
-  endDate?: string;
-}
-
-interface IUserActivityReportDateRange {
-    startDate?: string;
-    endDate?: string;
-}
 
 export class ReportService {
 
@@ -93,7 +78,7 @@ export class ReportService {
 
     // 3b. Batch: Get Registered Guests per schedule
     const guestRegistrationQuery = `
-        SELECT ps.schedule_id as scheduleId, COUNT(g.id) as count
+        SELECT ps.schedule_id as "scheduleId", COUNT(g.id)::int as count
         FROM participant_schedules ps
         INNER JOIN guests g ON ps.participant_id = g.participant_id
         WHERE ps.schedule_id IN (:scheduleIds)
@@ -109,7 +94,7 @@ export class ReportService {
 
     // 4. Batch: Get Awards Delivered per schedule
     const awardsQuery = `
-        SELECT ps.schedule_id as scheduleId, COUNT(pa.id) as count
+        SELECT ps.schedule_id as "scheduleId", COUNT(pa.id)::int as count
         FROM participant_schedules ps
         INNER JOIN participant_awards pa ON ps.participant_id = pa.participant_id
         INNER JOIN awards a ON pa.award_id = a.id
@@ -129,10 +114,11 @@ export class ReportService {
     // 5. Build Schedule Details
     const scheduleDetails = schedules.map(s => {
         const accData = accMap.get(s.id) || { total: 0, participants: 0, guests: 0 };
-        const registeredParticipants = regMap.get(s.id) || 0;
-        const registeredGuests = guestRegMap.get(s.id) || 0;
+        const registeredParticipants = Number(regMap.get(s.id) || 0);
+        const registeredGuests = Number(guestRegMap.get(s.id) || 0);
         const registeredTotal = registeredParticipants + registeredGuests;
-        const awardsDelivered = awardMap.get(s.id) || 0;
+        const awardsDelivered = Number(awardMap.get(s.id) || 0);
+        const accTotal = Number(accData.total) || 0;
         const capacity = s.maxCapacity ?? event.maxCapacity ?? 0;
 
         return {
@@ -144,11 +130,11 @@ export class ReportService {
             registeredTotal,
             registeredParticipants,
             registeredGuests,
-            accreditedTotal: accData.total,
-            accreditedParticipants: accData.participants,
-            accreditedGuests: accData.guests,
+            accreditedTotal: accTotal,
+            accreditedParticipants: Number(accData.participants) || 0,
+            accreditedGuests: Number(accData.guests) || 0,
             awardsDelivered,
-            capacityUsedPercentage: capacity > 0 ? (accData.total / capacity) * 100 : 0,
+            capacityUsedPercentage: capacity > 0 ? (accTotal / capacity) * 100 : 0,
         };
     });
 
@@ -232,140 +218,6 @@ export class ReportService {
         pending: awardsAssigned - awardsDeliveredTotal,
       },
       accreditationTimeline,
-    };
-  }
-
-  async getScheduleReport(scheduleId: number, pagination = { page: 1, limit: 20 }) {
-    const schedule = await EventSchedule.findByPk(scheduleId, { include: [Event] });
-    if (!schedule) throw new Error('Schedule not found');
-
-    const { count, rows } = await Accreditation.findAndCountAll({
-      where: { eventScheduleId: scheduleId },
-      include: [
-        { model: Participant, attributes: ['firstName', 'lastName', 'email'] },
-        { model: Guest, attributes: ['firstName', 'lastName'] },
-        { model: User, as: 'accreditedByUser', attributes: ['firstName', 'lastName'] }
-      ],
-      limit: pagination.limit,
-      offset: (pagination.page - 1) * pagination.limit,
-      order: [['checkInTime', 'ASC']]
-    });
-    
-    // Check-in stats by hour range
-    const accreditations = await Accreditation.findAll({ where: { eventScheduleId: scheduleId }, attributes: ['checkInTime'] });
-    const checkInStats = accreditations.reduce((acc: Record<string, number>, curr: Accreditation) => {
-        const hour = format(curr.checkInTime, 'HH');
-        acc[hour] = (acc[hour] || 0) + 1;
-        return acc;
-    }, {} as Record<string, number>);
-
-
-    return {
-      scheduleInfo: schedule,
-      accreditations: {
-        total: count,
-        page: pagination.page,
-        limit: pagination.limit,
-        data: rows,
-      },
-      checkInStatsByHour: checkInStats
-    };
-  }
-
-  async getAttendanceReport(filters: IAttendanceReportFilters) {
-    const whereClause: any = {};
-    const scheduleWhere: any = {};
-
-    if (filters.eventId) scheduleWhere.eventId = filters.eventId;
-    if (filters.scheduleId) whereClause.eventScheduleId = filters.scheduleId;
-    if (filters.startDate && filters.endDate) {
-      whereClause.checkInTime = { [Op.between]: [parseISO(filters.startDate), parseISO(filters.endDate)] };
-    }
-
-    const accreditations = await Accreditation.findAll({
-      where: whereClause,
-      include: [
-        { model: EventSchedule, where: scheduleWhere, attributes: ['scheduleName'] },
-        { model: Participant, attributes: ['firstName', 'lastName', 'email', 'documentNumber'] },
-        { model: Guest, attributes: ['firstName', 'lastName', 'documentNumber'], include: [{model: Participant, as: 'participant', attributes: ['email']}] },
-      ],
-      order: [['checkInTime', 'ASC']]
-    });
-
-    return accreditations.map((acc: any) => {
-        const person = acc.Participant || acc.Guest;
-        const isGuest = !!acc.Guest;
-        return {
-            name: `${person!.firstName} ${person!.lastName}`,
-            email: isGuest ? acc.Guest!.associatedParticipant?.email : acc.Participant!.email,
-            document: person!.documentNumber,
-            type: isGuest ? 'Guest' : 'Participant',
-            schedule: acc.EventSchedule!.scheduleName,
-            accreditedAt: acc.checkInTime,
-        }
-    });
-  }
-
-  async getAwardsReport(eventId: string) {
-    const awards = await Award.findAll({ where: { eventId } });
-
-    const awardDetails = await Promise.all(awards.map(async (award: Award) => {
-      const assigned = await ParticipantAward.count({ where: { awardId: award.id } });
-      const delivered = await ParticipantAward.count({ where: { awardId: award.id, deliveredAt: { [Op.ne]: null } } });
-      return {
-        name: award.name,
-        totalStock: award.quantity,
-        assigned,
-        delivered,
-        pending: assigned - delivered,
-        availableStock: award.quantity - assigned,
-      };
-    }));
-
-    const awardedParticipants = await ParticipantAward.findAll({
-        include: [
-            { model: Award, where: { eventId }, attributes: ['name'] },
-            { model: Participant, attributes: ['firstName', 'lastName', 'email'] }
-        ]
-    });
-
-    return {
-      awardDetails,
-      awardedParticipants: awardedParticipants.map((pa: any) => ({
-          participant: `${pa.Participant!.firstName} ${pa.Participant!.lastName}`,
-          email: pa.Participant!.email,
-          award: pa.Award!.name,
-          status: pa.deliveredAt ? 'Delivered' : 'Assigned',
-          deliveredAt: pa.deliveredAt
-      }))
-    };
-  }
-
-  async getUserActivityReport(userId: number, dateRange: IUserActivityReportDateRange) {
-    const where: any = { accreditedBy: userId };
-    if (dateRange.startDate && dateRange.endDate) {
-        where.checkInTime = { [Op.between]: [parseISO(dateRange.startDate), parseISO(dateRange.endDate)] };
-    }
-
-    const accreditations = await Accreditation.findAll({
-      where,
-      include: [EventSchedule]
-    });
-
-    const awardsWhere: any = { deliveredBy: userId };
-    if (dateRange.startDate && dateRange.endDate) {
-        awardsWhere.deliveredAt = { [Op.between]: [parseISO(dateRange.startDate), parseISO(dateRange.endDate)] };
-    }
-
-    const awardsDelivered = await ParticipantAward.findAll({
-      where: awardsWhere,
-      include: [Award]
-    });
-
-    return {
-      user: await User.findByPk(userId, { attributes: ['id', 'firstName', 'lastName'] }),
-      accreditations,
-      awardsDelivered,
     };
   }
 
@@ -465,9 +317,9 @@ export class ReportService {
             (SELECT COUNT(*) FROM accreditations acc_g 
              INNER JOIN guests g ON acc_g.guest_id = g.id 
              WHERE g.participant_id = p.id AND acc_g.event_schedule_id = es.id) as "Cant. Invitados Asistentes",
-            (SELECT GROUP_CONCAT(a.name SEPARATOR ', ') 
-             FROM participant_awards pa 
-             INNER JOIN awards a ON pa.award_id = a.id 
+            (SELECT STRING_AGG(a.name, ', ')
+             FROM participant_awards pa
+             INNER JOIN awards a ON pa.award_id = a.id
              WHERE pa.participant_id = p.id AND a.event_id = :eventId AND pa.delivered_at IS NOT NULL) as "awardName"
         FROM participants p
         INNER JOIN participant_schedules ps ON p.id = ps.participant_id

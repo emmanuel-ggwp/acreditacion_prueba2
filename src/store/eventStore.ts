@@ -33,10 +33,12 @@ interface EventState {
   fetchEventById: (id: string, includeSchedules?: boolean) => Promise<void>;
   createEvent: (eventData: z.infer<typeof createEventSchema>) => Promise<Event | void>;
   updateEvent: (id: string, eventData: z.infer<typeof updateEventSchema>) => Promise<void>;
-  deleteEvent: (id: string) => Promise<void>;
+  deleteEvent: (id: string, reason?: string) => Promise<void>;
   createSchedule: (scheduleData: z.infer<typeof createScheduleSchema>) => Promise<void>;
   updateSchedule: (id: string, eventId: string, scheduleData: z.infer<typeof updateScheduleSchema>) => Promise<void>;
-  deleteSchedule: (id: string, eventId: string) => Promise<void>;
+  deleteSchedule: (id: string, eventId: string, reason?: string) => Promise<void>;
+  setScheduleStatus: (scheduleId: string, eventId: string, status: string) => Promise<void>;
+  setScheduleImage: (scheduleId: string, eventId: string, imageUrl: string | null) => Promise<void>;
   setCurrentEvent: (event: Event | null) => void;
 }
 
@@ -147,10 +149,11 @@ const useEventStore = create<EventState>()(
         }
       },
 
-      deleteEvent: async (id: string) => {
+      deleteEvent: async (id: string, reason?: string) => {
         set({ loading: true, error: null });
         try {
-          await apiClient.delete(`/api/events/${id}`);
+          const qs = reason ? `?reason=${encodeURIComponent(reason)}` : '';
+          await apiClient.delete(`/api/events/${id}${qs}`);
           set((state) => ({
             events: state.events.filter((e) => e.id !== id),
             loading: false,
@@ -185,10 +188,11 @@ const useEventStore = create<EventState>()(
         }
       },
 
-      deleteSchedule: async (id, eventId) => {
+      deleteSchedule: async (id, eventId, reason) => {
         set({ loading: true, error: null });
         try {
-          await apiClient.delete(`/api/events/${eventId}/schedules/${id}`);
+          const rq = reason ? `?reason=${encodeURIComponent(reason)}` : '';
+          await apiClient.delete(`/api/events/${eventId}/schedules/${id}${rq}`);
           set((state) => ({
             EventSchedules: state.EventSchedules.filter((s) => s.id !== id),
             loading: false,
@@ -196,6 +200,23 @@ const useEventStore = create<EventState>()(
         } catch (error: any) {
           set({ error: error.message, loading: false });
         }
+      },
+
+      setScheduleStatus: async (scheduleId, eventId, status) => {
+        set({ loading: true, error: null });
+        try {
+          await apiClient.patch(`/api/events/${eventId}/schedules/${scheduleId}`, { status });
+          await useEventStore.getState().fetchSchedulesForEvent(eventId);
+          set({ loading: false });
+        } catch (error: any) {
+          set({ error: error.message, loading: false });
+          throw error;
+        }
+      },
+
+      setScheduleImage: async (scheduleId, eventId, imageUrl) => {
+        await apiClient.patch(`/api/events/${eventId}/schedules/${scheduleId}`, { imageUrl: imageUrl || '' });
+        await useEventStore.getState().fetchSchedulesForEvent(eventId);
       },
 
       setCurrentEvent: (event) => {

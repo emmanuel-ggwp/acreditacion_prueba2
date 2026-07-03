@@ -9,7 +9,7 @@ const ParticipantDetailPage = () => {
   const participantId = params.participantId as string;
 
   if (!participantId) {
-    return <div>Loading...</div>;
+    return <div>Cargando…</div>;
   }
 
   return (

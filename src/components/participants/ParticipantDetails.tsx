@@ -29,9 +29,9 @@ const ParticipantDetails = ({ participantId }: { participantId:string }) => {
     }
   };
 
-  if (loading) return <div className="text-center p-4">Loading participant details...</div>;
+  if (loading) return <div className="text-center p-4">Cargando detalles del participante...</div>;
   if (error) return <div className="text-center p-4 text-red-500">Error: {error}</div>;
-  if (!currentParticipant) return <div className="text-center p-4">Participant not found.</div>;
+  if (!currentParticipant) return <div className="text-center p-4">Participante no encontrado.</div>;
 
   // This is a temporary fix. The backend should provide this information.
   const isAccredited = (currentParticipant as any).accredited;
@@ -49,7 +49,7 @@ const ParticipantDetails = ({ participantId }: { participantId:string }) => {
               <span className={`px-3 py-1 text-sm font-semibold rounded-full ${
                 isAccredited ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
               }`}>
-                {isAccredited ? 'Accredited' : 'Pending Accreditation'}
+                {isAccredited ? 'Acreditado' : 'Acreditación pendiente'}
               </span>
               {!isAccredited && (
                 <button
@@ -58,7 +58,7 @@ const ParticipantDetails = ({ participantId }: { participantId:string }) => {
                   className="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 disabled:bg-green-300 flex items-center gap-2"
                 >
                   <CheckCircle size={20} />
-                  {accreditationLoading ? 'Accrediting...' : 'Accredit'}
+                  {accreditationLoading ? 'Acreditando...' : 'Acreditar'}
                 </button>
               )}
             </div>
@@ -69,7 +69,7 @@ const ParticipantDetails = ({ participantId }: { participantId:string }) => {
         <div className="p-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-4">
-              <h3 className="text-xl font-semibold text-gray-700 border-b pb-2">Details</h3>
+              <h3 className="text-xl font-semibold text-gray-700 border-b pb-2">Detalles</h3>
               <div className="flex items-center text-gray-600">
                 <Mail size={20} className="mr-3 text-indigo-500" />
                 <span>{currentParticipant.email}</span>
@@ -80,18 +80,18 @@ const ParticipantDetails = ({ participantId }: { participantId:string }) => {
               </div>
               <div className="flex items-center text-gray-600">
                 <Users size={20} className="mr-3 text-indigo-500" />
-                <span>{`Allowed Guests: ${currentParticipant.allowedGuests}`}</span>
+                <span>{`Invitados permitidos: ${currentParticipant.allowedGuests}`}</span>
               </div>
                <div className="flex items-center text-gray-600">
                 <Calendar size={20} className="mr-3 text-indigo-500" />
-                <span>{`Registered on: ${new Date(currentParticipant.createdAt).toLocaleDateString()}`}</span>
+                <span>{`Registrado el: ${new Date(currentParticipant.createdAt).toLocaleDateString()}`}</span>
               </div>
               
               {(currentParticipant.dietaryPreference !== 'NONE' || currentParticipant.dietaryComments) && (
                 <div className="flex items-start text-gray-600 mt-4 pt-4 border-t border-gray-100">
                   <Utensils size={20} className="mr-3 text-indigo-500 mt-1" />
                   <div>
-                    <span className="font-medium block">Dietary Requirements:</span>
+                    <span className="font-medium block">Requerimientos alimentarios:</span>
                     <span className="block text-sm bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded inline-block mb-1">
                       {currentParticipant.dietaryPreference}
                     </span>
@@ -105,9 +105,9 @@ const ParticipantDetails = ({ participantId }: { participantId:string }) => {
             
             <div>
               {/* Placeholder for Awards */}
-              <h3 className="text-xl font-semibold text-gray-700 border-b pb-2 mb-4">Awards</h3>
+              <h3 className="text-xl font-semibold text-gray-700 border-b pb-2 mb-4">Premios</h3>
               {/* <AwardList participantId={participantId} /> */}
-              <p className="text-gray-500">Awards section coming soon.</p>
+              <p className="text-gray-500">Sección de premios próximamente.</p>
             </div>
           </div>
         </div>

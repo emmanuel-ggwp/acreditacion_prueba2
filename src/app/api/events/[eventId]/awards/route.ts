@@ -9,27 +9,27 @@ import { ROLES } from '@/utils/constants';
 const { ADMIN, OPERATOR, GUARD} = ROLES;
 
 interface Params {
-  params: { eventId: string };
+  params: Promise<{ eventId: string }>;
 }
 
 export const GET = withAuth(async (req: AuthenticatedRequest, { params }: Params) => {
   try {
-    const eventId = parseInt(params.eventId, 10);
-    if (isNaN(eventId)) {
+    const { eventId } = await params;
+    if (!eventId?.length) {
       return NextResponse.json({ message: 'Invalid event ID' }, { status: 400 });
     }
     const awards = await awardService.listAwardsByEvent(eventId);
     return NextResponse.json(awards);
   } catch (error: any) {
-    console.error(`Error fetching awards for event ${params.eventId}:`, error);
+    console.error('Error fetching awards for event:', error);
     return NextResponse.json({ message: 'Error fetching awards', error: error.message }, { status: 500 });
   }
 }, [ADMIN, OPERATOR, GUARD]);
 
 export const POST = withAuth(async (req: AuthenticatedRequest, { params }: Params) => {
   try {
-    const eventId = parseInt(params.eventId, 10);
-    if (isNaN(eventId)) {
+    const { eventId } = await params;
+    if (!eventId?.length) {
       return NextResponse.json({ message: 'Invalid event ID' }, { status: 400 });
     }
     const body = await req.json();
@@ -37,7 +37,7 @@ export const POST = withAuth(async (req: AuthenticatedRequest, { params }: Param
     const award = await awardService.createAward(eventId, validatedData, req.user.id);
     return NextResponse.json(award, { status: 201 });
   } catch (error: any) {
-    console.error(`Error creating award for event ${params.eventId}:`, error);
+    console.error('Error creating award for event:', error);
     if (error.name === 'ZodError') {
       return NextResponse.json({ message: 'Validation failed', errors: error.errors }, { status: 400 });
     }

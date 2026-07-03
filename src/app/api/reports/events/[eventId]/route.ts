@@ -8,13 +8,12 @@ import { ROLES } from '@/utils/constants';
 const { ADMIN, OPERATOR, GUARD} = ROLES;
 
 interface Params {
-  params: { eventId: string };
+  params: Promise<{ eventId: string }>;
 }
 
 export const GET = withAuth(async (req: AuthenticatedRequest, { params }: Params) => {
   try {
-    const resolvedParams = await params;
-    const eventId = resolvedParams.eventId;
+    const { eventId } = await params;
     if (!eventId?.length) {
       return NextResponse.json({ message: 'Invalid event ID' }, { status: 400 });
     }
@@ -38,7 +37,7 @@ export const GET = withAuth(async (req: AuthenticatedRequest, { params }: Params
     const report = await reportService.getEventReport(eventId);
     return NextResponse.json(report);
   } catch (error: any) {
-    console.error(`Error generating event report for ${params.eventId}:`, error);
+    console.error('Error generating event report:', error);
     return NextResponse.json({ message: 'Error generating event report', error: error.message }, { status: 500 });
   }
 }, [ADMIN, OPERATOR]);

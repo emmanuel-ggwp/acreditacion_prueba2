@@ -132,30 +132,4 @@ describe('EventService', () => {
     });
   });
 
-  describe('getEventStatistics', () => {
-    it('should return detailed statistics for an event', async () => {
-        const eventId = 1;
-        const event = { id: eventId, name: 'Stats Event', maxCapacity: 100 };
-        (EventMock.findByPk as jest.Mock).mockResolvedValue(event);
-        (ParticipantMock.count as jest.Mock).mockResolvedValue(50);
-        (AccreditationMock.findAll as jest.Mock).mockResolvedValue([
-            { eventScheduleId: 1, EventSchedule: { scheduleName: 'Morning' }, get: () => 20 }
-        ]);
-        (AwardMock.findAll as jest.Mock).mockResolvedValue([
-            { id: 1, name: 'T-Shirt', quantity: 100 }
-        ]);
-        (ParticipantAwardMock.count as jest.Mock).mockResolvedValue(15);
-        (EventScheduleMock.findAll as jest.Mock).mockResolvedValue([
-            { id: 1, scheduleName: 'Morning', maxCapacity: 50, Accreditations: { length: 20 } }
-        ]);
-
-        const stats = await eventService.getEventStatistics(eventId);
-
-        expect(stats.totalParticipants).toBe(50);
-        expect(stats.accreditedBySchedule[0].accreditedCount).toBe(20);
-        expect(stats.awards.total).toBe(100);
-        expect(stats.awards.delivered).toBe(15);
-        expect(stats.capacityUsage[0].available).toBe(30);
-    });
-  });
 });

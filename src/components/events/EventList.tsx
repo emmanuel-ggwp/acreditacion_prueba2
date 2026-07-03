@@ -87,14 +87,14 @@ const EventList = () => {
         {/* Header Section */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Events</h1>
-            <p className="mt-1 text-sm text-gray-500">Manage and monitor your events</p>
+            <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Eventos</h1>
+            <p className="mt-1 text-sm text-gray-500">Gestiona y monitorea tus eventos</p>
           </div>
           <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.OPERATOR]}>
             <Link href="/events/new">
               <button className="inline-flex items-center px-4 py-2.5 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 shadow-sm transition-all duration-200 ease-in-out transform hover:scale-[1.02]">
                 <PlusCircle size={18} className="mr-2" />
-                Create Event
+                Crear Evento
               </button>
             </Link>
           </RoleGuard>
@@ -125,7 +125,7 @@ const EventList = () => {
             </div>
             <input
               type="text"
-              placeholder="Search events..."
+              placeholder="Buscar eventos…"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm transition duration-150 ease-in-out"
@@ -161,14 +161,14 @@ const EventList = () => {
                 <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-indigo-100 mb-4">
                   <CalendarX className="h-6 w-6 text-indigo-600" />
                 </div>
-                <h3 className="mt-2 text-sm font-medium text-gray-900">No events found</h3>
-                <p className="mt-1 text-sm text-gray-500">Get started by creating a new event.</p>
+                <h3 className="mt-2 text-sm font-medium text-gray-900">No se encontraron eventos</h3>
+                <p className="mt-1 text-sm text-gray-500">Comienza creando un nuevo evento.</p>
                 <div className="mt-6">
                   <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.OPERATOR]}>
                     <Link href="/events/new">
                       <button className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
                         <PlusCircle className="-ml-1 mr-2 h-5 w-5" aria-hidden="true" />
-                        New Event
+                        Nuevo Evento
                       </button>
                     </Link>
                   </RoleGuard>
@@ -187,22 +187,22 @@ const EventList = () => {
                 disabled={page === 1}
                 className="relative inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Previous
+                Anterior
               </button>
               <button
                 onClick={() => handlePageChange(page + 1)}
                 disabled={page === totalPages}
                 className="relative ml-3 inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Next
+                Siguiente
               </button>
             </div>
             <div className="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
               <div>
                 <p className="text-sm text-gray-700">
-                  Showing <span className="font-medium">{(page - 1) * limit + 1}</span> to{' '}
-                  <span className="font-medium">{Math.min(page * limit, total)}</span> of{' '}
-                  <span className="font-medium">{total}</span> results
+                  Mostrando <span className="font-medium">{(page - 1) * limit + 1}</span> a{' '}
+                  <span className="font-medium">{Math.min(page * limit, total)}</span> de{' '}
+                  <span className="font-medium">{total}</span> resultados
                 </p>
               </div>
               <div>
@@ -212,7 +212,7 @@ const EventList = () => {
                     disabled={page === 1}
                     className="relative inline-flex items-center rounded-l-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <span className="sr-only">Previous</span>
+                    <span className="sr-only">Anterior</span>
                     <ChevronLeft className="h-5 w-5" aria-hidden="true" />
                   </button>
                   {(() => {
@@ -267,7 +267,7 @@ const EventList = () => {
                     disabled={page === totalPages}
                     className="relative inline-flex items-center rounded-r-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <span className="sr-only">Next</span>
+                    <span className="sr-only">Siguiente</span>
                     <ChevronRight className="h-5 w-5" aria-hidden="true" />
                   </button>
                 </nav>

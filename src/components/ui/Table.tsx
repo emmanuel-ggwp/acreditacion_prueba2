@@ -12,7 +12,7 @@ interface TableProps<T extends object> {
   emptyMessage?: string;
 }
 
-function Table<T extends object>({ columns, data, renderRowActions, emptyMessage = "No data available." }: TableProps<T>) {
+function Table<T extends object>({ columns, data, renderRowActions, emptyMessage = "No hay datos disponibles." }: TableProps<T>) {
   const {
     getTableProps,
     getTableBodyProps,
@@ -51,7 +51,7 @@ function Table<T extends object>({ columns, data, renderRowActions, emptyMessage
                     <span className="ml-1">{column.isSorted ? (column.isSortedDesc ? '↓' : '↑') : ''}</span>
                   </th>
                 ))}
-                {renderRowActions && <th className="p-3 text-left text-sm font-semibold text-gray-600">Actions</th>}
+                {renderRowActions && <th className="p-3 text-left text-sm font-semibold text-gray-600">Acciones</th>}
               </tr>
             ))}
           </thead>
@@ -82,13 +82,13 @@ function Table<T extends object>({ columns, data, renderRowActions, emptyMessage
       {/* Pagination */}
       <div className="flex items-center justify-between mt-4">
         <div className="flex-1 text-sm text-gray-600">
-          Showing {page.length} of {data.length} results
+          Mostrando {page.length} de {data.length} resultados
         </div>
         <div className="flex items-center space-x-2">
           <Button onClick={() => gotoPage(0)} disabled={!canPreviousPage} variant="ghost" size="sm"><ChevronsLeft size={16} /></Button>
           <Button onClick={() => previousPage()} disabled={!canPreviousPage} variant="ghost" size="sm"><ChevronLeft size={16} /></Button>
           <span className="text-sm">
-            Page <strong>{pageIndex + 1} of {pageOptions.length}</strong>
+            Página <strong>{pageIndex + 1} de {pageOptions.length}</strong>
           </span>
           <Button onClick={() => nextPage()} disabled={!canNextPage} variant="ghost" size="sm"><ChevronRight size={16} /></Button>
           <Button onClick={() => gotoPage(pageCount - 1)} disabled={!canNextPage} variant="ghost" size="sm"><ChevronsRight size={16} /></Button>

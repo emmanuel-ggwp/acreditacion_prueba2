@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { verifyAccessToken } from '@/lib/jwt';
 import { Role, ROLES } from '@/utils/constants';
+import User from '@/models/User';
 
 export interface AuthenticatedRequest extends NextRequest {
   user: {
@@ -33,6 +34,18 @@ const roleGuard: RoleGuard = (allowedRoles) => (handler) => async (req, context)
 
   if (!allowedRoles.includes(user.role)) {
     return NextResponse.json({ message: 'Forbidden: Insufficient permissions' }, { status: 403 });
+  }
+
+  // El usuario del token debe seguir existiendo en la BD. Evita errores de llave
+  // foránea (created_by / accredited_by) por sesiones viejas tras regenerar usuarios:
+  // un 401 aquí hace que el cliente intente refrescar, falle y te mande al login.
+  try {
+    const dbUser = await User.findByPk(user.id, { attributes: ['id'] });
+    if (!dbUser) {
+      return NextResponse.json({ message: 'Sesión inválida. Vuelve a iniciar sesión.' }, { status: 401 });
+    }
+  } catch {
+    // Si la verificación falla por un problema transitorio de BD, no bloqueamos la petición.
   }
 
   const authenticatedRequest = req as AuthenticatedRequest;

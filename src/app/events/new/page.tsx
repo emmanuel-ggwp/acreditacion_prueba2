@@ -8,7 +8,7 @@ const NewEventPage = () => {
     <ProtectedRoute allowedRoles={[ROLES.ADMIN, ROLES.OPERATOR]}>
       <main className="container mx-auto p-4">
         <div className="max-w-2xl mx-auto">
-          <h1 className="text-3xl font-bold mb-6">Create New Event</h1>
+          <h1 className="text-3xl font-bold mb-6">Crear Nuevo Evento</h1>
           <EventForm />
         </div>
       </main>

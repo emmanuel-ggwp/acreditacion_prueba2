@@ -1,11 +1,11 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area, PieChart, Pie, Cell } from 'recharts';
-import { Users, Calendar, Award, CheckSquare, TrendingUp, ArrowUpRight, Activity, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Users, Calendar, CheckSquare, TrendingUp, ChevronDown, ChevronLeft, ChevronRight, Copy, Globe, Lock, Ban, ExternalLink } from 'lucide-react';
 import apiClient from '@/utils/apiClient';
 import useEventStore from '@/store/eventStore';
 import { ButtonEventReport } from '../events/ButtonEventReport';
+import { showToast } from '@/components/ui/Toast';
 
 interface ScheduleStat {
   id: string;
@@ -34,91 +34,78 @@ interface EventStat {
   schedules: ScheduleStat[];
   participants: number;
   guests: number;
+  isActive: boolean;
+  isPublic: boolean;
+  registrationOpen: boolean;
+  publicSlug: string | null;
 }
 
-// Mock Data - Replace with actual data from your store/API
-const mainStats = {
-  activeEvents: 5,
-  accreditationsToday: 128,
-  pendingAwards: 32,
-  activeUsers: 45,
-};
-
-const accreditationsByHourData = [
-  { hour: '09:00', count: 15 },
-  { hour: '10:00', count: 45 },
-  { hour: '11:00', count: 62 },
-  { hour: '12:00', count: 88 },
-  { hour: '13:00', count: 105 },
-  { hour: '14:00', count: 128 },
-];
-
-const eventsCapacityData = [
-    { name: 'Tech Conf', accredited: 450, capacity: 500 },
-    { name: 'Mkt Summit', accredited: 320, capacity: 400 },
-    { name: 'Design Wkshp', accredited: 80, capacity: 100 },
-    { name: 'Prod Launch', accredited: 150, capacity: 150 },
-];
-
+// Barra apilada Participantes vs Invitados (reemplaza la dona, más legible).
 const ParticipantGuestChart = React.memo(({ participants, guests }: { participants: number, guests: number }) => {
   const total = participants + guests;
-  if (total === 0) return null;
-
-  const radius = 20;
-  const strokeWidth = 12;
-  const normalizedRadius = radius;
-  const circumference = normalizedRadius * 2 * Math.PI;
-  const strokeDashoffset = circumference - (participants / total) * circumference;
-
+  if (total === 0) {
+    return <p className="text-xs text-gray-400 mt-2 pt-2 border-t border-gray-50">Sin datos aún</p>;
+  }
+  const pPct = (participants / total) * 100;
   return (
-    <div className="flex items-center mt-2 pt-2 border-t border-gray-50">
-      <div className="h-16 w-16 relative flex-shrink-0">
-         <svg height="100%" width="100%" viewBox="0 0 64 64" className="transform -rotate-90">
-            <circle
-              stroke="#10b981"
-              fill="transparent"
-              strokeWidth={strokeWidth}
-              r={normalizedRadius}
-              cx="32"
-              cy="32"
-            />
-            <circle
-              stroke="#6366f1"
-              fill="transparent"
-              strokeWidth={strokeWidth}
-              strokeDasharray={`${circumference} ${circumference}`}
-              style={{ strokeDashoffset }}
-              r={normalizedRadius}
-              cx="32"
-              cy="32"
-            />
-         </svg>
+    <div className="mt-2 pt-2 border-t border-gray-50">
+      <div className="flex h-2.5 w-full rounded-full overflow-hidden bg-gray-100">
+        {participants > 0 && <div style={{ width: `${pPct}%` }} className="bg-indigo-500" />}
+        {guests > 0 && <div style={{ width: `${100 - pPct}%` }} className="bg-emerald-500" />}
       </div>
-      <div className="ml-3 text-xs space-y-1">
-        <div className="flex items-center">
-            <div className="w-2 h-2 rounded-full bg-indigo-500 mr-1"></div>
-            <span className="text-gray-500">Part.: <span className="font-medium text-gray-900">{participants}</span></span>
+      <div className="mt-2 space-y-1 text-xs">
+        <div className="flex items-center justify-between gap-2">
+          <span className="flex items-center gap-1.5 text-gray-500 min-w-0"><span className="w-2 h-2 rounded-full bg-indigo-500 flex-shrink-0" /> <span className="truncate">Participantes</span></span>
+          <b className="text-gray-900 flex-shrink-0">{participants}</b>
         </div>
-        <div className="flex items-center">
-            <div className="w-2 h-2 rounded-full bg-emerald-500 mr-1"></div>
-            <span className="text-gray-500">Inv.: <span className="font-medium text-gray-900">{guests}</span></span>
+        <div className="flex items-center justify-between gap-2">
+          <span className="flex items-center gap-1.5 text-gray-500 min-w-0"><span className="w-2 h-2 rounded-full bg-emerald-500 flex-shrink-0" /> <span className="truncate">Invitados</span></span>
+          <b className="text-gray-900 flex-shrink-0">{guests}</b>
         </div>
       </div>
     </div>
   );
 });
+ParticipantGuestChart.displayName = 'ParticipantGuestChart';
 
-const EventStatCard = React.memo(({ stat, viewMode }: { stat: EventStat, viewMode: 'event' | 'date' }) => (
-  <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all duration-300 min-w-[280px]">
-    <div className="flex justify-between items-start mb-4">
-      <div className="flex-1 pr-4">
-        <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">{stat.name}</h4>
-      </div>
-      <div className="">
-        <ButtonEventReport eventId={stat.id} eventName={stat.name} size={'large'} />
-      </div>
+const EventStatCard = React.memo(({ stat, viewMode }: { stat: EventStat, viewMode: 'event' | 'date' }) => {
+  const badge = !stat.isActive
+    ? { t: 'Cancelado', c: 'bg-red-100 text-red-700', I: Ban }
+    : !stat.isPublic
+      ? { t: 'Borrador', c: 'bg-gray-100 text-gray-600', I: Lock }
+      : stat.registrationOpen
+        ? { t: 'Inscripción abierta', c: 'bg-green-100 text-green-700', I: Globe }
+        : { t: 'Inscripción cerrada', c: 'bg-amber-100 text-amber-700', I: Lock };
+  const hasLanding = stat.isPublic && !!stat.publicSlug;
+  const landingUrl = hasLanding && typeof window !== 'undefined' ? `${window.location.origin}/public/events/${stat.publicSlug}` : '';
+  const copyLink = () => {
+    if (!landingUrl) return;
+    navigator.clipboard.writeText(landingUrl).then(() => showToast.success('Enlace copiado')).catch(() => showToast.error('No se pudo copiar'));
+  };
+
+  return (
+  <div className="bg-white p-5 sm:p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all duration-300">
+    <div className="flex justify-between items-start mb-3 gap-2">
+      <h4 className="text-base font-bold text-gray-900 flex-1 min-w-0 truncate" title={stat.name}>{stat.name}</h4>
+      <ButtonEventReport eventId={stat.id} eventName={stat.name} size={'large'} />
     </div>
-    
+
+    <div className="flex flex-wrap items-center gap-2 mb-4">
+      <span className={`inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full ${badge.c}`}>
+        <badge.I size={12} /> {badge.t}
+      </span>
+      {hasLanding && (
+        <>
+          <button onClick={copyLink} className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-600 hover:bg-indigo-100">
+            <Copy size={12} /> Copiar enlace
+          </button>
+          <a href={landingUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full bg-gray-50 text-gray-600 hover:bg-gray-100">
+            <ExternalLink size={12} /> Ver
+          </a>
+        </>
+      )}
+    </div>
+
     {viewMode === 'event' ? (
       <div className="space-y-2">
         <p className="text-sm text-gray-600">Inscritos: <span className="font-medium text-gray-900">{stat.registered}</span></p>
@@ -138,7 +125,7 @@ const EventStatCard = React.memo(({ stat, viewMode }: { stat: EventStat, viewMod
                     {new Date(schedule.startDateTime).toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }).replace(/\//g, '-')}
                 </p>
             </div>
-            <div className="grid grid-cols-2 gap-8">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
               <div>
                 <p className="text-sm text-gray-500 mb-1">Inscritos</p>
                 <p className="text-xl font-bold text-gray-900">{schedule.registered}</p>
@@ -162,11 +149,13 @@ const EventStatCard = React.memo(({ stat, viewMode }: { stat: EventStat, viewMod
             </div>
           </div>
         ))}
-        {stat.schedules.length === 0 && <p className="text-sm text-gray-500 italic">No schedules found.</p>}
+        {stat.schedules.length === 0 && <p className="text-sm text-gray-500 italic">No se encontraron horarios.</p>}
       </div>
     )}
   </div>
-));
+  );
+});
+EventStatCard.displayName = 'EventStatCard';
 
 const StatCard = React.memo(({ title, value, icon: Icon, trend, trendUp }: { title: string; value: number | string; icon: React.ElementType, trend?: string, trendUp?: boolean }) => (
   <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all duration-300 group">
@@ -195,7 +184,12 @@ const DashboardStats: React.FC = () => {
   const [viewMode, setViewMode] = useState<'event' | 'date'>('date');
   const [showDropdown, setShowDropdown] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
+  const [kpis, setKpis] = useState<{ totalEvents?: number; totalParticipants?: number; accreditationsToday?: number } | null>(null);
   const itemsPerPage = 6;
+
+  useEffect(() => {
+    apiClient.get<any>('/api/reports/dashboard').then((d) => setKpis(d)).catch(() => {});
+  }, []);
 
   useEffect(() => {
     fetchEvents({ page: currentPage, limit: itemsPerPage });
@@ -263,7 +257,11 @@ const DashboardStats: React.FC = () => {
               awards: report.awardStats.delivered,
               schedules: scheduleStats,
               participants: report.participantStats.accredited || 0,
-              guests: report.participantStats.accreditedGuests || 0
+              guests: report.participantStats.accreditedGuests || 0,
+              isActive: (event as any).isActive !== false,
+              isPublic: !!(event as any).isPublic,
+              registrationOpen: (event as any).registrationOpen !== false,
+              publicSlug: (event as any).publicSlug ?? null,
             };
           } catch (e) {
             console.error(e);
@@ -286,106 +284,11 @@ const DashboardStats: React.FC = () => {
     <div className="space-y-8">
       
 
-      {/* Main Stats Cards display none*/}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6" style={{ display: 'none' }}>
-        <StatCard title="Active Events" value={total} icon={Calendar} trend="+2 this week" trendUp={true} />
-        <StatCard title="Accreditations Today" value={mainStats.accreditationsToday} icon={CheckSquare} trend="+12% vs yesterday" trendUp={true} />
-        <StatCard title="Pending Awards" value={mainStats.pendingAwards} icon={Award} trend="Needs attention" />
-        <StatCard title="Active Users" value={mainStats.activeUsers} icon={Users} trend="+5 new users" trendUp={true} />
-      </div>
-
-      {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8" style={{ display: 'none' }}>
-        {/* Area Chart */}
-        <div className="bg-white p-8 rounded-2xl border border-gray-100 shadow-sm">
-          <div className="flex justify-between items-center mb-8">
-            <div>
-                <h3 className="font-bold text-xl text-gray-900 flex items-center">
-                  <Activity className="mr-2 text-indigo-500" size={20} />
-                  Accreditations Trend
-                </h3>
-                <p className="text-sm text-gray-500 mt-1 ml-7">Hourly breakdown for today</p>
-            </div>
-            <button className="p-2 hover:bg-gray-50 rounded-lg transition-colors">
-                <ArrowUpRight className="h-5 w-5 text-gray-400" />
-            </button>
-          </div>
-          <div className="h-[300px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={accreditationsByHourData}>
-                <defs>
-                    <linearGradient id="colorCount" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3}/>
-                    <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
-                    </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
-                <XAxis 
-                    dataKey="hour" 
-                    axisLine={false} 
-                    tickLine={false} 
-                    tick={{ fill: '#9ca3af', fontSize: 12 }} 
-                    dy={10}
-                />
-                <YAxis 
-                    axisLine={false} 
-                    tickLine={false} 
-                    tick={{ fill: '#9ca3af', fontSize: 12 }} 
-                />
-                <Tooltip 
-                    contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
-                />
-                <Area 
-                    type="monotone" 
-                    dataKey="count" 
-                    stroke="#6366f1" 
-                    strokeWidth={3} 
-                    fillOpacity={1} 
-                    fill="url(#colorCount)" 
-                />
-                </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        {/* Bar Chart */}
-        <div className="bg-white p-8 rounded-2xl border border-gray-100 shadow-sm">
-          <div className="flex justify-between items-center mb-8">
-            <div>
-                <h3 className="font-bold text-xl text-gray-900">Capacity Overview</h3>
-                <p className="text-sm text-gray-500 mt-1">Accredited vs Total Capacity</p>
-            </div>
-            <button className="p-2 hover:bg-gray-50 rounded-lg transition-colors">
-                <ArrowUpRight className="h-5 w-5 text-gray-400" />
-            </button>
-          </div>
-          <div className="h-[300px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={eventsCapacityData} barSize={32} barGap={8}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
-                <XAxis 
-                    dataKey="name" 
-                    axisLine={false} 
-                    tickLine={false} 
-                    tick={{ fill: '#9ca3af', fontSize: 12 }} 
-                    dy={10}
-                />
-                <YAxis 
-                    axisLine={false} 
-                    tickLine={false} 
-                    tick={{ fill: '#9ca3af', fontSize: 12 }} 
-                />
-                <Tooltip 
-                    cursor={{ fill: '#f9fafb' }}
-                    contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
-                />
-                <Legend wrapperStyle={{ paddingTop: '20px' }} iconType="circle" />
-                <Bar dataKey="accredited" fill="#6366f1" radius={[6, 6, 6, 6]} name="Accredited" />
-                <Bar dataKey="capacity" fill="#e0e7ff" radius={[6, 6, 6, 6]} name="Total Capacity" />
-                </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
+      {/* KPIs reales */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+        <StatCard title="Eventos" value={kpis?.totalEvents ?? '—'} icon={Calendar} />
+        <StatCard title="Participantes" value={kpis?.totalParticipants ?? '—'} icon={Users} />
+        <StatCard title="Personas acreditadas hoy" value={kpis?.accreditationsToday ?? '—'} icon={CheckSquare} />
       </div>
 
       {/* Event Statistics Section */}
@@ -425,14 +328,14 @@ const DashboardStats: React.FC = () => {
         </div>
 
         {loadingStats || eventsLoading ? (
-            <div className="text-center py-10">Loading statistics...</div>
+            <div className="text-center py-10">Cargando estadísticas...</div>
         ) : (
             <>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {eventStats.map(stat => (
                       <EventStatCard key={stat.id} stat={stat} viewMode={viewMode} />
                   ))}
-                  {eventStats.length === 0 && <div className="text-gray-500">No events found.</div>}
+                  {eventStats.length === 0 && <div className="text-gray-500">No se encontraron eventos.</div>}
               </div>
               
               {total > 0 && (

@@ -10,6 +10,7 @@ import { createEventSchema, updateEventSchema } from '@/utils/validators/eventSc
 import User from '@/models/User';
 import { slugify } from '@/utils/formatters';
 import { AuditLog } from '../models';
+import { auditLogService } from './auditLogService';
 
 export class EventService {
   async createEvent(data: z.infer<typeof createEventSchema>, userId: string) {
@@ -21,8 +22,8 @@ export class EventService {
       let slug = baseSlug;
       let counter = 1;
       
-      // Check for uniqueness
-      while (await Event.findOne({ where: { publicSlug: slug } })) {
+      // Check for uniqueness (incluye soft-deleted: el índice UNIQUE los cuenta)
+      while (await Event.findOne({ where: { publicSlug: slug }, paranoid: false })) {
         slug = `${baseSlug}-${counter}`;
         counter++;
       }
@@ -30,10 +31,11 @@ export class EventService {
     }
 
     const event = await Event.create({ ...validatedData, createdBy: userId });
+    await auditLogService.log({ userId, action: 'CREATE', entity: 'Event', entityId: event.id, details: { name: event.name } });
     return event;
   }
 
-  async updateEvent(eventId: string, data: z.infer<typeof updateEventSchema>) {
+  async updateEvent(eventId: string, data: z.infer<typeof updateEventSchema>, userId?: string) {
     const validatedData = updateEventSchema.parse(data);
     const event = await Event.findByPk(eventId);
     if (!event) {
@@ -54,25 +56,48 @@ export class EventService {
        let slug = baseSlug;
        let counter = 1;
        
-       // Check for uniqueness (excluding current event)
-       while (await Event.findOne({ where: { publicSlug: slug, id: { [Op.ne]: eventId } } })) {
+       // Check for uniqueness (excluding current event; incluye soft-deleted)
+       while (await Event.findOne({ where: { publicSlug: slug, id: { [Op.ne]: eventId } }, paranoid: false })) {
          slug = `${baseSlug}-${counter}`;
          counter++;
        }
        validatedData.publicSlug = slug;
     }
 
+    // Clon profundo: get({plain:true}) queda aliased a los datos vivos y update() lo mutaría.
+    const before: any = JSON.parse(JSON.stringify(event.get({ plain: true })));
     await event.update(validatedData);
+    if (userId) {
+      const after: any = event.get({ plain: true });
+      const changes: Record<string, { from: any; to: any }> = {};
+      for (const k of Object.keys(validatedData)) {
+        if (JSON.stringify(before[k]) !== JSON.stringify(after[k])) changes[k] = { from: before[k] ?? null, to: after[k] ?? null };
+      }
+      if (Object.keys(changes).length) {
+        await auditLogService.log({ userId, action: 'UPDATE', entity: 'Event', entityId: event.id, details: { name: event.name, changes } });
+      }
+    }
     return event;
   }
 
-  async deleteEvent(eventId: string) {
+  async deleteEvent(eventId: string, userId?: string, reason?: string) {
     const event = await Event.findByPk(eventId);
     if (!event) {
       throw new Error('Event not found');
     }
+    const name = (event as any).name;
     // Soft delete
     await event.destroy();
+    // Registro de auditoría: qué se eliminó, el motivo y quién lo hizo.
+    if (userId) {
+      await auditLogService.log({
+        userId,
+        action: 'DELETE',
+        entity: 'Event',
+        entityId: eventId,
+        details: { name, reason: reason || null },
+      });
+    }
     return { message: 'Event deleted successfully' };
   }
 
@@ -90,9 +115,9 @@ export class EventService {
         separate: true,
         order: [
           [literal(`CASE 
-            WHEN EventSchedule.status = 'accrediting' THEN 1 
-            WHEN EventSchedule.status = 'published' THEN 2 
-            WHEN EventSchedule.status = 'accredited' THEN 3 
+            WHEN status = 'accrediting' THEN 1 
+            WHEN status = 'published' THEN 2 
+            WHEN status = 'accredited' THEN 3 
             ELSE 4 
           END`), 'ASC'],
           ['startDateTime', 'ASC']
@@ -128,14 +153,14 @@ export class EventService {
         if (filter === 'accrediting') {
              where[Op.and] = [
                 ...(where[Op.and] || []),
-                literal(`EXISTS (SELECT 1 FROM event_schedules es WHERE es.event_id = Event.id AND es.status = 'accrediting')`)
+                literal(`EXISTS (SELECT 1 FROM event_schedules es WHERE es.event_id = "Event".id AND es.status = 'accrediting')`)
              ];
              where.isActive = true;
         } else if (filter === 'accredited') {
              where[Op.and] = [
                 ...(where[Op.and] || []),
-                literal(`EXISTS (SELECT 1 FROM event_schedules es WHERE es.event_id = Event.id AND es.status = 'accredited')`),
-                literal(`NOT EXISTS (SELECT 1 FROM event_schedules es WHERE es.event_id = Event.id AND es.status IN ('published', 'accrediting'))`)
+                literal(`EXISTS (SELECT 1 FROM event_schedules es WHERE es.event_id = "Event".id AND es.status = 'accredited')`),
+                literal(`NOT EXISTS (SELECT 1 FROM event_schedules es WHERE es.event_id = "Event".id AND es.status IN ('published', 'accrediting'))`)
              ];
              where.isActive = true;
         } else if (filter === 'upcoming') {
@@ -146,7 +171,7 @@ export class EventService {
              
              where[Op.and] = [
                 ...(where[Op.and] || []),
-                literal(`EXISTS (SELECT 1 FROM event_schedules es WHERE es.event_id = Event.id AND es.status = 'published' AND es.start_date_time BETWEEN '${nowStr}' AND '${sevenDaysStr}')`)
+                literal(`EXISTS (SELECT 1 FROM event_schedules es WHERE es.event_id = "Event".id AND es.status = 'published' AND es.start_date_time BETWEEN '${nowStr}' AND '${sevenDaysStr}')`)
              ];
              where.isActive = true;
         } else if (filter === 'cancelled') {
@@ -156,9 +181,9 @@ export class EventService {
 
     if (search) {
       where[Op.or] = [
-        { name: { [Op.like]: `%${search}%` } },
-        { description: { [Op.like]: `%${search}%` } },
-        { location: { [Op.like]: `%${search}%` } }
+        { name: { [Op.iLike]: `%${search}%` } },
+        { description: { [Op.iLike]: `%${search}%` } },
+        { location: { [Op.iLike]: `%${search}%` } }
       ];
     }
 
@@ -177,21 +202,21 @@ export class EventService {
             ELSE 0
           END)
           FROM event_schedules es
-          WHERE es.event_id = Event.id
+          WHERE es.event_id = "Event".id
         )`), 'DESC'],
 
         // 2. Nearest published schedule start time
         [literal(`(
             SELECT MIN(es.start_date_time)
             FROM event_schedules es
-            WHERE es.event_id = Event.id AND es.status = 'published'
+            WHERE es.event_id = "Event".id AND es.status = 'published'
         )`), 'ASC'],
 
         // 3. Most recent accredited schedule end time
         [literal(`(
             SELECT MAX(es.end_date_time)
             FROM event_schedules es
-            WHERE es.event_id = Event.id AND es.status = 'accredited'
+            WHERE es.event_id = "Event".id AND es.status = 'accredited'
         )`), 'DESC'],
 
         ['createdAt', 'DESC']
@@ -206,9 +231,9 @@ export class EventService {
         separate: true,
         order: [
           [literal(`CASE 
-            WHEN EventSchedule.status = 'accrediting' THEN 1 
-            WHEN EventSchedule.status = 'published' THEN 2 
-            WHEN EventSchedule.status = 'accredited' THEN 3 
+            WHEN status = 'accrediting' THEN 1 
+            WHEN status = 'published' THEN 2 
+            WHEN status = 'accredited' THEN 3 
             ELSE 4 
           END`), 'ASC'],
           ['startDateTime', 'ASC']
@@ -277,88 +302,9 @@ export class EventService {
     return schedules;
   }
 
-  async getEventStatistics(eventId: string) {
-    const event = await Event.findByPk(eventId);
-    if (!event) {
-      throw new Error('Event not found');
-    }
-
-    const totalParticipants = await Participant.count({
-      distinct: true,
-      col: 'id',
-      include: [{
-        model: EventSchedule,
-        as: 'schedules',
-        where: { eventId },
-        required: true
-      }]
-    });
-
-    const accreditedBySchedule = await Accreditation.findAll({
-      attributes: [
-        'eventScheduleId',
-        [fn('COUNT', col('Accreditation.id')), 'accreditedCount'],
-      ],
-      include: [{
-        model: EventSchedule,
-        where: { eventId },
-        attributes: ['scheduleName'],
-      }],
-      group: ['eventScheduleId', 'EventSchedule.id'],
-    });
-
-    const awards = await Award.findAll({
-        where: { eventId },
-        attributes: ['id', 'name', 'quantity'],
-    });
-
-    const deliveredAwards = await ParticipantAward.count({
-        include: [{
-            model: Award,
-            where: { eventId },
-            attributes: []
-        }],
-        where: {
-            deliveredAt: { [Op.ne]: null }
-        }
-    });
-
-    const capacityUsage: any[] = await EventSchedule.findAll({
-        where: { eventId },
-        attributes: ['id', 'scheduleName', 'maxCapacity'],
-        include: [{
-            model: Accreditation,
-            attributes: [],
-        }],
-        group: ['EventSchedule.id'],
-    });
-
-    const stats = {
-      totalParticipants,
-      accreditedBySchedule: accreditedBySchedule.map((item: any) => ({
-        scheduleId: item.eventScheduleId,
-        scheduleName: (item.EventSchedule as EventSchedule).scheduleName,
-        accreditedCount: (item.get('accreditedCount') as number),
-      })),
-      awards: {
-          total: awards.reduce((sum, award) => sum + award.quantity, 0),
-          delivered: deliveredAwards,
-          details: awards,
-      },
-      capacityUsage: capacityUsage.map(schedule => {
-          const used = schedule.Accreditations?.length || 0;
-          const capacity = schedule.maxCapacity || (event as any).maxCapacity || 0;
-          return {
-              scheduleId: schedule.id,
-              scheduleName: schedule.scheduleName,
-              capacity,
-              used,
-              available: capacity - used,
-          }
-      })
-    };
-
-    return stats;
+  // Wrapper público para refrescar los estados de horarios (published→accrediting→accredited por tiempo).
+  async refreshScheduleStatuses(eventId?: string) {
+    return this._updateScheduleStatuses(eventId);
   }
 
   private async _updateScheduleStatuses(eventId?: string) {
@@ -374,14 +320,6 @@ export class EventService {
         },
         order: [['createdAt', 'DESC']],
       });
-
-      console.log('Last bulk update log:', lastBulk);
-      console.log('Current time:', now);
-      console.log('Time (ms):', lastBulk ? lastBulk.createdAt.getTime() : 'N/A');
-      console.log('Current time (ms):', now.getTime());
-      console.log('Time difference (ms):', lastBulk ? now.getTime() - lastBulk.createdAt.getTime() : 'N/A');
-      console.log('Five minutes in ms:', FIVE_MINUTES);
-      console.log('Should skip bulk update:', lastBulk ? (now.getTime() - lastBulk.createdAt.getTime() < FIVE_MINUTES) : false);
 
       if (lastBulk && now.getTime() - lastBulk.createdAt.getTime() < FIVE_MINUTES) {
         return;

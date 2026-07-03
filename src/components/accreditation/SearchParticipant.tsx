@@ -58,11 +58,11 @@ const SearchParticipant: React.FC<SearchParticipantProps> = ({ eventId, onSelect
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search by name, email, or document..."
+          placeholder="Buscar por nombre, correo o documento..."
           className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-lg text-lg focus:ring-indigo-500 focus:border-indigo-500"
         />
       </div>
-      {isLoading && <div className="p-2 text-sm text-gray-500">Searching...</div>}
+      {isLoading && <div className="p-2 text-sm text-gray-500">Buscando...</div>}
       {results.length > 0 && (
         <ul className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-80 overflow-auto">
           {results.map((person) => (
@@ -72,14 +72,14 @@ const SearchParticipant: React.FC<SearchParticipantProps> = ({ eventId, onSelect
               className="px-4 py-3 hover:bg-gray-100 cursor-pointer border-b last:border-b-0"
             >
               <p className="font-medium text-base">{`${(person as any).firstName} ${(person as any).lastName}`}</p>
-              <p className="text-sm text-gray-500">{(person as any).email || 'Guest'}</p>
+              <p className="text-sm text-gray-500">{(person as any).email || 'Invitado'}</p>
             </li>
           ))}
         </ul>
       )}
       {!isLoading && query.length > 2 && results.length === 0 && (
         <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg p-4 text-sm text-gray-500">
-          No results found for "{query}".
+          No se encontraron resultados para "{query}".
         </div>
       )}
     </div>

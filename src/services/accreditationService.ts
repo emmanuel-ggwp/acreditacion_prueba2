@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { Op, Transaction } from 'sequelize';
+import { Op, Transaction, fn, col } from 'sequelize';
 import { sequelize } from '@/lib/sequelize';
 import Accreditation from '@/models/Accreditation';
 import Participant from '@/models/Participant';
@@ -16,16 +16,21 @@ export class AccreditationService {
     { participantId, guestId, eventScheduleId }: { participantId?: string; guestId?: string; eventScheduleId: string },
     transaction: Transaction
   ) {
+    // Bloqueamos SOLO la fila del horario (sin include): Postgres no permite
+    // FOR UPDATE sobre el lado nulable de un outer join. El evento se trae aparte.
     const schedule = await EventSchedule.findByPk(eventScheduleId, {
-      include: [Event],
       lock: transaction.LOCK.UPDATE,
       transaction
     });
 
-    const event = (schedule as any)?.Event;
+    if (!schedule) {
+      throw new Error('Event schedule not found.');
+    }
 
-    if (!schedule || !event) {
-      throw new Error('Event schedule not found or is not associated with an event.');
+    const event = await Event.findByPk(schedule.eventId, { transaction });
+
+    if (!event) {
+      throw new Error('Event schedule is not associated with an event.');
     }
     if (!schedule.isActive || !event.isActive) {
       throw new Error('The event or schedule is not active.');
@@ -39,8 +44,8 @@ export class AccreditationService {
             throw new Error('Participant not found or does not belong to this event.');
         }
     } else if (guestId) {
-        person = await Guest.findByPk(guestId, { include: [Participant], transaction });
-        const guestParticipant = (person as any)?.Participant;
+        person = await Guest.findByPk(guestId, { include: [{ model: Participant, as: 'participant' }], transaction });
+        const guestParticipant = (person as any)?.participant;
         if (!person || guestParticipant?.eventId !== schedule.eventId) {
             throw new Error('Guest not found or does not belong to this event.');
         }
@@ -161,45 +166,19 @@ export class AccreditationService {
     }
   }
 
-  async checkOut(accreditationId: string, checkedOutBy: string) {
-    const accreditation = await Accreditation.findByPk(accreditationId);
-    if (!accreditation) {
-      throw new Error('Accreditation not found');
-    }
-    if (!accreditation.checkInTime) {
-      throw new Error('Cannot check out without a check-in time.');
-    }
-    if (accreditation.checkOutTime) {
-        throw new Error('Already checked out.');
-    }
-    accreditation.checkOutTime = new Date();
-    (accreditation as any).checkedOutBy = checkedOutBy;
-    await accreditation.save();
-
-    await auditLogService.log({
-      userId: checkedOutBy,
-      action: 'UPDATE',
-      entity: 'Accreditation',
-      entityId: accreditation.id,
-      details: { checkOutTime: accreditation.checkOutTime },
-    });
-
-    return accreditation;
-  }
-
   async getAccreditationById(accreditationId: string) {
     const accreditation = await Accreditation.findByPk(accreditationId, {
       attributes: ['id', 'checkInTime', 'checkOutTime', 'notes'],
       include: [
-        { 
-          model: Participant, 
+        {
+          model: Participant,
           attributes: ['id', 'firstName', 'lastName', 'email'],
-          include: [{ model: Event, attributes: ['id', 'name'] }] 
+          include: [{ model: Event, as: 'event', attributes: ['id', 'name'] }]
         },
-        { 
-          model: Guest, 
+        {
+          model: Guest,
           attributes: ['id', 'firstName', 'lastName'],
-          include: [{ model: Participant, attributes: ['id', 'firstName', 'lastName'] }] 
+          include: [{ model: Participant, as: 'participant', attributes: ['id', 'firstName', 'lastName'] }]
         },
         { model: EventSchedule, attributes: ['id', 'scheduleName', 'startDateTime', 'endDateTime'] },
         { model: User, as: 'accreditedByUser', attributes: ['id', 'firstName', 'lastName'] }
@@ -250,12 +229,26 @@ export class AccreditationService {
     return { accreditations: rows, total: count, page, limit };
   }
 
-  async getAccreditationsBySchedule(scheduleId: string) {
-    return Accreditation.findAll({
-        where: { eventScheduleId: scheduleId },
-        include: [Participant, Guest],
-        order: [['checkInTime', 'ASC']]
-    });
+  // Estadísticas para el panel de acreditación de un horario:
+  // acreditados (participantes), invitados acreditados, total, y premiados del evento.
+  async getScheduleStats(scheduleId: string) {
+    const schedule = await EventSchedule.findByPk(scheduleId);
+    if (!schedule) throw new Error('Schedule not found');
+
+    const rows = await Accreditation.findAll({
+      where: { eventScheduleId: scheduleId },
+      attributes: [
+        [fn('COUNT', fn('DISTINCT', col('participant_id'))), 'participants'],
+        [fn('COUNT', fn('DISTINCT', col('guest_id'))), 'guests'],
+      ],
+      raw: true,
+    }) as unknown as Array<{ participants: any; guests: any }>;
+
+    const participants = Number(rows[0]?.participants || 0);
+    const guests = Number(rows[0]?.guests || 0);
+    const awarded = await Participant.count({ where: { eventId: (schedule as any).eventId, isAwarded: true } });
+
+    return { participants, guests, total: participants + guests, awarded };
   }
 
   async verifyAccreditation(type: 'participant' | 'guest', id: string, scheduleId: string, transaction?: Transaction) {

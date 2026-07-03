@@ -22,7 +22,7 @@ interface ParticipantState {
   searchParticipants: (eventId: string, query: string) => Promise<Participant[]>;
   createParticipant: (participantData: z.infer<typeof createParticipantSchema>) => Promise<void>;
   updateParticipant: (id: string, participantData: z.infer<typeof updateParticipantSchema>) => Promise<void>;
-  deleteParticipant: (id: string) => Promise<void>;
+  deleteParticipant: (id: string, reason?: string) => Promise<void>;
   setCurrentParticipant: (participant: ParticipantWithAccreditation | null) => void;
 }
 
@@ -122,10 +122,11 @@ const useParticipantStore = create<ParticipantState>()(
         }
       },
 
-      deleteParticipant: async (id) => {
+      deleteParticipant: async (id, reason) => {
         set({ loading: true, error: null });
         try {
-          await apiClient.delete(`/api/participants/${id}`);
+          const qs = reason ? `?reason=${encodeURIComponent(reason)}` : '';
+          await apiClient.delete(`/api/participants/${id}${qs}`);
           set((state) => ({
             participants: state.participants.filter((p) => p.id !== id),
             total: state.total - 1,

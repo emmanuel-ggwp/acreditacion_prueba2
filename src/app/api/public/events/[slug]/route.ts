@@ -22,7 +22,7 @@ export async function GET(
           // Let's try without 'as' first or use the standard naming convention
         }
       ],
-      attributes: ['id', 'name', 'description', 'location', 'registrationConfig', 'allowGuests']
+      attributes: ['id', 'name', 'description', 'location', 'registrationConfig', 'allowGuests', 'registrationOpen', 'allowMultipleSchedules', 'logoUrl', 'backgroundImageUrl']
     });
 
     if (!event) {

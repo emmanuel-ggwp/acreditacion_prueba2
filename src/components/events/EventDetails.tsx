@@ -14,7 +14,7 @@ import apiClient from '@/utils/apiClient';
 import EventForm from './EventForm';
 
 // Placeholders for other components
-const AwardsTab = () => <div>Awards Management</div>;
+const AwardsTab = () => <div>Gestión de Premios</div>;
 
 interface EventDetailsProps {
   eventId?: string;
@@ -54,10 +54,10 @@ const EventDetails: React.FC<EventDetailsProps> = ({ eventId }) => {
         a.click();
         window.URL.revokeObjectURL(url);
         document.body.removeChild(a);
-        toast.success('Report downloaded successfully');
+        toast.success('Reporte descargado correctamente');
     } catch (error) {
         console.error('Error downloading report:', error);
-        toast.error('Failed to download report');
+        toast.error('No se pudo descargar el reporte');
     }
   };
 
@@ -69,23 +69,23 @@ const EventDetails: React.FC<EventDetailsProps> = ({ eventId }) => {
   }, [EventSchedules]);
 
   if (loading && eventId && !currentEvent) {
-    return <div className="text-center p-10">Loading event details...</div>;
+    return <div className="text-center p-10">Cargando detalles del evento…</div>;
   }
 
   if (eventId && !currentEvent && !loading) {
-    return <div className="text-center p-10 text-red-500">Event not found.</div>;
+    return <div className="text-center p-10 text-red-500">Evento no encontrado.</div>;
   }
 
   const tabs: { id: Tab; label: string; icon: React.ElementType }[] = [
     { id: 'info', label: 'Info', icon: Calendar },
-    { id: 'schedules', label: 'Schedules', icon: Clock },
-    { id: 'participants', label: 'Participants', icon: Users },
-    { id: 'awards', label: 'Awards', icon: Award },
-    { id: 'reports', label: 'Reports', icon: BarChart2 },
+    { id: 'schedules', label: 'Horarios', icon: Clock },
+    { id: 'participants', label: 'Participantes', icon: Users },
+    { id: 'awards', label: 'Premios', icon: Award },
+    { id: 'reports', label: 'Reportes', icon: BarChart2 },
   ];
 
   if (hasActiveSchedule) {
-    tabs.push({ id: 'accreditation', label: 'Accreditation', icon: UserCheck });
+    tabs.push({ id: 'accreditation', label: 'Acreditación', icon: UserCheck });
   }
 
   const renderTabContent = () => {
@@ -94,21 +94,21 @@ const EventDetails: React.FC<EventDetailsProps> = ({ eventId }) => {
         return (
           <div className="p-8">
             <div className="flex justify-between items-center mb-8 pb-4 border-b border-gray-100">
-              <h3 className="text-xl font-semibold text-gray-900">Event Information</h3>
+              <h3 className="text-xl font-semibold text-gray-900">Información del Evento</h3>
               {eventId && (
                 <div className="flex gap-2">
                   <button
                     onClick={handleDownloadReport}
                     className="flex items-center px-4 py-2 rounded-md text-sm font-medium transition-colors bg-green-50 text-green-700 hover:bg-green-100"
-                    title="Download General Report"
+                    title="Descargar Reporte General"
                   >
-                    <FileText size={16} className="mr-2"/> Report
+                    <FileText size={16} className="mr-2"/> Reporte
                   </button>
                   <button
                     onClick={() => setIsEditMode(true)}
                     className="flex items-center px-4 py-2 rounded-md text-sm font-medium transition-colors bg-indigo-50 text-indigo-700 hover:bg-indigo-100"
                   >
-                    <Edit2 size={16} className="mr-2"/> Edit Details
+                    <Edit2 size={16} className="mr-2"/> Editar Detalles
                   </button>
                 </div>
               )}
@@ -118,44 +118,44 @@ const EventDetails: React.FC<EventDetailsProps> = ({ eventId }) => {
               <div className="space-y-8 max-w-4xl">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                   <div className="col-span-2">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Nombre</label>
                     <p className="text-lg text-gray-900 font-medium">{currentEvent.name}</p>
                   </div>
 
                   <div className="col-span-2">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-                    <p className="text-gray-700 whitespace-pre-wrap leading-relaxed">{currentEvent.description || <span className="text-gray-400 italic">No description provided</span>}</p>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Descripción</label>
+                    <p className="text-gray-700 whitespace-pre-wrap leading-relaxed">{currentEvent.description || <span className="text-gray-400 italic">Sin descripción</span>}</p>
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Ubicación</label>
                     <p className="text-gray-900 flex items-center"><span className="inline-block w-2 h-2 rounded-full bg-gray-400 mr-2"></span>{currentEvent.location || '-'}</p>
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Max Capacity</label>
-                    <p className="text-gray-900">{currentEvent.maxCapacity ? `${currentEvent.maxCapacity} attendees` : 'Unlimited capacity'}</p>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Capacidad Máxima</label>
+                    <p className="text-gray-900">{currentEvent.maxCapacity ? `${currentEvent.maxCapacity} asistentes` : 'Capacidad ilimitada'}</p>
                   </div>
 
                   <div className="flex items-center h-full pt-6">
                       <div className="flex items-center px-3 py-1 rounded-full bg-gray-100 w-fit">
                         <span className={`h-2.5 w-2.5 rounded-full mr-2 ${currentEvent.allowGuests ? 'bg-green-500' : 'bg-red-500'}`}></span>
-                        <span className="text-sm font-medium text-gray-700">Guests {currentEvent.allowGuests ? 'Allowed' : 'Not Allowed'}</span>
+                        <span className="text-sm font-medium text-gray-700">Invitados {currentEvent.allowGuests ? 'Permitidos' : 'No Permitidos'}</span>
                       </div>
                   </div>
 
                   {currentEvent.allowGuests && (
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Max Guests per Participant</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Máximo de Invitados por Participante</label>
                       <p className="text-gray-900">{currentEvent.maxGuestsPerParticipant}</p>
                     </div>
                   )}
 
                   {currentEvent.isPublic && (
                     <div className="col-span-2 border-t border-gray-100 pt-6 mt-2">
-                        <h4 className="text-md font-medium text-gray-900 mb-2">Public Registration</h4>
+                        <h4 className="text-md font-medium text-gray-900 mb-2">Registro Público</h4>
                         <div className="bg-gray-50 p-4 rounded-lg">
-                            <p className="text-sm text-gray-600 mb-1">Public URL:</p>
+                            <p className="text-sm text-gray-600 mb-1">URL Pública:</p>
                             <a 
                                 href={`/public/events/${currentEvent.publicSlug}`} 
                                 target="_blank" 
@@ -164,7 +164,7 @@ const EventDetails: React.FC<EventDetailsProps> = ({ eventId }) => {
                             >
                                 {`${window.location.origin}/public/events/${currentEvent.publicSlug}`}
                             </a>
-                            <p className="text-xs text-gray-500 mt-2">Template: {currentEvent.publicTemplate || 'Default'}</p>
+                            <p className="text-xs text-gray-500 mt-2">Plantilla: {currentEvent.publicTemplate || 'Default'}</p>
                         </div>
                     </div>
                   )}
@@ -193,13 +193,13 @@ const EventDetails: React.FC<EventDetailsProps> = ({ eventId }) => {
           </div>
         );
       case 'schedules':
-        return eventId ? <ScheduleList eventId={eventId} /> : <div className="p-6 text-center text-gray-500">Save the event to manage schedules.</div>;
+        return eventId ? <ScheduleList eventId={eventId} /> : <div className="p-6 text-center text-gray-500">Guarda el evento para gestionar los horarios.</div>;
       case 'participants':
-        return eventId ? <ParticipantList eventId={eventId} /> : <div className="p-6 text-center text-gray-500">Save the event to manage participants.</div>;
+        return eventId ? <ParticipantList eventId={eventId} /> : <div className="p-6 text-center text-gray-500">Guarda el evento para gestionar los participantes.</div>;
       case 'awards':
-        return eventId ? <AwardsTab /> : <div className="p-6 text-center text-gray-500">Save the event to manage awards.</div>;
+        return eventId ? <AwardsTab /> : <div className="p-6 text-center text-gray-500">Guarda el evento para gestionar los premios.</div>;
       case 'reports':
-        return eventId ? <EventReport eventId={eventId} /> : <div className="p-6 text-center text-gray-500">Save the event to view reports.</div>;
+        return eventId ? <EventReport eventId={eventId} /> : <div className="p-6 text-center text-gray-500">Guarda el evento para ver los reportes.</div>;
       case 'accreditation':
         return eventId ? <AccreditationPanel eventId={eventId} /> : null;
       default:
@@ -211,10 +211,10 @@ const EventDetails: React.FC<EventDetailsProps> = ({ eventId }) => {
     <div className="container mx-auto p-6">
       <div className="mb-6">
         <h1 className="text-3xl font-bold text-gray-900 mb-2">
-          {eventId ? currentEvent?.name : 'New Event'}
+          {eventId ? currentEvent?.name : 'Nuevo Evento'}
         </h1>
         <p className="text-gray-600">
-          {eventId ? currentEvent?.location : 'Create a new event'}
+          {eventId ? currentEvent?.location : 'Crear un nuevo evento'}
         </p>
       </div>
 

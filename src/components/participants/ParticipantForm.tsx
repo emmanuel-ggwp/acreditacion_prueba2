@@ -13,6 +13,8 @@ import { Clock } from 'lucide-react';
 import EventSchedule from '@/models/EventSchedule';
 import { showToast } from '@/components/ui/Toast';
 import GuestList from './GuestList';
+import { getFormFields, guestDietaryEnabled } from '@/utils/formFields';
+import { getDietaryOptions } from '@/utils/dietary';
 
 const participantFormSchema = createParticipantSchema.extend({
   id: z.guid().optional(),
@@ -23,13 +25,19 @@ type ParticipantFormData = z.input<typeof participantFormSchema>;
 interface ParticipantFormProps {
   eventId: string;
   participant?: Participant;
-  onClose: () => void;
+  onClose?: () => void;
 }
 
 const ParticipantForm: React.FC<ParticipantFormProps> = ({ eventId, participant, onClose }) => {
   const { createParticipant, updateParticipant, fetchParticipantById, currentParticipant, searchParticipants } = useParticipantStore();
-  const { EventSchedules, fetchSchedulesForEvent } = useEventStore();
+  const { EventSchedules, fetchSchedulesForEvent, events, currentEvent, fetchEventById } = useEventStore();
   const isEditMode = !!participant;
+
+  // Config de campos del evento: el admin ve los mismos campos habilitados en la landing.
+  const eventForCfg: any = (currentEvent && currentEvent.id === eventId) ? currentEvent : (events || []).find((e: any) => e.id === eventId);
+  const ff = getFormFields(eventForCfg?.registrationConfig);
+  const dietOpts = getDietaryOptions(eventForCfg?.registrationConfig);
+  const guestDiet = guestDietaryEnabled(eventForCfg?.registrationConfig);
 
   const {
     register,
@@ -50,7 +58,9 @@ const ParticipantForm: React.FC<ParticipantFormProps> = ({ eventId, participant,
       documentNumber: participant?.documentNumber || '',
       company: participant?.company || '',
       position: participant?.position || '',
+      numeroSap: (participant as any)?.numeroSap || '',
       allowedGuests: participant?.allowedGuests || 0,
+      allowMultipleSchedules: participant?.allowMultipleSchedules || false,
       dietaryPreference: participant?.dietaryPreference || 'NONE',
       dietaryComments: participant?.dietaryComments || '',
       scheduleIds: [],
@@ -98,6 +108,7 @@ const ParticipantForm: React.FC<ParticipantFormProps> = ({ eventId, participant,
       documentNumber: p.documentNumber || '',
       company: p.company || '',
       position: p.position || '',
+      numeroSap: (p as any).numeroSap || '',
       allowedGuests: p.allowedGuests,
       dietaryPreference: p.dietaryPreference || 'NONE',
       dietaryComments: p.dietaryComments || '',
@@ -108,21 +119,8 @@ const ParticipantForm: React.FC<ParticipantFormProps> = ({ eventId, participant,
 
   useEffect(() => {
     fetchSchedulesForEvent(eventId);
-  }, [eventId, fetchSchedulesForEvent]);
-
-  useEffect(() => {
-    if (!isEditMode && EventSchedules.length > 0) {
-      const now = new Date();
-      const sortedSchedules = [...EventSchedules].sort((a, b) => new Date(a.dataValues.startTime).getTime() - new Date(b.dataValues.startTime).getTime());
-
-      const upcomingSchedule = sortedSchedules.find(s => new Date(s.startDateTime) > now);
-      const targetSchedule = upcomingSchedule || sortedSchedules[sortedSchedules.length - 1];
-
-      if (targetSchedule) {
-        setValue('scheduleIds', [targetSchedule.id]);
-      }
-    }
-  }, [isEditMode, EventSchedules, setValue]);
+    fetchEventById(eventId);
+  }, [eventId, fetchSchedulesForEvent, fetchEventById]);
 
   useEffect(() => {
     if (participant?.id) {
@@ -142,7 +140,9 @@ const ParticipantForm: React.FC<ParticipantFormProps> = ({ eventId, participant,
         documentNumber: currentParticipant.documentNumber || '',
         company: currentParticipant.company || '',
         position: currentParticipant.position || '',
+        numeroSap: (currentParticipant as any).numeroSap || '',
         allowedGuests: currentParticipant.allowedGuests,
+        allowMultipleSchedules: (currentParticipant as any).allowMultipleSchedules || false,
         dietaryPreference: currentParticipant.dietaryPreference || 'NONE',
         dietaryComments: currentParticipant.dietaryComments || '',
         scheduleIds: scheduleIds,
@@ -160,18 +160,16 @@ const ParticipantForm: React.FC<ParticipantFormProps> = ({ eventId, participant,
         if (id) {
           const submissionData = updateParticipantSchema.parse(participantData);
           await updateParticipant(id, submissionData);
-          showToast.success('Participant updated successfully');
+          showToast.success('Participante actualizado correctamente');
         } else {
           throw new Error('Participant ID is required for update.');
         }
-        onClose();
+        onClose?.();
       } else {
-        const submissionData = createParticipantSchema.parse(participantData);
-        await createParticipant({
-          ...submissionData,
-        });
-        showToast.success('Participant created successfully');
-        onClose();
+        const submissionData = createParticipantSchema.parse({ ...participantData, eventId });
+        await createParticipant(submissionData);
+        showToast.success('Participante creado correctamente');
+        onClose?.();
       }
     } catch (e) {
       const error = errorHandler(e);
@@ -184,12 +182,13 @@ const ParticipantForm: React.FC<ParticipantFormProps> = ({ eventId, participant,
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 flex justify-center items-center">
       <div className="bg-white p-8 rounded-lg shadow-xl z-50 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-        <h2 className="text-2xl font-bold mb-6">{isEffectiveEditMode ? 'Edit Participant' : 'Create New Participant'}</h2>
+        <h2 className="text-2xl font-bold mb-6">{isEffectiveEditMode ? 'Editar participante' : 'Crear nuevo participante'}</h2>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {ff.documentNumber.enabled && (
             <div className="relative col-span-1 md:col-span-2">
-              <InputField label="Document Number" name="documentNumber" register={register} error={errors.documentNumber} />
-              {isSearching && <div className="absolute right-3 top-9 text-gray-400 text-sm">Searching...</div>}
+              <InputField label={`RUT / Documento${ff.documentNumber.required ? ' *' : ''}`} name="documentNumber" register={register} error={errors.documentNumber} />
+              {isSearching && <div className="absolute right-3 top-9 text-gray-400 text-sm">Buscando...</div>}
               {showResults && searchResults.length > 0 && (
                 <ul className="absolute z-10 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto mt-1">
                   {searchResults.map((p) => (
@@ -209,41 +208,45 @@ const ParticipantForm: React.FC<ParticipantFormProps> = ({ eventId, participant,
                 </ul>
               )}
             </div>
-            <InputField label="First Name" name="firstName" register={register} error={errors.firstName} />
-            <InputField label="Last Name" name="lastName" register={register} error={errors.lastName} />
-            <InputField label="Email" name="email" type="email" register={register} error={errors.email} />
-            <InputField label="Phone" name="phone" register={register} error={errors.phone} />
-            <InputField label="Company" name="company" register={register} error={errors.company} />
-            <InputField label="Position" name="position" register={register} error={errors.position} />
-            <InputField label="Allowed Guests" name="allowedGuests" type="number" register={register} error={errors.allowedGuests} />
-            
+            )}
+            <InputField label="Nombre" name="firstName" register={register} error={errors.firstName} />
+            <InputField label="Apellido" name="lastName" register={register} error={errors.lastName} />
+            <InputField label="Correo" name="email" type="email" register={register} error={errors.email} />
+            {ff.phone.enabled && <InputField label={`Teléfono${ff.phone.required ? ' *' : ''}`} name="phone" register={register} error={errors.phone} />}
+            {ff.company.enabled && <InputField label={`Empresa${ff.company.required ? ' *' : ''}`} name="company" register={register} error={errors.company} />}
+            {ff.position.enabled && <InputField label={`Cargo${ff.position.required ? ' *' : ''}`} name="position" register={register} error={errors.position} />}
+            {ff.numeroSap.enabled && <InputField label={`Código SAP${ff.numeroSap.required ? ' *' : ''}`} name={'numeroSap' as any} register={register} error={(errors as any).numeroSap} />}
+            <InputField label="Invitados permitidos" name="allowedGuests" type="number" register={register} error={errors.allowedGuests} />
+
+            <label className="col-span-1 md:col-span-2 flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+              <input type="checkbox" {...register('allowMultipleSchedules')} className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
+              Permitir que este participante se inscriba en <b>varias fechas</b> (aunque el evento no lo permita)
+            </label>
+
+            {ff.dietary.enabled && (
             <div className="col-span-1 md:col-span-2 border-t pt-4 mt-2">
-               <h3 className="text-sm font-medium text-gray-900 mb-3">Dietary Requirements</h3>
+               <h3 className="text-sm font-medium text-gray-900 mb-3">Requerimientos alimentarios</h3>
                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label htmlFor="dietaryPreference" className="block text-sm font-medium text-gray-700">Preference</label>
+                    <label htmlFor="dietaryPreference" className="block text-sm font-medium text-gray-700">Preferencia{ff.dietary.required ? ' *' : ''}</label>
                     <select
                       id="dietaryPreference"
                       {...register('dietaryPreference')}
                       className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                     >
-                      <option value="NONE">None</option>
-                      <option value="VEGETARIAN">Vegetarian</option>
-                      <option value="VEGAN">Vegan</option>
-                      <option value="CELIAC">Celiac (Gluten Free)</option>
-                      <option value="KOSHER">Kosher</option>
-                      <option value="HALAL">Halal</option>
-                      <option value="OTHER">Other</option>
+                      {dietOpts.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                     </select>
                     {errors.dietaryPreference && <p className="mt-2 text-sm text-red-600">{errors.dietaryPreference.message}</p>}
                   </div>
-                  <InputField label="Comments / Allergies" name="dietaryComments" register={register} error={errors.dietaryComments} />
+                  <InputField label="Comentarios / Alergias" name="dietaryComments" register={register} error={errors.dietaryComments} />
                </div>
             </div>
+            )}
           </div>
 
           <div className="col-span-2">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Schedules</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Horarios</label>
+            <p className="text-xs text-gray-500 mb-2">Sin horario seleccionado = participante <b>precargado</b> (podrá inscribirse luego por la landing). Marca uno o más para <b>inscribirlo</b> directamente.</p>
             <div className="border rounded-md p-2 max-h-40 overflow-y-auto">
               {EventSchedules.length > 0 ? (
                 EventSchedules.map((schedule: EventSchedule) => (
@@ -263,8 +266,8 @@ const ParticipantForm: React.FC<ParticipantFormProps> = ({ eventId, participant,
               ) : (
                 <div className="text-center py-12 bg-gray-50 rounded-lg border border-dashed border-gray-300">
                   <Clock className="mx-auto h-12 w-12 text-gray-400" />
-                  <h3 className="mt-2 text-sm font-medium text-gray-900">No schedules</h3>
-                  <p className="mt-1 text-sm text-gray-500">Get started by creating a new schedule for this event.</p>
+                  <h3 className="mt-2 text-sm font-medium text-gray-900">Sin horarios</h3>
+                  <p className="mt-1 text-sm text-gray-500">Comienza creando un nuevo horario para este evento.</p>
                 </div>
               )}
             </div>
@@ -274,28 +277,28 @@ const ParticipantForm: React.FC<ParticipantFormProps> = ({ eventId, participant,
           {isEffectiveEditMode && participantId && (
             <div className="col-span-2 border-t pt-4">
               <div className="flex items-center justify-between mb-2">
-                <h3 className="text-sm font-medium text-gray-900">Guests</h3>
-                <p className="text-xs text-gray-500">Allowed: {watch('allowedGuests') || 0}</p>
+                <h3 className="text-sm font-medium text-gray-900">Invitados</h3>
+                <p className="text-xs text-gray-500">Permitidos: {watch('allowedGuests') || 0}</p>
               </div>
-              <GuestList participantId={participantId} allowedGuests={watch('allowedGuests') || 0} />
+              <GuestList participantId={participantId} allowedGuests={watch('allowedGuests') || 0} guestDietary={guestDiet} dietaryOptions={dietOpts} />
             </div>
           )}
 
           <div className="flex justify-end space-x-4 pt-4">
             <button
               type="button"
-              onClick={onClose}
+              onClick={() => onClose?.()}
               className="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-300"
               disabled={isSubmitting}
             >
-              Cancel
+              Cancelar
             </button>
             <button
               type="submit"
               className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 disabled:opacity-50"
               disabled={isSubmitting}
             >
-              {isSubmitting ? 'Saving...' : (isEffectiveEditMode ? 'Save Changes' : 'Create Participant')}
+              {isSubmitting ? 'Guardando...' : (isEffectiveEditMode ? 'Guardar cambios' : 'Crear participante')}
             </button>
           </div>
         </form>

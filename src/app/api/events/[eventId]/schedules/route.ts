@@ -19,14 +19,14 @@ export const POST = withAuth(async (req: AuthenticatedRequest, { params }: Param
     const { eventId } = resolvedParams;
     const body = await req.json();
     const validatedData = createScheduleSchema.parse(body);
-    const schedule = await eventScheduleService.createSchedule(eventId, validatedData);
+    const schedule = await eventScheduleService.createSchedule(eventId, validatedData, req.user?.id);
     return NextResponse.json(schedule, { status: 201 });
   } catch (error: any) {
     console.error(`Error adding schedule to event:`, error);
     if (error.name === 'ZodError') {
       return NextResponse.json({ message: 'Validation failed', errors: error.errors }, { status: 400 });
     }
-    return NextResponse.json({ message: 'Error adding schedule', error: error.message }, { status: 500 });
+    return NextResponse.json({ message: error.message || 'Error adding schedule' }, { status: 400 });
   }
 }, [ADMIN, OPERATOR]);
 

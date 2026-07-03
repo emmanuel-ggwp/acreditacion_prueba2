@@ -159,66 +159,6 @@ describe('AccreditationService', () => {
     });
   });
 
-  describe('checkOut', () => {
-    const accreditationId = 'accred-1';
-    const checkedOutBy = 'user-2';
-
-    it('should check out an accreditation successfully', async () => {
-      const mockAccreditation = {
-        id: accreditationId,
-        checkInTime: new Date(),
-        checkOutTime: null,
-        save: jest.fn(function(this: any) {
-            this.checkOutTime = new Date();
-            (this as any).checkedOutBy = checkedOutBy;
-            return Promise.resolve(this);
-        }),
-      };
-      (AccreditationMock.findByPk as jest.Mock).mockResolvedValue(mockAccreditation);
-
-      const result = await accreditationService.checkOut(accreditationId, checkedOutBy);
-
-      expect(AccreditationMock.findByPk).toHaveBeenCalledWith(accreditationId);
-      expect(mockAccreditation.save).toHaveBeenCalled();
-      expect(result.checkOutTime).not.toBeNull();
-      expect((result as any).checkedOutBy).toEqual(checkedOutBy);
-    });
-
-    it('should throw an error if accreditation not found', async () => {
-      (AccreditationMock.findByPk as jest.Mock).mockResolvedValue(null);
-
-      await expect(
-        accreditationService.checkOut(accreditationId, checkedOutBy)
-      ).rejects.toThrow('Accreditation not found');
-    });
-
-    it('should throw an error if already checked out', async () => {
-      const mockAccreditation = {
-        id: accreditationId,
-        checkInTime: new Date(),
-        checkOutTime: new Date(), // Already has a checkout time
-      };
-      (AccreditationMock.findByPk as jest.Mock).mockResolvedValue(mockAccreditation);
-
-      await expect(
-        accreditationService.checkOut(accreditationId, checkedOutBy)
-      ).rejects.toThrow('Already checked out.');
-    });
-
-    it('should throw an error if not checked in', async () => {
-        const mockAccreditation = {
-          id: accreditationId,
-          checkInTime: null, // No check-in time
-          checkOutTime: null,
-        };
-        (AccreditationMock.findByPk as jest.Mock).mockResolvedValue(mockAccreditation);
-  
-        await expect(
-          accreditationService.checkOut(accreditationId, checkedOutBy)
-        ).rejects.toThrow('Cannot check out without a check-in time.');
-      });
-  });
-
   describe('bulkAccredit', () => {
     // Use valid UUIDs for testing
     const eventScheduleId = '123e4567-e89b-12d3-a456-426614174000';

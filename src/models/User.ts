@@ -29,7 +29,7 @@ class User extends Model {
   declare public password: string;
   declare public firstName: string;
   declare public lastName: string;
-  declare public role: 'ADMIN' | 'ACREDITADOR' | 'GUARDIA';
+  declare public role: 'ADMIN' | 'MANAGER' | 'OPERATOR' | 'GUARDIA';
   declare public isActive: boolean;
   declare public lastLogin: Date | null;
 
@@ -99,9 +99,9 @@ User.init(
       allowNull: true,
     },
     role: {
-      type: DataTypes.ENUM('ADMIN', 'ACREDITADOR', 'GUARDIA'),
+      type: DataTypes.ENUM('ADMIN', 'MANAGER', 'OPERATOR', 'GUARDIA'),
       allowNull: false,
-      defaultValue: 'ACREDITADOR',
+      defaultValue: 'GUARDIA',
     },
     isActive: {
       type: DataTypes.BOOLEAN,

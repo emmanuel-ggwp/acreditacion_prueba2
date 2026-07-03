@@ -44,10 +44,10 @@ const AwardForm: React.FC<AwardFormProps> = ({ eventId, award, onClose }) => {
 
   return (
     <div className="p-6 my-4 border border-gray-200 rounded-lg bg-gray-50">
-      <h3 className="text-xl font-semibold mb-4">{isEditing ? 'Edit Award' : 'Create New Award'}</h3>
+      <h3 className="text-xl font-semibold mb-4">{isEditing ? 'Editar Premio' : 'Crear Nuevo Premio'}</h3>
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
         <div>
-          <label htmlFor="name" className="block text-sm font-medium text-gray-700">Award Name</label>
+          <label htmlFor="name" className="block text-sm font-medium text-gray-700">Nombre del Premio</label>
           <input
             id="name"
             {...register('name')}
@@ -56,7 +56,7 @@ const AwardForm: React.FC<AwardFormProps> = ({ eventId, award, onClose }) => {
           {errors.name && <p className="mt-1 text-sm text-red-600">{errors.name.message}</p>}
         </div>
         <div>
-          <label htmlFor="description" className="block text-sm font-medium text-gray-700">Description</label>
+          <label htmlFor="description" className="block text-sm font-medium text-gray-700">Descripción</label>
           <textarea
             id="description"
             {...register('description')}
@@ -66,7 +66,7 @@ const AwardForm: React.FC<AwardFormProps> = ({ eventId, award, onClose }) => {
           {errors.description && <p className="mt-1 text-sm text-red-600">{errors.description.message}</p>}
         </div>
         <div>
-          <label htmlFor="quantity" className="block text-sm font-medium text-gray-700">Quantity (Stock)</label>
+          <label htmlFor="quantity" className="block text-sm font-medium text-gray-700">Cantidad (Stock)</label>
           <input
             id="quantity"
             type="number"
@@ -80,10 +80,10 @@ const AwardForm: React.FC<AwardFormProps> = ({ eventId, award, onClose }) => {
 
         <div className="flex justify-end space-x-3">
           <button type="button" onClick={onClose} className="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-300">
-            Cancel
+            Cancelar
           </button>
           <button type="submit" disabled={loading} className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 disabled:opacity-50">
-            {loading ? 'Saving...' : (isEditing ? 'Save Changes' : 'Create Award')}
+            {loading ? 'Guardando…' : (isEditing ? 'Guardar Cambios' : 'Crear Premio')}
           </button>
         </div>
       </form>

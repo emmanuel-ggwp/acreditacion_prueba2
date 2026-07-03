@@ -2,35 +2,34 @@ import { z } from 'zod';
 import { Op, fn, col } from 'sequelize';
 import { Event, EventSchedule, Accreditation } from '@/models/index';
 import { createScheduleSchema, updateScheduleSchema } from '@/utils/validators/eventSchemas';
+import { auditLogService } from './auditLogService';
+
+const scheduleName = (s: any) => s.label || s.scheduleName;
 
 export class EventScheduleService {
-  async createSchedule(eventId: string, data: z.infer<typeof createScheduleSchema>) {
+  async createSchedule(eventId: string, data: z.infer<typeof createScheduleSchema>, userId?: string) {
     const validatedData = createScheduleSchema.parse(data);
     const event = await Event.findByPk(eventId);
     if (!event) {
       throw new Error(`Evento ${eventId} no encontrado para la agenda.`);
     }
 
-    // Optional: Check for overlapping schedules
-    const overlapping = await EventSchedule.findOne({
-        where: {
-            eventId,
-            [Op.or]: [
-                { startDateTime: { [Op.between]: [validatedData.startDateTime, validatedData.endDateTime] } },
-                { endDateTime: { [Op.between]: [validatedData.startDateTime, validatedData.endDateTime] } },
-            ]
-        }
-    });
-
-    if (overlapping) {
-        throw new Error('Schedule overlaps with an existing one.');
+    // La capacidad de una fecha no puede superar la capacidad máxima del evento.
+    const evMax = Number((event as any).maxCapacity) || 0;
+    const sMax = Number((validatedData as any).maxCapacity) || 0;
+    if (evMax > 0 && sMax > evMax) {
+      throw new Error(`La capacidad de la fecha (${sMax}) no puede superar la capacidad máxima del evento (${evMax}).`);
     }
 
+    // Nota: se permiten horarios que se solapan (ej. sesiones paralelas en distintas salas).
     const schedule = await EventSchedule.create({ ...validatedData, eventId });
+    if (userId) {
+      await auditLogService.log({ userId, action: 'CREATE', entity: 'EventSchedule', entityId: schedule.id, details: { name: scheduleName(schedule) } });
+    }
     return schedule;
   }
 
-  async updateSchedule(scheduleId: string, data: z.infer<typeof updateScheduleSchema>) {
+  async updateSchedule(scheduleId: string, data: z.infer<typeof updateScheduleSchema>, userId?: string) {
     const validatedData = updateScheduleSchema.parse(data);
     const schedule = await EventSchedule.findByPk(scheduleId);
     if (!schedule) {
@@ -44,11 +43,28 @@ export class EventScheduleService {
         }
     }
 
+    // La capacidad de una fecha no puede superar la capacidad máxima del evento.
+    if (validatedData.maxCapacity != null) {
+        const event = await Event.findByPk((schedule as any).eventId);
+        const evMax = Number((event as any)?.maxCapacity) || 0;
+        const sMax = Number(validatedData.maxCapacity) || 0;
+        if (evMax > 0 && sMax > evMax) {
+            throw new Error(`La capacidad de la fecha (${sMax}) no puede superar la capacidad máxima del evento (${evMax}).`);
+        }
+    }
+
+    const before: any = JSON.parse(JSON.stringify(schedule.get({ plain: true })));
     await schedule.update(validatedData);
+    if (userId) {
+      const changes = auditLogService.buildChanges(before, schedule.get({ plain: true }), Object.keys(validatedData));
+      if (Object.keys(changes).length) {
+        await auditLogService.log({ userId, action: 'UPDATE', entity: 'EventSchedule', entityId: schedule.id, details: { name: scheduleName(schedule), changes } });
+      }
+    }
     return schedule;
   }
 
-  async deleteSchedule(scheduleId: string) {
+  async deleteSchedule(scheduleId: string, userId?: string, reason?: string) {
     const accreditedCount = await Accreditation.count({ where: { eventScheduleId: scheduleId } });
     if (accreditedCount > 0) {
       throw new Error('Cannot delete schedule with existing accreditations.');
@@ -57,7 +73,11 @@ export class EventScheduleService {
     if (!schedule) {
       throw new Error('Schedule not found');
     }
+    const name = scheduleName(schedule);
     await schedule.destroy();
+    if (userId) {
+      await auditLogService.log({ userId, action: 'DELETE', entity: 'EventSchedule', entityId: scheduleId, details: { name, reason: reason || null } });
+    }
     return { message: 'Schedule deleted successfully' };
   }
 
@@ -83,21 +103,68 @@ export class EventScheduleService {
     return schedules;
   }
 
-  async getAvailableCapacity(scheduleId: string): Promise<number> {
-    const schedule = await EventSchedule.findByPk(scheduleId, {
-        include: [{ model: Event, attributes: ['maxCapacity'] }]
+  // Horarios relevantes para acreditar (cross-evento): los que están EN acreditación ahora,
+  // más los publicados de HOY (para abrirlos/prepararlos). Incluye evento y nº de acreditados.
+  async getActiveSchedules() {
+    const now = new Date();
+    const startToday = new Date(now); startToday.setHours(0, 0, 0, 0);
+    const endToday = new Date(now); endToday.setHours(23, 59, 59, 999);
+
+    return EventSchedule.findAll({
+      where: {
+        isActive: true,
+        [Op.or]: [
+          { status: 'accrediting' },
+          { status: 'published', startDateTime: { [Op.between]: [startToday, endToday] } },
+        ],
+      },
+      include: [
+        { model: Accreditation, attributes: [] },
+        { model: Event, attributes: ['id', 'name', 'location', 'maxCapacity'] },
+      ],
+      attributes: {
+        include: [[fn('COUNT', col('Accreditations.id')), 'accreditedCount']],
+      },
+      group: ['EventSchedule.id', 'Event.id'],
+      order: [['startDateTime', 'ASC']],
     });
-    if (!schedule) {
-      throw new Error('Schedule not found');
+  }
+
+  // Abrir/cerrar acreditación a mano (published|accrediting|accredited|cancelled).
+  async setStatus(scheduleId: string, status: string, userId?: string) {
+    const allowed = ['published', 'accrediting', 'accredited', 'cancelled'];
+    if (!allowed.includes(status)) throw new Error('Estado de horario inválido');
+    const schedule = await EventSchedule.findByPk(scheduleId);
+    if (!schedule) throw new Error('Schedule not found');
+    const from = (schedule as any).status;
+    await schedule.update({ status });
+    if (userId && from !== status) {
+      await auditLogService.log({
+        userId,
+        action: 'UPDATE',
+        entity: 'EventSchedule',
+        entityId: schedule.id,
+        details: { name: scheduleName(schedule), changes: { status: { from, to: status } } },
+      });
     }
+    return schedule;
+  }
 
-    const event = (schedule as any).Event;
-    const capacity = schedule.maxCapacity || event?.maxCapacity || 0;
-    if (capacity === 0) return Infinity; // No capacity limit
-
-    const accreditedCount = await Accreditation.count({ where: { eventScheduleId: scheduleId } });
-    
-    return capacity - accreditedCount;
+  // Asignar/quitar la imagen de un horario (solo el campo imageUrl, sin tocar fechas).
+  async setImage(scheduleId: string, imageUrl: string | null, userId?: string) {
+    const schedule = await EventSchedule.findByPk(scheduleId);
+    if (!schedule) throw new Error('Schedule not found');
+    await schedule.update({ imageUrl: imageUrl || null });
+    if (userId) {
+      await auditLogService.log({
+        userId,
+        action: 'UPDATE',
+        entity: 'EventSchedule',
+        entityId: schedule.id,
+        details: { name: scheduleName(schedule), changes: { imagen: imageUrl ? 'actualizada' : 'quitada' } },
+      });
+    }
+    return schedule;
   }
 
   async searchSchedules(query: { name?: string, startDate?: Date, endDate?: Date }) {

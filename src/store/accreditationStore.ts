@@ -19,6 +19,9 @@ interface AccreditationState {
   error: string | null;
   totalAccreditations: number;
   accreditationsToday: number;
+  activeSchedules: any[];
+  fetchActiveSchedules: () => Promise<void>;
+  setScheduleStatus: (scheduleId: string, eventId: string, status: string) => Promise<void>;
   fetchAccreditations: (eventId: string, page: number, limit: number) => Promise<void>;
   accreditParticipant: (participantId: string, eventScheduleId: string, accreditedById: string, notes?: string) => Promise<void>;
   accreditGuest: (guestId: string, eventScheduleId: string, accreditedById: string, notes?: string) => Promise<void>;
@@ -36,6 +39,26 @@ const useAccreditationStore = create<AccreditationState>()(
       error: null,
       totalAccreditations: 0,
       accreditationsToday: 0,
+      activeSchedules: [],
+
+      fetchActiveSchedules: async () => {
+        try {
+          const list = await apiClient.get<any[]>('/api/accreditation/schedules');
+          set({ activeSchedules: list });
+        } catch (error: any) {
+          set({ error: error.message });
+        }
+      },
+
+      setScheduleStatus: async (scheduleId, eventId, status) => {
+        try {
+          await apiClient.patch(`/api/events/${eventId}/schedules/${scheduleId}`, { status });
+          await useAccreditationStore.getState().fetchActiveSchedules();
+        } catch (error: any) {
+          set({ error: error.message });
+          throw error;
+        }
+      },
 
       fetchAccreditations: async (eventId, page, limit) => {
         set({ loading: true, error: null });
@@ -72,10 +95,10 @@ const useAccreditationStore = create<AccreditationState>()(
       accreditGuest: async (guestId, eventScheduleId, accreditedById, notes) => {
         set({ loading: true, error: null });
         try {
-          const newAccreditation = await apiClient.post<RichAccreditation>(`/api/accreditations/guest`, {
-            guestId,
-            eventScheduleId,
-            accreditedById,
+          const newAccreditation = await apiClient.post<RichAccreditation>(`/api/accreditations`, {
+            type: 'guest',
+            id: guestId,
+            scheduleId: eventScheduleId,
             notes,
           });
           set((state) => ({
