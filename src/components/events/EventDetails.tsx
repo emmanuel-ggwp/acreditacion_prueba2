@@ -12,9 +12,7 @@ import { useRouter } from 'next/navigation';
 import { isToday, isYesterday, isTomorrow } from 'date-fns';
 import apiClient from '@/utils/apiClient';
 import EventForm from './EventForm';
-
-// Placeholders for other components
-const AwardsTab = () => <div>Gestión de Premios</div>;
+import EventAwardedList from './EventAwardedList';
 
 interface EventDetailsProps {
   eventId?: string;
@@ -197,7 +195,7 @@ const EventDetails: React.FC<EventDetailsProps> = ({ eventId }) => {
       case 'participants':
         return eventId ? <ParticipantList eventId={eventId} /> : <div className="p-6 text-center text-gray-500">Guarda el evento para gestionar los participantes.</div>;
       case 'awards':
-        return eventId ? <AwardsTab /> : <div className="p-6 text-center text-gray-500">Guarda el evento para gestionar los premios.</div>;
+        return eventId ? <EventAwardedList eventId={eventId} /> : <div className="p-6 text-center text-gray-500">Guarda el evento para gestionar los premios.</div>;
       case 'reports':
         return eventId ? <EventReport eventId={eventId} /> : <div className="p-6 text-center text-gray-500">Guarda el evento para ver los reportes.</div>;
       case 'accreditation':
