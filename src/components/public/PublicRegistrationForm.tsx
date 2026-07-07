@@ -5,12 +5,14 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { publicRegistrationSchema } from '@/utils/validators/participantSchemas';
-import { getFormFields, guestDietaryEnabled } from '@/utils/formFields';
-import { getDietaryOptions, isFreeTextDiet, dietaryFull } from '@/utils/dietary';
+import { getFormFields, guestDietaryEnabled, getGuestMode } from '@/utils/formFields';
+import { getDietaryOptions, isFreeTextDiet, dietaryFull, ensureDietOption } from '@/utils/dietary';
 import { sendConfirmationEmail } from '@/lib/emailjs';
+import { buildGuestSummary } from '@/utils/guests';
+import { isValidRut } from '@/utils/validators/rut';
 import DateSelectModal from '@/components/public/DateSelectModal';
 import { CONTACT_EMAIL } from '@/utils/contact';
-import { Loader2, CheckCircle, AlertCircle, Calendar, ChevronDown } from 'lucide-react';
+import { Loader2, CheckCircle, AlertCircle, Calendar, ChevronDown, ShieldCheck } from 'lucide-react';
 
 const FIELD_LABELS: Record<string, string> = { phone: 'Teléfono', documentNumber: 'RUT / Documento', company: 'Empresa', position: 'Cargo', numeroSap: 'Código SAP', dietary: 'Preferencia alimenticia' };
 import { useRouter } from 'next/navigation';
@@ -38,7 +40,7 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
   const theme: any = (event as any).registrationConfig?.theme || {};
-  const primary: string = theme.primaryColor || '#4f46e5';
+  const primary: string = theme.primaryColor || '#1e293b';
   const btnColor: string = theme.buttonColor || primary;
   // CSS acotado al formulario para aplicar la paleta elegida (solo lo que el admin definió).
   const themeCss = `
@@ -62,6 +64,18 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
   const dietOpts = getDietaryOptions((event as any).registrationConfig);
   const maxGuests = Number((event as any).maxGuestsPerParticipant) || 0;
   const allowGuests = (event as any).allowGuests !== false;
+  const guestMode = getGuestMode((event as any).registrationConfig);
+  // Modo 'count': solo un número. Modo 'companion': acompañante (sí/no) + cargas.
+  const [countGuests, setCountGuests] = useState(0);
+  const [companion, setCompanion] = useState(false);
+  const [loads, setLoads] = useState(0);
+  // Modo de inscripción del evento: 'rut' = solo RUT precargado (reja previa al formulario).
+  const registrationMode: 'open' | 'rut' = (event as any).registrationConfig?.mode === 'rut' ? 'rut' : 'open';
+  const [rutInput, setRutInput] = useState('');
+  const [rutParticipantId, setRutParticipantId] = useState<string | null>(null);
+  const [rutPassed, setRutPassed] = useState(false);
+  const [lookupLoading, setLookupLoading] = useState(false);
+  const [lookupError, setLookupError] = useState('');
   const [openGuests, setOpenGuests] = useState<{ firstName: string; lastName: string; dietaryPreference?: string; dietaryComments?: string }[]>([]);
   const addGuest = () => setOpenGuests((g) => (g.length < maxGuests ? [...g, { firstName: '', lastName: '', dietaryPreference: 'NONE', dietaryComments: '' }] : g));
   const removeGuest = (i: number) => setOpenGuests((g) => g.filter((_, idx) => idx !== i));
@@ -81,6 +95,49 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
       scheduleIds: availableSchedules.length === 1 ? [availableSchedules[0].id] : []
     }
   });
+
+  // Reja de RUT (modo 'rut'): busca al participante precargado y precarga sus datos.
+  const doLookup = async () => {
+    setLookupError('');
+    if (!isValidRut(rutInput)) { setLookupError('Ingresa un RUT válido (ej. 12345678-9).'); return; }
+    setLookupLoading(true);
+    try {
+      const res = await fetch(`/api/public/events/${slug}/lookup?rut=${encodeURIComponent(rutInput)}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'No se pudo validar el RUT.');
+      if (!data.found) {
+        setLookupError('No encontramos tu RUT en este evento. Verifica el número o contacta al organizador.');
+        return;
+      }
+      const p = data.participant;
+      setRutParticipantId(p.id);
+      setValue('firstName', p.firstName || '');
+      setValue('lastName', p.lastName || '');
+      setValue('email', p.email || '');
+      setValue('phone', p.phone || '');
+      setValue('documentNumber', p.documentNumber || rutInput);
+      // Precargar dieta e invitados registrados en la precarga.
+      setValue('dietaryPreference', p.dietaryPreference || 'NONE');
+      setValue('dietaryComments', p.dietaryComments || '');
+      if (Array.isArray(data.guests) && data.guests.length) {
+        setOpenGuests(data.guests.map((g: any) => ({
+          firstName: g.firstName || '',
+          lastName: g.lastName || '',
+          dietaryPreference: g.dietaryPreference || 'NONE',
+          dietaryComments: '',
+        })));
+      }
+      // Invitados en modos numéricos (count / companion).
+      if (p.guestCount != null) setCountGuests(Number(p.guestCount) || 0);
+      if (p.guestCompanion != null) setCompanion(!!p.guestCompanion);
+      if (p.guestLoads != null) setLoads(Number(p.guestLoads) || 0);
+      setRutPassed(true);
+    } catch (e: any) {
+      setLookupError(e.message || 'Error al validar el RUT.');
+    } finally {
+      setLookupLoading(false);
+    }
+  };
 
   // Avisa a la plantilla la(s) fecha(s) seleccionada(s) para el encabezado.
   const watchedScheduleIds = watch('scheduleIds');
@@ -105,25 +162,39 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
       }
       if (missing.length) { setError('Completa los campos obligatorios: ' + missing.join(', ') + '.'); setIsSubmitting(false); return; }
 
-      const guests = openGuests
-        .filter((g) => g.firstName.trim())
-        .map((g) => {
-          const gd: any = {};
-          if (guestDiet) {
-            // El invitado no tiene columna de comentarios: si eligió Alergia/Otro y escribió,
-            // guardamos el detalle dentro de dietaryPreference (ej.: "Alergia: maní").
-            gd.dietaryPreference = isFreeTextDiet(g.dietaryPreference) && (g.dietaryComments || '').trim()
-              ? dietaryFull(g.dietaryPreference, g.dietaryComments)
-              : (g.dietaryPreference || 'NONE');
-          }
-          return { firstName: g.firstName.trim(), lastName: g.lastName.trim() || undefined, guestType: 'ACOMPANANTE', ...gd };
-        });
+      // Invitados según el modo del evento.
+      let guests: any[] = [];
+      const guestData: any = {};
+      if (allowGuests && maxGuests > 0) {
+        if (guestMode === 'count') {
+          guestData.guestCount = Math.max(0, Math.min(countGuests, maxGuests));
+        } else if (guestMode === 'companion') {
+          const total = (companion ? 1 : 0) + Math.max(0, loads);
+          guestData.guestCompanion = companion;
+          guestData.guestLoads = Math.max(0, loads);
+          guestData.guestCount = Math.min(total, maxGuests);
+        } else {
+          guests = openGuests
+            .filter((g) => g.firstName.trim())
+            .map((g) => {
+              const gd: any = {};
+              if (guestDiet) {
+                // El invitado no tiene columna de comentarios: si eligió Alergia/Otro y escribió,
+                // guardamos el detalle dentro de dietaryPreference (ej.: "Alergia: maní").
+                gd.dietaryPreference = isFreeTextDiet(g.dietaryPreference) && (g.dietaryComments || '').trim()
+                  ? dietaryFull(g.dietaryPreference, g.dietaryComments)
+                  : (g.dietaryPreference || 'NONE');
+              }
+              return { firstName: g.firstName.trim(), lastName: g.lastName.trim() || undefined, guestType: 'ACOMPANANTE', ...gd };
+            });
+        }
+      }
       const response = await fetch(`/api/public/events/${slug}/register`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ ...data, guests }),
+        body: JSON.stringify({ ...data, ...guestData, guests, ...(registrationMode === 'rut' && rutParticipantId ? { participantId: rutParticipantId } : {}) }),
       });
 
       const result = await response.json();
@@ -139,6 +210,13 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
         if (templateId) {
           const schedule = ((event as any).schedules || []).find((s: any) => s.id === (data.scheduleIds || [])[0]);
           const nombre = `${data.firstName} ${data.lastName}`.trim();
+          // Invitados según el modo del evento (un solo texto sirve para los 3 modos).
+          const gs = buildGuestSummary(guestMode, {
+            names: guests.map((g: any) => `${g.firstName} ${g.lastName || ''}`.trim()),
+            count: guestData.guestCount,
+            companion,
+            loads,
+          });
           await sendConfirmationEmail(templateId, {
             to_email: data.email,
             email: data.email,
@@ -148,8 +226,8 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
             schedule_name: schedule ? (schedule.label || schedule.scheduleName) : '',
             fechaEvento: schedule ? new Date(schedule.startDateTime).toLocaleDateString('es-CL') : '',
             lugarEvento: schedule?.location || event.location || '',
-            guests_count: String(guests.length),
-            guests_summary: guests.map((g: any) => `${g.firstName} ${g.lastName || ''}`.trim()).join(', '),
+            guests_count: String(gs.count),
+            guests_summary: gs.summary,
           });
         }
       } catch (_) {
@@ -198,6 +276,55 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
           Registrar a otra persona
         </button>
       </div>
+    );
+  }
+
+  // Modo 'rut': reja previa. Solo tras identificar el RUT precargado se muestra el formulario.
+  if (registrationMode === 'rut' && !rutPassed) {
+    return (
+      <>
+        <style>{themeCss}</style>
+        <div className="apf-form">
+          <div className="max-w-sm mx-auto text-center">
+            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-gray-100">
+              <ShieldCheck className="h-7 w-7" style={{ color: primary }} />
+            </div>
+            <h2 className="text-xl font-bold text-gray-900">Identifícate con tu RUT</h2>
+            <p className="text-sm text-gray-500 mt-1.5">
+              Este evento es solo para invitados registrados previamente. Ingresa tu RUT para acceder a tu inscripción.
+            </p>
+
+            <div className="mt-6 text-left">
+              <label htmlFor="rutGate" className="block text-sm font-medium text-gray-700 mb-1">RUT</label>
+              <input
+                id="rutGate"
+                value={rutInput}
+                onChange={(e) => setRutInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); doLookup(); } }}
+                placeholder="Ej. 12.345.678-9"
+                className="block w-full px-4 py-3 text-center text-lg tracking-wide border border-gray-300 rounded-lg shadow-sm placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-300 focus:border-gray-400"
+              />
+              {lookupError && <p className="mt-2 text-sm text-red-600 text-center">{lookupError}</p>}
+            </div>
+
+            <button
+              type="button"
+              onClick={doLookup}
+              disabled={lookupLoading}
+              className="mt-4 w-full inline-flex items-center justify-center gap-2 py-3 px-4 rounded-lg text-white font-semibold shadow-sm hover:brightness-110 transition disabled:opacity-60"
+              style={{ backgroundColor: btnColor }}
+            >
+              {lookupLoading && <Loader2 className="h-5 w-5 animate-spin" />}
+              {lookupLoading ? 'Validando…' : 'Continuar'}
+            </button>
+
+            <div className="mt-5 rounded-lg bg-gray-50 border border-gray-100 p-3 text-xs text-gray-500 leading-relaxed">
+              ¿Tu RUT no aparece o tienes algún problema? Escríbenos a{' '}
+              <a href={`mailto:${CONTACT_EMAIL}`} className="underline font-medium" style={{ color: primary }}>{CONTACT_EMAIL}</a>
+            </div>
+          </div>
+        </div>
+      </>
     );
   }
 
@@ -312,10 +439,14 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
             <input
               type="text"
               id="documentNumber"
+              readOnly={registrationMode === 'rut'}
               {...register('documentNumber')}
-              className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+              className={`appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm ${registrationMode === 'rut' ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''}`}
             />
           </div>
+          {registrationMode === 'rut' && (
+            <p className="mt-1 text-xs text-gray-400">El RUT no se puede modificar (validado en la lista de invitados).</p>
+          )}
         </div>
         )}
 
@@ -378,7 +509,7 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
               {...register('dietaryPreference')}
               className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
             >
-              {dietOpts.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              {ensureDietOption(dietOpts, watch('dietaryPreference')).map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
           </div>
         </div>
@@ -401,7 +532,7 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
         )}
       </div>
 
-      {allowGuests && maxGuests > 0 && (
+      {allowGuests && maxGuests > 0 && guestMode === 'named' && (
         <div className="border-t border-gray-200 pt-5">
           <label className="block text-sm font-medium text-gray-700 mb-2">
             Invitados <span className="text-gray-400 font-normal">(hasta {maxGuests})</span>
@@ -416,7 +547,7 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
                 </div>
                 {guestDiet && (
                   <select value={g.dietaryPreference || 'NONE'} onChange={(e) => updateGuest(i, 'dietaryPreference', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white">
-                    {dietOpts.map((o) => <option key={o.value} value={o.value}>Preferencia alimenticia: {o.label}</option>)}
+                    {ensureDietOption(dietOpts, g.dietaryPreference).map((o) => <option key={o.value} value={o.value}>Preferencia alimenticia: {o.label}</option>)}
                   </select>
                 )}
                 {guestDiet && isFreeTextDiet(g.dietaryPreference) && (
@@ -433,6 +564,55 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
           {openGuests.length < maxGuests && (
             <button type="button" onClick={addGuest} className="mt-2 text-sm font-medium" style={{ color: primary }}>+ Agregar invitado</button>
           )}
+        </div>
+      )}
+
+      {/* Modo 'count': solo el número de invitados. */}
+      {allowGuests && maxGuests > 0 && guestMode === 'count' && (
+        <div className="border-t border-gray-200 pt-5">
+          <label htmlFor="guestCount" className="block text-sm font-medium text-gray-700 mb-2">
+            ¿Cuántos invitados llevas? <span className="text-gray-400 font-normal">(hasta {maxGuests})</span>
+          </label>
+          <input
+            id="guestCount"
+            type="number"
+            min={0}
+            max={maxGuests}
+            value={countGuests}
+            onChange={(e) => setCountGuests(Math.max(0, Math.min(maxGuests, parseInt(e.target.value, 10) || 0)))}
+            className="block w-full sm:w-40 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+          />
+        </div>
+      )}
+
+      {/* Modo 'companion': acompañante (sí/no) + número de cargas. */}
+      {allowGuests && maxGuests > 0 && guestMode === 'companion' && (
+        <div className="border-t border-gray-200 pt-5 space-y-3">
+          <label className="block text-sm font-medium text-gray-700">
+            Invitados <span className="text-gray-400 font-normal">(hasta {maxGuests} en total)</span>
+          </label>
+          <label className="flex items-center gap-2 text-sm text-gray-700">
+            <input
+              type="checkbox"
+              checked={companion}
+              onChange={(e) => setCompanion(e.target.checked)}
+              className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+            />
+            Voy con acompañante
+          </label>
+          <div>
+            <label htmlFor="guestLoads" className="block text-sm text-gray-700 mb-1">Número de cargas</label>
+            <input
+              id="guestLoads"
+              type="number"
+              min={0}
+              max={Math.max(0, maxGuests - (companion ? 1 : 0))}
+              value={loads}
+              onChange={(e) => setLoads(Math.max(0, Math.min(Math.max(0, maxGuests - (companion ? 1 : 0)), parseInt(e.target.value, 10) || 0)))}
+              className="block w-full sm:w-40 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+            />
+          </div>
+          <p className="text-xs text-gray-500">Total de invitados: {(companion ? 1 : 0) + loads}</p>
         </div>
       )}
 

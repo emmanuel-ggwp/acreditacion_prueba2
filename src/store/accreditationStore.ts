@@ -23,9 +23,11 @@ interface AccreditationState {
   fetchActiveSchedules: () => Promise<void>;
   setScheduleStatus: (scheduleId: string, eventId: string, status: string) => Promise<void>;
   fetchAccreditations: (eventId: string, page: number, limit: number) => Promise<void>;
-  accreditParticipant: (participantId: string, eventScheduleId: string, accreditedById: string, notes?: string) => Promise<void>;
+  accreditParticipant: (participantId: string, eventScheduleId: string, accreditedById: string, notes?: string, guestCount?: number) => Promise<void>;
   accreditGuest: (guestId: string, eventScheduleId: string, accreditedById: string, notes?: string) => Promise<void>;
   verifyAccreditation: (type: 'participant' | 'guest', id: string, scheduleId: string) => Promise<{ isAccredited: boolean, accreditation: RichAccreditation | null }>;
+  unaccredit: (type: 'participant' | 'guest', id: string, scheduleId: string) => Promise<void>;
+  setGuestCount: (participantId: string, scheduleId: string, guestCount: number) => Promise<void>;
   getLastAccreditation: (eventId: string) => Promise<void>;
   getAccreditationStats: (eventId: string) => Promise<void>;
 }
@@ -70,7 +72,7 @@ const useAccreditationStore = create<AccreditationState>()(
         }
       },
 
-      accreditParticipant: async (participantId, eventScheduleId, accreditedById, notes) => {
+      accreditParticipant: async (participantId, eventScheduleId, accreditedById, notes, guestCount) => {
         set({ loading: true, error: null });
         try {
           const newAccreditation = await apiClient.post<RichAccreditation>(`/api/accreditations`, {
@@ -78,6 +80,7 @@ const useAccreditationStore = create<AccreditationState>()(
             id: participantId,
             scheduleId: eventScheduleId,
             notes,
+            guestCount,
           });
           set((state) => ({
             accreditations: [newAccreditation, ...state.accreditations],
@@ -107,6 +110,28 @@ const useAccreditationStore = create<AccreditationState>()(
             accreditationsToday: state.accreditationsToday + 1,
             loading: false,
           }));
+        } catch (error: any) {
+          set({ error: error.message, loading: false });
+          throw error;
+        }
+      },
+
+      unaccredit: async (type, id, scheduleId) => {
+        set({ loading: true, error: null });
+        try {
+          await apiClient.delete(`/api/accreditations`, { body: { type, id, scheduleId } });
+          set({ loading: false });
+        } catch (error: any) {
+          set({ error: error.message, loading: false });
+          throw error;
+        }
+      },
+
+      setGuestCount: async (participantId, scheduleId, guestCount) => {
+        set({ loading: true, error: null });
+        try {
+          await apiClient.patch(`/api/accreditations`, { type: 'participant', id: participantId, scheduleId, guestCount });
+          set({ loading: false });
         } catch (error: any) {
           set({ error: error.message, loading: false });
           throw error;

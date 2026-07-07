@@ -13,7 +13,7 @@ import { Clock } from 'lucide-react';
 import EventSchedule from '@/models/EventSchedule';
 import { showToast } from '@/components/ui/Toast';
 import GuestList from './GuestList';
-import { getFormFields, guestDietaryEnabled } from '@/utils/formFields';
+import { getFormFields, guestDietaryEnabled, getGuestMode } from '@/utils/formFields';
 import { getDietaryOptions } from '@/utils/dietary';
 
 const participantFormSchema = createParticipantSchema.extend({
@@ -38,6 +38,9 @@ const ParticipantForm: React.FC<ParticipantFormProps> = ({ eventId, participant,
   const ff = getFormFields(eventForCfg?.registrationConfig);
   const dietOpts = getDietaryOptions(eventForCfg?.registrationConfig);
   const guestDiet = guestDietaryEnabled(eventForCfg?.registrationConfig);
+  const guestMode = getGuestMode(eventForCfg?.registrationConfig);
+  const maxGuests = Number(eventForCfg?.maxGuestsPerParticipant) || 0;
+  const allowGuests = eventForCfg?.allowGuests !== false;
 
   const {
     register,
@@ -60,6 +63,9 @@ const ParticipantForm: React.FC<ParticipantFormProps> = ({ eventId, participant,
       position: participant?.position || '',
       numeroSap: (participant as any)?.numeroSap || '',
       allowedGuests: participant?.allowedGuests || 0,
+      guestCount: (participant as any)?.guestCount || 0,
+      guestCompanion: (participant as any)?.guestCompanion || false,
+      guestLoads: (participant as any)?.guestLoads || 0,
       allowMultipleSchedules: participant?.allowMultipleSchedules || false,
       dietaryPreference: participant?.dietaryPreference || 'NONE',
       dietaryComments: participant?.dietaryComments || '',
@@ -142,6 +148,9 @@ const ParticipantForm: React.FC<ParticipantFormProps> = ({ eventId, participant,
         position: currentParticipant.position || '',
         numeroSap: (currentParticipant as any).numeroSap || '',
         allowedGuests: currentParticipant.allowedGuests,
+        guestCount: (currentParticipant as any).guestCount || 0,
+        guestCompanion: (currentParticipant as any).guestCompanion || false,
+        guestLoads: (currentParticipant as any).guestLoads || 0,
         allowMultipleSchedules: (currentParticipant as any).allowMultipleSchedules || false,
         dietaryPreference: currentParticipant.dietaryPreference || 'NONE',
         dietaryComments: currentParticipant.dietaryComments || '',
@@ -153,7 +162,17 @@ const ParticipantForm: React.FC<ParticipantFormProps> = ({ eventId, participant,
   const onSubmit: SubmitHandler<ParticipantFormData> = async (data) => {
     try {
       // Remove eventId injection
-      const participantData = { ...data };
+      const participantData: any = { ...data };
+
+      // Invitados numéricos: normalizamos guestCount según el modo del evento.
+      if (allowGuests && maxGuests > 0) {
+        if (guestMode === 'companion') {
+          const total = ((data as any).guestCompanion ? 1 : 0) + (Number((data as any).guestLoads) || 0);
+          participantData.guestCount = Math.min(total, maxGuests);
+        } else if (guestMode === 'count') {
+          participantData.guestCount = Math.max(0, Math.min(Number((data as any).guestCount) || 0, maxGuests));
+        }
+      }
 
       if (isEffectiveEditMode) {
         const id = participant?.id || data.id;
@@ -243,6 +262,37 @@ const ParticipantForm: React.FC<ParticipantFormProps> = ({ eventId, participant,
             </div>
             )}
           </div>
+
+          {allowGuests && maxGuests > 0 && guestMode === 'count' && (
+            <div className="col-span-2">
+              <label htmlFor="guestCount" className="block text-sm font-medium text-gray-700 mb-1">N° de invitados <span className="text-gray-400 font-normal">(hasta {maxGuests})</span></label>
+              <input
+                id="guestCount"
+                type="number" min={0} max={maxGuests}
+                {...register('guestCount' as any, { setValueAs: (v) => (v === '' ? 0 : parseInt(v, 10) || 0) })}
+                className="block w-full sm:w-48 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+              />
+            </div>
+          )}
+
+          {allowGuests && maxGuests > 0 && guestMode === 'companion' && (
+            <div className="col-span-2 space-y-2">
+              <label className="block text-sm font-medium text-gray-700">Invitados <span className="text-gray-400 font-normal">(hasta {maxGuests} en total)</span></label>
+              <label className="flex items-center gap-2 text-sm text-gray-700">
+                <input type="checkbox" {...register('guestCompanion' as any)} className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
+                Va con acompañante
+              </label>
+              <div>
+                <label htmlFor="guestLoads" className="block text-sm text-gray-700 mb-1">N° de cargas</label>
+                <input
+                  id="guestLoads"
+                  type="number" min={0} max={maxGuests}
+                  {...register('guestLoads' as any, { setValueAs: (v) => (v === '' ? 0 : parseInt(v, 10) || 0) })}
+                  className="block w-full sm:w-48 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                />
+              </div>
+            </div>
+          )}
 
           <div className="col-span-2">
             <label className="block text-sm font-medium text-gray-700 mb-1">Horarios</label>

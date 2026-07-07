@@ -14,8 +14,8 @@ interface TemplateProps {
 
 export default function ModernTemplate({ event, slug }: TemplateProps) {
   const theme = (event.registrationConfig && event.registrationConfig.theme) || {};
-  const primary: string = theme.primaryColor || '#3b82f6';
-  const secondary: string = theme.secondaryColor || '#8b5cf6';
+  const primary: string = theme.primaryColor || '#7c93b3';
+  const secondary: string = theme.secondaryColor || '#475569';
   const formBg: string = theme.formBackgroundColor || '#ffffff';
   const hasBg = !!event.backgroundImageUrl;
   const overlayColor: string = theme.overlayColor || '#0f172a';
@@ -34,7 +34,7 @@ export default function ModernTemplate({ event, slug }: TemplateProps) {
     <div className="min-h-screen bg-slate-900 text-white flex flex-col lg:flex-row">
       {fontHref && <link rel="stylesheet" href={fontHref} />}
       {/* Panel izquierdo - Info */}
-      <div className="lg:w-1/3 p-12 flex flex-col justify-center relative overflow-hidden" style={leftStyle}>
+      <div className="lg:w-1/3 p-8 sm:p-10 lg:p-12 flex flex-col justify-center relative overflow-hidden" style={leftStyle}>
         {hasBg && <div className="absolute inset-0" style={{ backgroundColor: hexToRgba(overlayColor, overlay) }} aria-hidden="true" />}
         <div className="absolute top-0 left-0 w-full h-2" style={{ background: `linear-gradient(to right, ${primary}, ${secondary})` }} />
 
@@ -43,7 +43,7 @@ export default function ModernTemplate({ event, slug }: TemplateProps) {
             // eslint-disable-next-line @next/next/no-img-element
             <img src={event.logoUrl} alt={event.name} className="h-14 w-auto mb-8 drop-shadow-lg" />
           )}
-          <h1 className="text-4xl font-extrabold mb-6 tracking-tight" style={{ fontFamily: titleFont.stack }}>{event.name}</h1>
+          <h1 className="text-3xl sm:text-4xl font-extrabold mb-6 tracking-tight break-words" style={{ fontFamily: titleFont.stack }}>{event.name}</h1>
 
           {event.description && (
             <div className="mb-8 text-slate-200/90">
@@ -92,7 +92,7 @@ export default function ModernTemplate({ event, slug }: TemplateProps) {
       </div>
 
       {/* Panel derecho - Formulario */}
-      <div className="lg:w-2/3 text-slate-900 p-8 lg:p-12 overflow-y-auto" style={{ backgroundColor: formBg }}>
+      <div className="lg:w-2/3 text-slate-900 p-6 sm:p-8 lg:p-12 overflow-y-auto" style={{ backgroundColor: formBg }}>
         <div className="max-w-2xl mx-auto">
           <div className="mb-8">
             <h2 className="text-2xl font-bold text-slate-800">Asegura tu lugar</h2>

@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import useParticipantStore from '@/store/participantStore';
 import useEventStore from '@/store/eventStore';
 import useAuthStore from '@/store/authStore';
-import { PlusCircle, FileDown, FileUp, Edit, Trash2, Award, X } from 'lucide-react';
+import { PlusCircle, FileDown, FileUp, Edit, Trash2, Award, X, CheckCircle2, Clock } from 'lucide-react';
 import ParticipantSearch from './ParticipantSearch';
 import Participant from '@/models/Participant';
 import ParticipantForm from './ParticipantForm';
@@ -13,6 +13,8 @@ import ParticipantImport from './ParticipantImport';
 import { showToast } from '@/components/ui/Toast';
 import { exportParticipantsToExcel } from '@/utils/exportParticipants';
 import DeleteReasonModal from '@/components/ui/DeleteReasonModal';
+import { getGuestMode } from '@/utils/formFields';
+import { getDietaryOptions } from '@/utils/dietary';
 
 const fmtAccreditedAt = (d?: string | null) => {
   if (!d) return null;
@@ -204,9 +206,13 @@ const ParticipantList = ({ eventId }: { eventId: string }) => {
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{participant.documentNumber || '-'}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm">
                     {(participant as any).registered ? (
-                      <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">Inscrito</span>
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700" title="El participante ya se inscribió (tiene fecha)">
+                        <CheckCircle2 size={12} /> Inscrito
+                      </span>
                     ) : (
-                      <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">Precargado</span>
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700" title="Precargado: aún no se inscribe. Solo tiene acceso al formulario con su RUT.">
+                        <Clock size={12} /> Precargado
+                      </span>
                     )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
@@ -268,6 +274,8 @@ const ParticipantList = ({ eventId }: { eventId: string }) => {
       {isImportOpen && (
         <ParticipantImport
           eventId={eventId}
+          guestMode={getGuestMode((currentEvent as any)?.registrationConfig)}
+          dietaryOptions={getDietaryOptions((currentEvent as any)?.registrationConfig).filter((o) => o.value !== 'NONE').map((o) => o.label)}
           onClose={() => setIsImportOpen(false)}
           onImported={() => fetchParticipantsByEvent(eventId)}
         />

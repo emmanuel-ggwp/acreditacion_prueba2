@@ -124,6 +124,10 @@ export async function POST(
             numeroSap: (data as any).numeroSap ?? null,
             dietaryPreference: (data as any).dietaryPreference ?? 'NONE',
             dietaryComments: (data as any).dietaryComments ?? null,
+            // Invitados en modos numéricos (count / companion).
+            guestCount: (data as any).guestCount ?? 0,
+            guestCompanion: (data as any).guestCompanion ?? false,
+            guestLoads: (data as any).guestLoads ?? 0,
             eventId: event.id,
             createdBy: event.createdBy,
             registrationSource: 'PUBLIC_FORM',

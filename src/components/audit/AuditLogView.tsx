@@ -129,7 +129,7 @@ const AuditLogView: React.FC = () => {
                             </li>
                           ))}
                         </ul>
-                      ) : '—'}
+                      ) : (d.summary || '—')}
                     </td>
                     <td className="px-4 py-2 whitespace-nowrap">
                       {u.firstName ? `${u.firstName} ${u.lastName || ''}`.trim() : '—'}

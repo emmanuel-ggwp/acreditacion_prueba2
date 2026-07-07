@@ -24,6 +24,8 @@ class Accreditation extends Model {
   declare public checkInTime: Date;
   declare public checkOutTime: Date | null;
   declare public notes: string | null;
+  // Invitados que llegaron con el participante (modos 'count'/'companion'; en 'named' se usan filas Guest).
+  declare public guestCount: number;
 
   declare public readonly createdAt: Date;
   declare public readonly updatedAt: Date;
@@ -103,6 +105,11 @@ Accreditation.init(
     notes: {
       type: DataTypes.TEXT,
       allowNull: true,
+    },
+    guestCount: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 0,
     },
     createdAt: {
       type: DataTypes.DATE,

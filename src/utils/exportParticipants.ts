@@ -43,7 +43,9 @@ export async function exportParticipantsToExcel(eventId: string, eventName: stri
       'Requerimiento alimentario': dietaryFull(p.dietaryPreference, p.dietaryComments),
       'Premiado': p.isAwarded ? 'Sí' : 'No',
       'Motivo premio': p.awardReason || '',
-      'Cant. invitados': guests.length,
+      'Cant. invitados': guests.length + (Number(p.guestCount) || 0),
+      'Acompañante': p.guestCompanion ? 'Sí' : (Number(p.guestLoads) > 0 ? 'No' : ''),
+      'Cargas': Number(p.guestLoads) > 0 ? p.guestLoads : '',
       'Invitados': guests.map((g: any) => `${g.firstName} ${g.lastName || ''}`.trim()).join(' ; '),
     };
   });
