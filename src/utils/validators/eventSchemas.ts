@@ -22,14 +22,23 @@ export const formFieldConfigSchema = z.object({
 /** Opción de tipo de invitado (ej. { value: 'CARGA', label: 'Carga' }). */
 export const guestTypeOptionSchema = z.object({ value: z.string(), label: z.string() });
 
+/**
+ * Modo de declaración de invitados del evento:
+ * - 'named': con nombres (cada invitado es una fila con nombre/RUT/tipo). Comportamiento actual.
+ * - 'count': solo el número de invitados (sin nombres).
+ * - 'companion': si va con acompañante (sí/no) + número de cargas.
+ */
+export const guestModeEnum = z.enum(['named', 'count', 'companion']);
+
 /** Configuración de invitados por evento. */
 export const guestsConfigSchema = z.object({
   allowed: z.boolean().default(false),
   max: z.number().int().min(0).default(0),
+  mode: guestModeEnum.default('named'),
   typesEnabled: z.boolean().default(false),
   types: z.array(guestTypeOptionSchema).default([]),
   fields: z.array(formFieldConfigSchema).default([]),
-  // ¿Se pide preferencia alimenticia a cada invitado?
+  // ¿Se pide preferencia alimenticia a cada invitado? (solo aplica al modo 'named')
   dietary: z.boolean().optional(),
 });
 

@@ -46,6 +46,18 @@ export function getDietaryOptions(registrationConfig: any): DietOption[] {
 }
 
 /**
+ * Devuelve las opciones asegurando que el valor actual esté presente.
+ * Si el valor guardado (ej. importado "Vegano" o "Sin lactosa") no coincide con
+ * ninguna opción, lo agrega como su propia opción para que el <select> lo muestre.
+ */
+export function ensureDietOption(options: DietOption[], value: any): DietOption[] {
+  const v = (value ?? '').toString().trim();
+  if (!v || v === 'NONE') return options;
+  if (options.some((o) => o.value === v)) return options;
+  return [...options, { value: v, label: v }];
+}
+
+/**
  * ¿La opción elegida admite/necesita texto libre? (Alergia u Otro).
  * Se usa para mostrar el campo donde la persona escribe el detalle.
  */

@@ -49,6 +49,11 @@ export async function GET(
         email: p.email,
         phone: p.phone,
         documentNumber: p.documentNumber,
+        dietaryPreference: p.dietaryPreference,
+        dietaryComments: p.dietaryComments,
+        guestCount: p.guestCount,
+        guestCompanion: p.guestCompanion,
+        guestLoads: p.guestLoads,
       },
       guests: (p.guests || []).map((g: any) => ({
         id: g.id,
@@ -56,6 +61,7 @@ export async function GET(
         lastName: g.lastName,
         guestType: g.guestType,
         documentNumber: g.documentNumber,
+        dietaryPreference: g.dietaryPreference,
       })),
     });
   } catch (error: any) {

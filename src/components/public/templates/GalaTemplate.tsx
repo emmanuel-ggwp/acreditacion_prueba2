@@ -4,8 +4,9 @@ import React, { useState } from 'react';
 import { Calendar, MapPin, ArrowRight, CheckCircle2, Clock, Loader2, Info, Mail } from 'lucide-react';
 import { isValidRut } from '@/utils/validators/rut';
 import { sendConfirmationEmail } from '@/lib/emailjs';
-import { getFormFields, guestDietaryEnabled } from '@/utils/formFields';
-import { getDietaryOptions, isFreeTextDiet, dietaryFull } from '@/utils/dietary';
+import { buildGuestSummary } from '@/utils/guests';
+import { getFormFields, guestDietaryEnabled, getGuestMode } from '@/utils/formFields';
+import { getDietaryOptions, isFreeTextDiet, dietaryFull, dietaryLabel, ensureDietOption } from '@/utils/dietary';
 import { hexToRgba } from '@/utils/color';
 import { CONTACT_EMAIL } from '@/utils/contact';
 import { getTitleFont, googleFontHref } from '@/utils/fonts';
@@ -42,7 +43,7 @@ const blockTypeLabel = (t?: string) => {
   }
 };
 
-interface Carga { id: string; firstName: string; lastName?: string; guestType?: string; selected: boolean; }
+interface Carga { id: string; firstName: string; lastName?: string; guestType?: string; dietaryPreference?: string | null; selected: boolean; }
 
 export default function GalaTemplate({ event, slug }: TemplateProps) {
   const theme = (event.registrationConfig && event.registrationConfig.theme) || {};
@@ -80,6 +81,10 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
 
   // Modo abierto: invitados que agrega el asistente (hasta el máximo del evento)
   const maxGuests = Number(event.maxGuestsPerParticipant) || 0;
+  const guestMode = getGuestMode(event.registrationConfig);
+  const [countGuests, setCountGuests] = useState(0);
+  const [companion, setCompanion] = useState(false);
+  const [loads, setLoads] = useState(0);
   const [openGuests, setOpenGuests] = useState<{ firstName: string; lastName: string; dietaryPreference?: string; dietaryComments?: string }[]>([]);
   const addOpenGuest = () => setOpenGuests((g) => (g.length < maxGuests ? [...g, { firstName: '', lastName: '', dietaryPreference: 'NONE', dietaryComments: '' }] : g));
   const removeOpenGuest = (i: number) => setOpenGuests((g) => g.filter((_, idx) => idx !== i));
@@ -119,8 +124,8 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
       }
       const p = data.participant;
       setParticipantId(p.id);
-      setForm((f) => ({ ...f, firstName: p.firstName || '', lastName: p.lastName || '', email: p.email || '', phone: p.phone || '', documentNumber: p.documentNumber || rutInput }));
-      setCargas((data.guests || []).map((g: any) => ({ id: g.id, firstName: g.firstName, lastName: g.lastName, guestType: g.guestType, selected: false })));
+      setForm((f) => ({ ...f, firstName: p.firstName || '', lastName: p.lastName || '', email: p.email || '', phone: p.phone || '', documentNumber: p.documentNumber || rutInput, dietaryPreference: p.dietaryPreference || 'NONE', dietaryComments: p.dietaryComments || '' }));
+      setCargas((data.guests || []).map((g: any) => ({ id: g.id, firstName: g.firstName, lastName: g.lastName, guestType: g.guestType, dietaryPreference: g.dietaryPreference || null, selected: false })));
       const regIds: string[] = data.registeredScheduleIds || [];
       setAllowMultiple(!!data.allowMultiple);
       setRegisteredScheduleIds(regIds);
@@ -162,25 +167,40 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
         if (!val || val === '' || (key === 'dietary' && val === 'NONE')) missing.push(GALA_LABELS[key]);
       }
       if (missing.length) { setError('Completa los campos obligatorios: ' + missing.join(', ') + '.'); return; }
-      const openGuestList = openGuests
-        .filter((g) => g.firstName.trim())
-        .map((g) => {
-          const gd: any = {};
-          if (guestDiet) {
-            // El invitado no tiene columna de comentarios: la alergia/detalle se guarda dentro
-            // de dietaryPreference (ej.: "Alergia: maní").
-            gd.dietaryPreference = isFreeTextDiet(g.dietaryPreference) && (g.dietaryComments || '').trim()
-              ? dietaryFull(g.dietaryPreference, g.dietaryComments)
-              : (g.dietaryPreference || 'NONE');
-          }
-          return { firstName: g.firstName.trim(), lastName: g.lastName.trim() || undefined, guestType: 'ACOMPANANTE', ...gd };
-        });
+      // Invitados según el modo del evento.
+      let openGuestList: any[] = [];
+      const guestData: any = {};
+      if (event.allowGuests && maxGuests > 0) {
+        if (guestMode === 'count') {
+          guestData.guestCount = Math.max(0, Math.min(countGuests, maxGuests));
+        } else if (guestMode === 'companion') {
+          const total = (companion ? 1 : 0) + Math.max(0, loads);
+          guestData.guestCompanion = companion;
+          guestData.guestLoads = Math.max(0, loads);
+          guestData.guestCount = Math.min(total, maxGuests);
+        } else {
+          openGuestList = openGuests
+            .filter((g) => g.firstName.trim())
+            .map((g) => {
+              const gd: any = {};
+              if (guestDiet) {
+                // El invitado no tiene columna de comentarios: la alergia/detalle se guarda dentro
+                // de dietaryPreference (ej.: "Alergia: maní").
+                gd.dietaryPreference = isFreeTextDiet(g.dietaryPreference) && (g.dietaryComments || '').trim()
+                  ? dietaryFull(g.dietaryPreference, g.dietaryComments)
+                  : (g.dietaryPreference || 'NONE');
+              }
+              return { firstName: g.firstName.trim(), lastName: g.lastName.trim() || undefined, guestType: 'ACOMPANANTE', ...gd };
+            });
+        }
+      }
       payload = {
         firstName: form.firstName.trim(), lastName: form.lastName.trim(), email: form.email.trim(),
         phone: form.phone.trim() || undefined, documentNumber: form.documentNumber.trim() || undefined,
         company: form.company.trim() || undefined, position: form.position.trim() || undefined,
         numeroSap: form.numeroSap.trim() || undefined,
         ...(ff.dietary.enabled ? { dietaryPreference: form.dietaryPreference, dietaryComments: form.dietaryComments.trim() || undefined } : {}),
+        ...guestData,
         scheduleIds: [selectedScheduleId],
         guests: openGuestList,
       };
@@ -221,6 +241,8 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
               ]
             : openGuests.filter((g) => g.firstName.trim()).map((g) => `${g.firstName} ${g.lastName || ''}`.trim());
           const nombre = `${form.firstName} ${form.lastName}`.trim();
+          // Invitados según el modo del evento (un solo texto sirve para los 3 modos).
+          const gs = buildGuestSummary(guestMode, { names: guestsList, count: countGuests, companion, loads });
           await sendConfirmationEmail(templateId, {
             to_email: form.email,
             email: form.email,
@@ -230,8 +252,8 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
             schedule_name: schedule ? (schedule.label || schedule.scheduleName) : '',
             fechaEvento: schedule ? new Date(schedule.startDateTime).toLocaleDateString('es-CL') : '',
             lugarEvento: schedule?.location || '',
-            guests_count: String(guestsList.length),
-            guests_summary: guestsList.join(', '),
+            guests_count: String(gs.count),
+            guests_summary: gs.summary,
           });
         }
       } catch (_) {
@@ -494,7 +516,12 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
                     {cargas.map((c, idx) => (
                       <label key={c.id} className="flex items-center gap-3 p-3 rounded-xl cursor-pointer border" style={{ backgroundColor: 'rgba(255,255,255,0.06)', borderColor: 'rgba(255,255,255,0.2)' }}>
                         <input type="checkbox" checked={c.selected} onChange={(e) => setCargas((arr) => arr.map((x, i) => (i === idx ? { ...x, selected: e.target.checked } : x)))} className="w-5 h-5" style={{ accentColor: primary }} />
-                        <span className="text-white">{c.firstName} {c.lastName || ''}</span>
+                        <span className="text-white">
+                          {c.firstName} {c.lastName || ''}
+                          {c.dietaryPreference && dietaryLabel(c.dietaryPreference) !== 'Ninguna' && (
+                            <span className="text-white/60 text-xs ml-2">· {dietaryLabel(c.dietaryPreference)}</span>
+                          )}
+                        </span>
                       </label>
                     ))}
                   </div>
@@ -542,7 +569,7 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
                   <div className="md:col-span-2">
                     <label className="block text-white/80 text-sm mb-1">Preferencia alimenticia{ff.dietary.required ? ' *' : ''}</label>
                     <select className={inputClass} style={inputStyle} value={form.dietaryPreference} onChange={(e) => setField('dietaryPreference', e.target.value)}>
-                      {dietOpts.map((o) => <option key={o.value} value={o.value} style={{ color: '#111' }}>{o.label}</option>)}
+                      {ensureDietOption(dietOpts, form.dietaryPreference).map((o) => <option key={o.value} value={o.value} style={{ color: '#111' }}>{o.label}</option>)}
                     </select>
                     {isFreeTextDiet(form.dietaryPreference) && (
                       <input
@@ -557,7 +584,7 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
                 )}
               </div>
 
-              {event.allowGuests && maxGuests > 0 && (
+              {event.allowGuests && maxGuests > 0 && guestMode === 'named' && (
                 <div className="mt-5">
                   <p className="text-white font-semibold mb-2">Invitados <span className="text-white/60 text-sm font-normal">(hasta {maxGuests})</span></p>
                   {openGuests.map((g, i) => (
@@ -569,7 +596,7 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
                       </div>
                       {guestDiet && (
                         <select className={`${inputClass} mt-2`} style={inputStyle} value={g.dietaryPreference || 'NONE'} onChange={(e) => updateOpenGuest(i, 'dietaryPreference', e.target.value)}>
-                          {dietOpts.map((o) => <option key={o.value} value={o.value} style={{ color: '#111' }}>{`Preferencia alimenticia: ${o.label}`}</option>)}
+                          {ensureDietOption(dietOpts, g.dietaryPreference).map((o) => <option key={o.value} value={o.value} style={{ color: '#111' }}>{`Preferencia alimenticia: ${o.label}`}</option>)}
                         </select>
                       )}
                       {guestDiet && isFreeTextDiet(g.dietaryPreference) && (
@@ -586,6 +613,42 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
                   {openGuests.length < maxGuests && (
                     <button type="button" onClick={addOpenGuest} className="text-sm underline text-white/90 hover:text-white">+ Agregar invitado</button>
                   )}
+                </div>
+              )}
+
+              {/* Modo 'count': solo el número de invitados. */}
+              {event.allowGuests && maxGuests > 0 && guestMode === 'count' && (
+                <div className="mt-5">
+                  <p className="text-white font-semibold mb-2">¿Cuántos invitados llevas? <span className="text-white/60 text-sm font-normal">(hasta {maxGuests})</span></p>
+                  <input
+                    className={`${inputClass} sm:max-w-[10rem]`}
+                    style={inputStyle}
+                    type="number" min={0} max={maxGuests}
+                    value={countGuests}
+                    onChange={(e) => setCountGuests(Math.max(0, Math.min(maxGuests, parseInt(e.target.value, 10) || 0)))}
+                  />
+                </div>
+              )}
+
+              {/* Modo 'companion': acompañante (sí/no) + número de cargas. */}
+              {event.allowGuests && maxGuests > 0 && guestMode === 'companion' && (
+                <div className="mt-5 space-y-3">
+                  <p className="text-white font-semibold">Invitados <span className="text-white/60 text-sm font-normal">(hasta {maxGuests} en total)</span></p>
+                  <label className="flex items-center gap-2 text-white/90 text-sm">
+                    <input type="checkbox" checked={companion} onChange={(e) => setCompanion(e.target.checked)} className="h-4 w-4 rounded" />
+                    Voy con acompañante
+                  </label>
+                  <div>
+                    <p className="text-white/80 text-sm mb-1">Número de cargas</p>
+                    <input
+                      className={`${inputClass} sm:max-w-[10rem]`}
+                      style={inputStyle}
+                      type="number" min={0} max={Math.max(0, maxGuests - (companion ? 1 : 0))}
+                      value={loads}
+                      onChange={(e) => setLoads(Math.max(0, Math.min(Math.max(0, maxGuests - (companion ? 1 : 0)), parseInt(e.target.value, 10) || 0)))}
+                    />
+                  </div>
+                  <p className="text-white/60 text-xs">Total de invitados: {(companion ? 1 : 0) + loads}</p>
                 </div>
               )}
             </>

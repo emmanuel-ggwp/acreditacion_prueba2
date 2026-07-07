@@ -1,7 +1,8 @@
 
 import { z } from 'zod';
-import { Op, fn, col } from 'sequelize';
+import { Op, fn, col, where as sqlWhere } from 'sequelize';
 import { sequelize } from '@/lib/sequelize';
+import { formatRut, isValidRut } from '@/utils/validators/rut';
 import {
   Participant,
   Guest,
@@ -136,32 +137,54 @@ export class ParticipantService {
       if (!schedule) throw new Error('Schedule not found for this event');
     }
 
-    const results = { created: 0, reused: 0, guestsCreated: 0, errors: [] as { row: number; error: string }[] };
+    const results = { created: 0, reused: 0, guestsCreated: 0, errors: [] as { row: number; rut?: string; name?: string; error: string }[] };
 
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i] || {};
       const { guests = [], ...pdata } = row;
       const tx = await sequelize.transaction();
       try {
-        if (!pdata.firstName || !pdata.email) {
-          throw new Error('Faltan campos obligatorios: nombre y correo');
+        // Solo el RUT es obligatorio. El resto (nombre, correo, etc.) es opcional.
+        if (!pdata.documentNumber || !String(pdata.documentNumber).trim()) {
+          throw new Error('Falta el RUT (es el único campo obligatorio).');
         }
 
-        const orConds: any[] = [{ email: pdata.email }];
-        if (pdata.documentNumber) orConds.push({ documentNumber: pdata.documentNumber });
+        // Dedup por RUT NORMALIZADO (sin puntos, guion ni espacios), así
+        // 28088678-5 = 28.088.678-5 = 280886785 se tratan como la misma persona.
+        const normRut = String(pdata.documentNumber).replace(/[.\-\s]/g, '').toUpperCase();
+        const rutMatch = sqlWhere(
+          fn('UPPER', fn('REPLACE', fn('REPLACE', fn('REPLACE', col('document_number'), '.', ''), '-', ''), ' ', '')),
+          normRut
+        );
+        const orConds: any[] = [rutMatch];
+        if (pdata.email) orConds.push({ email: pdata.email });
         let participant = await Participant.findOne({ where: { eventId, [Op.or]: orConds }, transaction: tx });
 
+        // RUT canónico para guardar (12.345.678-5). Si no es un RUT chileno válido, se deja tal cual.
+        const canonicalRut = isValidRut(pdata.documentNumber) ? formatRut(pdata.documentNumber) : String(pdata.documentNumber).trim();
+
         if (!participant) {
+          // Invitados en modos numéricos (count / companion). "Acompañante" acepta sí/si/x/1.
+          const companionVal = /^(s[ií]|si|yes|y|true|1|x)$/i.test(String(pdata.guestCompanion ?? '').trim());
+          const loadsVal = Number(pdata.guestLoads) || 0;
+          const hasCompanionData = pdata.guestCompanion !== undefined || pdata.guestLoads !== undefined;
+          const countVal = hasCompanionData ? (companionVal ? 1 : 0) + loadsVal : (Number(pdata.guestCount) || 0);
+
           participant = await Participant.create({
-            firstName: pdata.firstName,
+            firstName: pdata.firstName || '',
             lastName: pdata.lastName || '',
-            email: pdata.email,
-            documentNumber: pdata.documentNumber || null,
+            email: pdata.email || null,
+            documentNumber: canonicalRut || null,
             phone: pdata.phone || null,
             company: pdata.company || null,
             position: pdata.position || null,
             numeroSap: pdata.numeroSap || null,
+            dietaryPreference: (pdata.dietaryPreference && String(pdata.dietaryPreference).trim()) || 'NONE',
+            dietaryComments: pdata.dietaryComments || null,
             allowedGuests: Number(pdata.allowedGuests) || (Array.isArray(guests) ? guests.length : 0),
+            guestCount: countVal,
+            guestCompanion: companionVal,
+            guestLoads: loadsVal,
             eventId,
             createdBy,
             registrationSource: 'IMPORT',
@@ -185,8 +208,9 @@ export class ParticipantService {
             participantId: participant.id,
             firstName: g.firstName,
             lastName: g.lastName || null,
-            documentNumber: g.documentNumber || null,
+            documentNumber: g.documentNumber ? (isValidRut(g.documentNumber) ? formatRut(g.documentNumber) : String(g.documentNumber).trim()) : null,
             guestType: g.guestType || null,
+            dietaryPreference: (g.dietaryPreference && String(g.dietaryPreference).trim()) || null,
             confirmed: !!schedule,
             scheduleId: schedule ? schedule.id : null,
           } as any, { transaction: tx });
@@ -196,9 +220,37 @@ export class ParticipantService {
         await tx.commit();
       } catch (e: any) {
         await tx.rollback();
-        results.errors.push({ row: i + 1, error: e.message });
+        results.errors.push({
+          row: i + 1,
+          rut: pdata.documentNumber ? String(pdata.documentNumber) : '',
+          name: `${pdata.firstName || ''} ${pdata.lastName || ''}`.trim(),
+          error: e.message,
+        });
       }
     }
+
+    // Log de auditoría de la importación (carga masiva o precarga).
+    const scheduleLabel = schedule
+      ? `${schedule.scheduleName || 'Fecha'}${schedule.startDateTime ? ' · ' + new Date(schedule.startDateTime).toLocaleString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''}${schedule.location ? ' · ' + schedule.location : ''}`
+      : 'Sin fecha (precarga)';
+    await auditLogService.log({
+      userId: createdBy,
+      action: 'CREATE',
+      entity: 'Participant',
+      entityId: eventId,
+      details: {
+        name: `Importación de participantes — ${event.name}`,
+        summary: `${schedule ? 'Carga masiva (inscritos)' : 'Precarga'} · Fecha: ${scheduleLabel} · ${results.created} creados, ${results.reused} reusados, ${results.guestsCreated} invitados, ${results.errors.length} con error (de ${rows.length} filas)`,
+        operacion: schedule ? 'Carga masiva (inscritos)' : 'Precarga',
+        evento: event.name,
+        fecha: scheduleLabel,
+        creados: results.created,
+        reusados: results.reused,
+        invitados: results.guestsCreated,
+        errores: results.errors.length,
+        totalFilas: rows.length,
+      },
+    });
 
     return results;
   }

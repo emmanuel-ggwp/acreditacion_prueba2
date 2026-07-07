@@ -13,7 +13,7 @@ interface TemplateProps {
 
 export default function DefaultTemplate({ event, slug }: TemplateProps) {
   const theme = (event.registrationConfig && event.registrationConfig.theme) || {};
-  const primary = theme.primaryColor || '#4f46e5';
+  const primary = theme.primaryColor || '#1e293b';
   const formBg = theme.formBackgroundColor || '#ffffff';
   const textColor = theme.textColor || '#111827';
   const hasBg = !!event.backgroundImageUrl;
@@ -45,8 +45,8 @@ export default function DefaultTemplate({ event, slug }: TemplateProps) {
 
         <div className="shadow-xl rounded-2xl overflow-hidden" style={{ backgroundColor: formBg }}>
           {/* Header / Banner */}
-          <div className="px-8 py-10 text-white" style={{ backgroundColor: primary }}>
-            <h1 className="text-3xl font-bold mb-2" style={{ fontFamily: titleFont.stack }}>{event.name}</h1>
+          <div className="px-6 py-8 sm:px-8 sm:py-10 text-white" style={{ backgroundColor: primary }}>
+            <h1 className="text-2xl sm:text-3xl font-bold mb-2 break-words" style={{ fontFamily: titleFont.stack }}>{event.name}</h1>
             <div className="flex flex-wrap gap-4 text-white/80 text-sm font-medium">
               {headerSel ? (
                 <div className="flex items-center">
@@ -74,7 +74,7 @@ export default function DefaultTemplate({ event, slug }: TemplateProps) {
           </div>
 
           {/* Content */}
-          <div className="px-8 py-8" style={{ color: textColor }}>
+          <div className="px-5 py-7 sm:px-8 sm:py-8" style={{ color: textColor }}>
             {event.description && (
               <div className="prose mb-8" style={{ color: textColor }}>
                 <p>{event.description}</p>

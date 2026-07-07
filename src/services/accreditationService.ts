@@ -79,8 +79,8 @@ export class AccreditationService {
     return { schedule, person };
   }
 
-  async accreditParticipant(participantId: string, eventScheduleId: string, accreditedBy: string, notes?: string) {
-    
+  async accreditParticipant(participantId: string, eventScheduleId: string, accreditedBy: string, notes?: string, guestCount?: number) {
+
     const transaction = await sequelize.transaction();
     try {
       await this._verifyAndLock({ participantId, eventScheduleId }, transaction);
@@ -91,6 +91,8 @@ export class AccreditationService {
         accreditedBy,
         checkInTime: new Date(),
         notes,
+        // Invitados que llegaron (modos numéricos count/companion; en 'named' se acreditan aparte).
+        guestCount: Math.max(0, Number(guestCount) || 0),
       }, { transaction });
 
       await auditLogService.log({
@@ -137,6 +139,51 @@ export class AccreditationService {
       await transaction.rollback();
       throw error;
     }
+  }
+
+  // Des-acreditar un participante: elimina su acreditación y la de sus invitados en ese horario.
+  async unaccreditParticipant(participantId: string, eventScheduleId: string, accreditedBy: string) {
+    const transaction = await sequelize.transaction();
+    try {
+      const guests = await Guest.findAll({ where: { participantId }, attributes: ['id'], transaction });
+      const guestIds = guests.map((g: any) => g.id);
+      const where: any = {
+        eventScheduleId,
+        [Op.or]: [{ participantId }, ...(guestIds.length ? [{ guestId: { [Op.in]: guestIds } }] : [])],
+      };
+      const removed = await Accreditation.destroy({ where, transaction });
+      await auditLogService.log({
+        userId: accreditedBy, action: 'DELETE', entity: 'Accreditation', entityId: participantId,
+        details: { participantId, eventScheduleId, removed },
+      });
+      await transaction.commit();
+      return { removed };
+    } catch (error) {
+      await transaction.rollback();
+      throw error;
+    }
+  }
+
+  // Des-acreditar un invitado puntual (corregir su asistencia sin tocar al participante).
+  async unaccreditGuest(guestId: string, eventScheduleId: string, accreditedBy: string) {
+    const removed = await Accreditation.destroy({ where: { guestId, eventScheduleId } });
+    await auditLogService.log({
+      userId: accreditedBy, action: 'DELETE', entity: 'Accreditation', entityId: guestId,
+      details: { guestId, eventScheduleId, removed },
+    });
+    return { removed };
+  }
+
+  // Editar cuántos invitados llegaron (modos numéricos count/companion).
+  async setAccreditationGuestCount(participantId: string, eventScheduleId: string, guestCount: number, accreditedBy: string) {
+    const acc = await Accreditation.findOne({ where: { participantId, eventScheduleId } });
+    if (!acc) throw new Error('El participante no está acreditado en este horario.');
+    await acc.update({ guestCount: Math.max(0, Number(guestCount) || 0) });
+    await auditLogService.log({
+      userId: accreditedBy, action: 'UPDATE', entity: 'Accreditation', entityId: (acc as any).id,
+      details: { participantId, eventScheduleId, guestCount },
+    });
+    return acc;
   }
 
   async bulkAccredit(accreditations: z.infer<typeof bulkAccreditationSchema>, accreditedBy: string) {
@@ -241,12 +288,14 @@ export class AccreditationService {
       attributes: [
         [fn('COUNT', fn('DISTINCT', col('participant_id'))), 'participants'],
         [fn('COUNT', fn('DISTINCT', col('guest_id'))), 'guests'],
+        [fn('COALESCE', fn('SUM', col('guest_count')), 0), 'guestCountSum'],
       ],
       raw: true,
-    }) as unknown as Array<{ participants: any; guests: any }>;
+    }) as unknown as Array<{ participants: any; guests: any; guestCountSum: any }>;
 
     const participants = Number(rows[0]?.participants || 0);
-    const guests = Number(rows[0]?.guests || 0);
+    // Invitados = filas con nombre (guest_id) + invitados numéricos (suma de guest_count).
+    const guests = Number(rows[0]?.guests || 0) + Number(rows[0]?.guestCountSum || 0);
     const awarded = await Participant.count({ where: { eventId: (schedule as any).eventId, isAwarded: true } });
 
     return { participants, guests, total: participants + guests, awarded };
@@ -269,12 +318,16 @@ export class AccreditationService {
           'eventScheduleId',
           [fn('COUNT', fn('DISTINCT', col('participant_id'))), 'participants'],
           [fn('COUNT', fn('DISTINCT', col('guest_id'))), 'guests'],
+          [fn('COALESCE', fn('SUM', col('guest_count')), 0), 'guestCountSum'],
         ],
         group: ['eventScheduleId'],
         raw: true,
-      }) as unknown as Array<{ eventScheduleId: string; participants: any; guests: any }>;
+      }) as unknown as Array<{ eventScheduleId: string; participants: any; guests: any; guestCountSum: any }>;
       for (const r of rows) {
-        counts[r.eventScheduleId] = { participants: Number(r.participants || 0), guests: Number(r.guests || 0) };
+        counts[r.eventScheduleId] = {
+          participants: Number(r.participants || 0),
+          guests: Number(r.guests || 0) + Number(r.guestCountSum || 0),
+        };
       }
     }
 

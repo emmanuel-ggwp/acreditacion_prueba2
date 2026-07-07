@@ -42,6 +42,11 @@ class Participant extends Model {
   declare public dietaryPreference: string;
   declare public dietaryComments: string | null;
   declare public allowedGuests: number;
+  // Invitados declarados en modos numéricos (ver registrationConfig.guests.mode):
+  // 'count' -> guestCount = total; 'companion' -> guestCompanion (sí/no) + guestLoads (cargas), y guestCount = total.
+  declare public guestCount: number;
+  declare public guestCompanion: boolean;
+  declare public guestLoads: number;
   declare public registrationSource: 'MANUAL' | 'IMPORT' | 'PUBLIC_FORM';
   declare public isNew: boolean;
   declare public eventId: string | null;
@@ -99,8 +104,11 @@ Participant.init(
       allowNull: false,
     },
     email: {
+      // Opcional: en precargas/cargas masivas puede venir vacío (solo el RUT es obligatorio).
+      // Sequelize omite los validadores cuando el valor es null, así que un correo ausente
+      // no falla; si viene un correo, se valida el formato.
       type: DataTypes.STRING,
-      allowNull: false,
+      allowNull: true,
       validate: {
         isEmail: true,
       },
@@ -137,6 +145,21 @@ Participant.init(
     },
     allowedGuests: {
       type: DataTypes.INTEGER,
+      defaultValue: 0,
+    },
+    guestCount: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 0,
+    },
+    guestCompanion: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+    },
+    guestLoads: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
       defaultValue: 0,
     },
     registrationSource: {

@@ -18,6 +18,10 @@ export const participantSchema = z.object({
   dietaryPreference: z.string().optional(),
   dietaryComments: z.string().optional().nullable(),
   allowedGuests: z.number().int().min(0).default(0),
+  // Invitados en modos numéricos (registrationConfig.guests.mode).
+  guestCount: z.number().int().min(0).optional(),
+  guestCompanion: z.boolean().optional(),
+  guestLoads: z.number().int().min(0).optional(),
   customData: z.any().optional().nullable(),
   isAwarded: z.boolean().optional(),
   awardReason: z.string().optional().nullable(),

@@ -119,13 +119,13 @@ const ImageUploadField: React.FC<{
 const TEMPLATE_PALETTES: Record<string, Record<string, string | number>> = {
   // Predeterminada: índigo clásico y neutro.
   default: {
-    primaryColor: '#4f46e5', secondaryColor: '#6366f1', buttonColor: '#4f46e5',
-    textColor: '#111827', inputColor: '#f9fafb', borderColor: '#e5e7eb',
-    formBackgroundColor: '#ffffff', overlayColor: '#000000', overlayOpacity: 0.5, titleFont: 'montserrat',
+    primaryColor: '#1e293b', secondaryColor: '#334155', buttonColor: '#1e293b',
+    textColor: '#111827', inputColor: '#f8fafc', borderColor: '#e2e8f0',
+    formBackgroundColor: '#ffffff', overlayColor: '#0f172a', overlayOpacity: 0.55, titleFont: 'montserrat',
   },
   // Moderno: azul/violeta vibrante sobre panel oscuro.
   modern: {
-    primaryColor: '#3b82f6', secondaryColor: '#8b5cf6', buttonColor: '#6366f1',
+    primaryColor: '#7c93b3', secondaryColor: '#475569', buttonColor: '#334155',
     textColor: '#0f172a', inputColor: '#f1f5f9', borderColor: '#cbd5e1',
     formBackgroundColor: '#ffffff', overlayColor: '#0f172a', overlayOpacity: 0.6, titleFont: 'poppins',
   },
@@ -177,20 +177,22 @@ const EventForm: React.FC<EventFormProps> = ({ event, onClose, onSuccess }) => {
         ...(event?.registrationConfig || {}),
         mode: event?.registrationConfig?.mode || 'open',
         theme: {
-          primaryColor: '#4f46e5',
-          secondaryColor: '#6366f1',
-          buttonColor: '#4f46e5',
+          primaryColor: '#1e293b',
+          secondaryColor: '#334155',
+          buttonColor: '#1e293b',
           textColor: '#111827',
-          inputColor: '#f9fafb',
-          borderColor: '#e5e7eb',
+          inputColor: '#f8fafc',
+          borderColor: '#e2e8f0',
           formBackgroundColor: '#ffffff',
-          overlayOpacity: 0.5,
+          overlayColor: '#0f172a',
+          overlayOpacity: 0.55,
           titleFont: 'montserrat',
           ...((event?.registrationConfig?.theme) || {}),
         },
         formFields: getFormFields(event?.registrationConfig),
         guests: {
           ...(event?.registrationConfig?.guests || {}),
+          mode: event?.registrationConfig?.guests?.mode || 'named',
           dietary: !!event?.registrationConfig?.guests?.dietary,
         },
         dietaryOptions: (event?.registrationConfig?.dietaryOptions && event.registrationConfig.dietaryOptions.length)
@@ -407,6 +409,29 @@ const EventForm: React.FC<EventFormProps> = ({ event, onClose, onSuccess }) => {
                 />
                 {errors.maxGuestsPerParticipant && <p className="mt-2 text-sm text-red-500">{errors.maxGuestsPerParticipant.message}</p>}
               </div>
+
+              {/* Modo de invitados */}
+              {watch('allowGuests') && (
+                <div className="sm:col-span-2">
+                  <label htmlFor="guestMode" className="block text-sm font-semibold text-gray-700 mb-1">
+                    Cómo se registran los invitados
+                  </label>
+                  <select
+                    id="guestMode"
+                    {...register('registrationConfig.guests.mode' as any)}
+                    className="block w-full rounded-xl border-gray-200 bg-gray-50 px-4 py-3 text-gray-900 focus:border-indigo-500 focus:bg-white focus:ring-2 focus:ring-indigo-500/20 transition-all duration-200 sm:text-sm"
+                  >
+                    <option value="named">Con nombres — cada invitado con su nombre (y RUT/tipo)</option>
+                    <option value="count">Solo número — cuántos invitados lleva (sin nombres)</option>
+                    <option value="companion">Acompañante + cargas — si va con acompañante (sí/no) y número de cargas</option>
+                  </select>
+                  <p className="mt-1 text-xs text-gray-500">
+                    {watch('registrationConfig.guests.mode' as any) === 'count' && 'El asistente solo indica cuántos invitados lleva.'}
+                    {watch('registrationConfig.guests.mode' as any) === 'companion' && 'El asistente indica si va con acompañante y cuántas cargas lleva.'}
+                    {(watch('registrationConfig.guests.mode' as any) === 'named' || !watch('registrationConfig.guests.mode' as any)) && 'Cada invitado se ingresa con su nombre; se pueden acreditar uno por uno.'}
+                  </p>
+                </div>
+              )}
 
               {/* Landing Design Section */}
               <div className="sm:col-span-2 border-t border-gray-100 pt-6 mt-2">

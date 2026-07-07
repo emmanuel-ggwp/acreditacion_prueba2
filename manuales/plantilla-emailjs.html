@@ -76,9 +76,11 @@
                 <span class="email-label" style="color:#1E3A8A; font-weight:700;">Lugar:</span>
                 <span class="email-value" style="color:#1f2937;"> {{lugarEvento}}</span>
               </td></tr>
+              <!-- Invitados: {{guests_summary}} se adapta al modo del evento
+                   (nombres / solo número / acompañante + cargas). -->
               <tr><td style="padding:6px 16px 14px;">
                 <span class="email-label" style="color:#1E3A8A; font-weight:700;">Invitados:</span>
-                <span class="email-value" style="color:#1f2937;"> {{guests_count}}</span>
+                <span class="email-value" style="color:#1f2937;"> {{guests_summary}}</span>
               </td></tr>
             </table>
 
@@ -96,7 +98,7 @@
         <!-- Pie -->
         <tr>
           <td class="email-footer" style="text-align:center; color:#9aa1ad; font-size:12px; line-height:1.6; padding:4px 28px 24px;">
-            © 2025 Grupo LoCastillo. Todos los derechos reservados.<br>
+            © 2026 Grupo LoCastillo. Todos los derechos reservados.<br>
             Este es un correo informativo. No respondas a esta dirección.
           </td>
         </tr>

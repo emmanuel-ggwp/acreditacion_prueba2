@@ -11,12 +11,12 @@ const { ADMIN, OPERATOR, GUARD } = ROLES;
 export const POST = withAuth(async (req: AuthenticatedRequest) => {
   try {
     const body = await req.json();
-    const { type, id, scheduleId, notes } = body;
+    const { type, id, scheduleId, notes, guestCount } = body;
     const accreditedBy = req.user.id;
     let accreditation;
 
     if (type === 'participant') {
-      accreditation = await accreditationService.accreditParticipant(id, scheduleId, accreditedBy, notes);
+      accreditation = await accreditationService.accreditParticipant(id, scheduleId, accreditedBy, notes, guestCount);
     } else if (type === 'guest') {
       accreditation = await accreditationService.accreditGuest(id, scheduleId, accreditedBy, notes);
     } else {
@@ -48,6 +48,45 @@ export const GET = withAuth(async (req: AuthenticatedRequest) => {
     return NextResponse.json({ message: error.message }, { status: 500 });
   }
 }, [ADMIN, OPERATOR]);
+
+// Des-acreditar (corregir errores): elimina la acreditación de un participante (y sus invitados) o de un invitado.
+export const DELETE = withAuth(async (req: AuthenticatedRequest) => {
+  try {
+    const body = await req.json();
+    const { type, id, scheduleId } = body;
+    const accreditedBy = req.user.id;
+    if (!id || !scheduleId) {
+      return NextResponse.json({ message: 'id y scheduleId son requeridos' }, { status: 400 });
+    }
+    let result;
+    if (type === 'participant') {
+      result = await accreditationService.unaccreditParticipant(id, scheduleId, accreditedBy);
+    } else if (type === 'guest') {
+      result = await accreditationService.unaccreditGuest(id, scheduleId, accreditedBy);
+    } else {
+      return NextResponse.json({ message: 'Invalid accreditation type' }, { status: 400 });
+    }
+    return NextResponse.json(result);
+  } catch (error: any) {
+    return NextResponse.json({ message: error.message }, { status: 400 });
+  }
+}, [ADMIN, OPERATOR, GUARD]);
+
+// Editar cuántos invitados llegaron (modos numéricos count/companion).
+export const PATCH = withAuth(async (req: AuthenticatedRequest) => {
+  try {
+    const body = await req.json();
+    const { id, scheduleId, guestCount } = body;
+    const accreditedBy = req.user.id;
+    if (!id || !scheduleId) {
+      return NextResponse.json({ message: 'id y scheduleId son requeridos' }, { status: 400 });
+    }
+    const result = await accreditationService.setAccreditationGuestCount(id, scheduleId, Number(guestCount) || 0, accreditedBy);
+    return NextResponse.json(result);
+  } catch (error: any) {
+    return NextResponse.json({ message: error.message }, { status: 400 });
+  }
+}, [ADMIN, OPERATOR, GUARD]);
 
 export const PUT = withAuth(async (req: AuthenticatedRequest) => {
   try {

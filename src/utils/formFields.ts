@@ -38,7 +38,15 @@ export function getFormFields(registrationConfig: any): FormFieldsConfig {
   return out;
 }
 
-/** ¿Se pide preferencia alimenticia a cada invitado? */
+/** ¿Se pide preferencia alimenticia a cada invitado? (solo modo 'named') */
 export function guestDietaryEnabled(registrationConfig: any): boolean {
-  return !!registrationConfig?.guests?.dietary;
+  return getGuestMode(registrationConfig) === 'named' && !!registrationConfig?.guests?.dietary;
+}
+
+export type GuestMode = 'named' | 'count' | 'companion';
+
+/** Modo de declaración de invitados del evento (default 'named'). */
+export function getGuestMode(registrationConfig: any): GuestMode {
+  const m = registrationConfig?.guests?.mode;
+  return m === 'count' || m === 'companion' ? m : 'named';
 }
