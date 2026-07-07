@@ -9,7 +9,6 @@ import { getFormFields, guestDietaryEnabled, getGuestMode } from '@/utils/formFi
 import { getDietaryOptions, isFreeTextDiet, dietaryFull, ensureDietOption } from '@/utils/dietary';
 import { sendConfirmationEmail } from '@/lib/emailjs';
 import { buildGuestSummary } from '@/utils/guests';
-import { isValidRut } from '@/utils/validators/rut';
 import DateSelectModal from '@/components/public/DateSelectModal';
 import { CONTACT_EMAIL } from '@/utils/contact';
 import { Loader2, CheckCircle, AlertCircle, Calendar, ChevronDown, ShieldCheck } from 'lucide-react';
@@ -88,9 +87,8 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
     watch,
     setValue
   } = useForm<PublicRegistrationFormData>({
-    resolver: zodResolver(publicRegistrationSchema),
+    resolver: zodResolver(publicRegistrationSchema) as any,
     defaultValues: {
-      allowedGuests: 0,
       // Con una sola fecha disponible se pre-selecciona; con varias se deja vacío
       // para que el asistente abra el modal y elija (más claro).
       scheduleIds: availableSchedules.length === 1 ? [availableSchedules[0].id] : []
@@ -100,7 +98,9 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
   // Reja de RUT (modo 'rut'): busca al participante precargado y precarga sus datos.
   const doLookup = async () => {
     setLookupError('');
-    if (!isValidRut(rutInput)) { setLookupError('Ingresa un RUT válido (ej. 12345678-9).'); return; }
+    // No exigimos validez matemática del RUT: la reja solo debe ENCONTRAR al precargado.
+    // (Así funcionan RUT de personas mayores, documentos extranjeros o listas de empresas.)
+    if (rutInput.replace(/[.\-\s]/g, '').trim().length < 2) { setLookupError('Ingresa tu RUT.'); return; }
     setLookupLoading(true);
     try {
       const res = await fetch(`/api/public/events/${slug}/lookup?rut=${encodeURIComponent(rutInput)}`);
@@ -345,7 +345,7 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
       variant={variant}
       accent={btnColor}
     />
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-6 apf-form">
+    <form onSubmit={handleSubmit(onSubmit as any)} className="space-y-6 apf-form">
       {error && (
         <div className="bg-red-50 border-l-4 border-red-400 p-4 mb-6">
           <div className="flex">

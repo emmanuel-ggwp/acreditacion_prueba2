@@ -11,6 +11,7 @@ import { LogoMark } from '@/components/ui/Logo';
 const Header: React.FC<{ onToggleSidebar: () => void; isSidebarOpen: boolean }> = ({ onToggleSidebar, isSidebarOpen }) => {
   const { user, logout } = useAuthStore();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const displayName = [user?.firstName, user?.lastName].filter(Boolean).join(' ') || user?.username || user?.email;
 
   const handleLogout = () => {
     logout();
@@ -49,13 +50,14 @@ const Header: React.FC<{ onToggleSidebar: () => void; isSidebarOpen: boolean }> 
         <div className="relative">
           <button onClick={() => setIsMenuOpen(!isMenuOpen)} className="flex items-center space-x-2">
             <User className="text-gray-600" />
-            <span className="hidden md:block text-sm font-medium text-gray-700">{user?.username}</span>
+            <span className="hidden md:block text-sm font-medium text-gray-700">{displayName}</span>
           </button>
           {isMenuOpen && (
-            <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 ring-1 ring-black ring-opacity-5">
+            <div className="absolute right-0 mt-2 w-56 bg-white rounded-md shadow-lg py-1 ring-1 ring-black ring-opacity-5">
               <div className="px-4 py-2 text-sm text-gray-700 border-b">
-                <p className="font-semibold">{user?.username}</p>
-                <p className="text-xs text-gray-500">{user?.role}</p>
+                <p className="font-semibold">{displayName}</p>
+                {user?.email && <p className="text-xs text-gray-500 truncate">{user.email}</p>}
+                <p className="text-xs text-gray-400">{user?.role}</p>
               </div>
               <Link href="/profile" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Mi perfil</Link>
               <button onClick={handleLogout} className="w-full text-left flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">

@@ -35,7 +35,7 @@ describe('POST /api/auth/login', () => {
       headers: { 'Content-Type': 'application/json' },
     });
 
-    const response = await POST(request);
+    const response = await POST(request as any);
     const body = await response.json();
 
     expect(response.status).toBe(200);
@@ -55,7 +55,7 @@ describe('POST /api/auth/login', () => {
         headers: { 'Content-Type': 'application/json' },
       });
 
-    const response = await POST(request);
+    const response = await POST(request as any);
     const body = await response.json();
 
     expect(response.status).toBe(401);
@@ -71,7 +71,7 @@ describe('POST /api/auth/login', () => {
         headers: { 'Content-Type': 'application/json' },
       });
 
-    const response = await POST(request);
+    const response = await POST(request as any);
     const body = await response.json();
 
     expect(response.status).toBe(400);

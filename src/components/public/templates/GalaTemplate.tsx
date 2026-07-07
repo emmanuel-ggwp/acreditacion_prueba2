@@ -112,7 +112,8 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
   // ---- Lookup por RUT ----
   const doLookup = async () => {
     setLookupError('');
-    if (!isValidRut(rutInput)) { setLookupError('Ingresa un RUT válido (ej. 12345678-9).'); return; }
+    // No exigimos validez matemática del RUT: la reja solo debe ENCONTRAR al precargado.
+    if (rutInput.replace(/[.\-\s]/g, '').trim().length < 2) { setLookupError('Ingresa tu RUT.'); return; }
     setLookupLoading(true);
     try {
       const res = await fetch(`/api/public/events/${slug}/lookup?rut=${encodeURIComponent(rutInput)}`);
@@ -150,11 +151,31 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
     let payload: any;
     if (mode === 'rut') {
       if (!participantId) { setError('Primero identifícate con tu RUT.'); return; }
+      // El precargado puede venir incompleto: exigimos los datos que pide el evento.
+      const missing: string[] = [];
+      if (!form.firstName.trim()) missing.push('Nombre');
+      if (!form.lastName.trim()) missing.push('Apellido');
+      if (!form.email.trim()) missing.push('Correo electrónico');
+      for (const key of Object.keys(ff)) {
+        if (!ff[key].enabled || !ff[key].required) continue;
+        const val = key === 'dietary' ? form.dietaryPreference : (form as any)[key];
+        if (!val || val === '' || (key === 'dietary' && val === 'NONE')) missing.push(GALA_LABELS[key]);
+      }
+      if (form.email.trim() && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(form.email.trim())) { setError('Ingresa un correo electrónico válido.'); return; }
+      if (missing.length) { setError('Completa los campos obligatorios: ' + missing.join(', ') + '.'); return; }
       const guests = [
         ...cargas.filter((c) => c.selected).map((c) => ({ id: c.id })),
         ...(acompEnabled && acomp.firstName.trim() ? [{ firstName: acomp.firstName.trim(), lastName: acomp.lastName.trim() || undefined, guestType: 'ACOMPANANTE' }] : []),
       ];
-      payload = { participantId, scheduleIds: [selectedScheduleId], guests };
+      payload = {
+        participantId,
+        firstName: form.firstName.trim(), lastName: form.lastName.trim(), email: form.email.trim(),
+        phone: form.phone.trim() || undefined, company: form.company.trim() || undefined,
+        position: form.position.trim() || undefined, numeroSap: form.numeroSap.trim() || undefined,
+        ...(ff.dietary.enabled ? { dietaryPreference: form.dietaryPreference, dietaryComments: form.dietaryComments.trim() || undefined } : {}),
+        scheduleIds: [selectedScheduleId],
+        guests,
+      };
     } else {
       if (!form.firstName.trim() || !form.lastName.trim()) { setError('Ingresa tu nombre y apellido.'); return; }
       if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(form.email.trim())) { setError('Ingresa un correo electrónico válido.'); return; }
@@ -502,10 +523,39 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
         <form onSubmit={handleSubmit} className="rounded-3xl p-6 md:p-8 shadow-2xl" style={{ backgroundColor: 'rgba(0,0,0,0.45)', border: '1px solid rgba(255,255,255,0.12)' }}>
           {mode === 'rut' ? (
             <>
-              {/* Identidad precargada */}
-              <div className="text-white mb-5">
-                <p className="text-lg font-semibold">{form.firstName} {form.lastName}</p>
-                <p className="text-white/70 text-sm">{form.documentNumber}{form.email ? ` · ${form.email}` : ''}</p>
+              {/* Identificado con RUT + completar datos que falten */}
+              <div className="mb-4">
+                <p className="text-white/70 text-sm">Identificado con RUT</p>
+                <p className="text-lg font-semibold text-white">{form.documentNumber}</p>
+                <p className="text-white/60 text-xs mt-1">Completa o confirma tus datos para inscribirte.</p>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-2">
+                <input className={inputClass} style={inputStyle} placeholder="Nombre *" value={form.firstName} onChange={(e) => setField('firstName', e.target.value)} />
+                <input className={inputClass} style={inputStyle} placeholder="Apellido *" value={form.lastName} onChange={(e) => setField('lastName', e.target.value)} />
+                {ff.phone.enabled && (
+                  <input className={inputClass} style={inputStyle} placeholder={`Teléfono${ff.phone.required ? ' *' : ''}`} value={form.phone} onChange={(e) => setField('phone', e.target.value)} />
+                )}
+                {ff.numeroSap.enabled && (
+                  <input className={inputClass} style={inputStyle} placeholder={`Código SAP${ff.numeroSap.required ? ' *' : ''}`} value={form.numeroSap} onChange={(e) => setField('numeroSap', e.target.value)} />
+                )}
+                {ff.company.enabled && (
+                  <input className={inputClass} style={inputStyle} placeholder={`Empresa${ff.company.required ? ' *' : ''}`} value={form.company} onChange={(e) => setField('company', e.target.value)} />
+                )}
+                {ff.position.enabled && (
+                  <input className={inputClass} style={inputStyle} placeholder={`Cargo${ff.position.required ? ' *' : ''}`} value={form.position} onChange={(e) => setField('position', e.target.value)} />
+                )}
+                <input className={`${inputClass} md:col-span-2`} style={inputStyle} type="email" placeholder="Correo electrónico *" value={form.email} onChange={(e) => setField('email', e.target.value)} />
+                {ff.dietary.enabled && (
+                  <div className="md:col-span-2">
+                    <label className="block text-white/80 text-sm mb-1">Preferencia alimenticia{ff.dietary.required ? ' *' : ''}</label>
+                    <select className={inputClass} style={inputStyle} value={form.dietaryPreference} onChange={(e) => setField('dietaryPreference', e.target.value)}>
+                      {ensureDietOption(dietOpts, form.dietaryPreference).map((o) => <option key={o.value} value={o.value} style={{ color: '#111' }}>{o.label}</option>)}
+                    </select>
+                    {isFreeTextDiet(form.dietaryPreference) && (
+                      <input className={`${inputClass} mt-2`} style={inputStyle} placeholder={String(form.dietaryPreference).toUpperCase().includes('ALERG') ? 'Especifica tu alergia' : 'Especifica tu requerimiento'} value={form.dietaryComments} onChange={(e) => setField('dietaryComments', e.target.value)} />
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Cargas */}

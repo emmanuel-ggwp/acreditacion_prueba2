@@ -74,6 +74,24 @@ export async function POST(
         await t.rollback();
         return NextResponse.json({ error: 'Participante no encontrado.' }, { status: 404 });
       }
+      // Completar/actualizar los datos que el asistente rellenó o confirmó en el formulario
+      // (en precargas suele venir solo el RUT; aquí se guardan nombre, correo, dieta, etc.).
+      const upd: any = {};
+      const setIf = (k: string, v: any) => { if (v !== undefined && v !== null && String(v).trim() !== '') upd[k] = v; };
+      setIf('firstName', body.firstName);
+      setIf('lastName', body.lastName);
+      setIf('email', body.email);
+      setIf('phone', body.phone);
+      setIf('company', body.company);
+      setIf('position', body.position);
+      setIf('numeroSap', body.numeroSap);
+      setIf('dietaryPreference', body.dietaryPreference);
+      if (body.dietaryComments !== undefined) upd.dietaryComments = body.dietaryComments;
+      if (body.guestCount !== undefined) upd.guestCount = body.guestCount;
+      if (body.guestCompanion !== undefined) upd.guestCompanion = body.guestCompanion;
+      if (body.guestLoads !== undefined) upd.guestLoads = body.guestLoads;
+      if (Object.keys(upd).length) await participant.update(upd, { transaction: t });
+
       const existing = await (participant as any).getSchedules({ transaction: t });
       existingScheduleIds = existing.map((s: any) => s.id);
     } else {

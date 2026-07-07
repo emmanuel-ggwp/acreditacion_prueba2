@@ -162,7 +162,7 @@ const EventForm: React.FC<EventFormProps> = ({ event, onClose, onSuccess }) => {
       name: event?.name || '',
       description: event?.description || '',
       location: event?.location || '',
-      maxCapacity: event?.maxCapacity ?? null,
+      maxCapacity: event?.maxCapacity ?? undefined,
       allowGuests: event?.allowGuests ?? true,
       maxGuestsPerParticipant: event?.maxGuestsPerParticipant ?? 0,
       isPublic: event?.isPublic ?? false,
@@ -289,7 +289,7 @@ const EventForm: React.FC<EventFormProps> = ({ event, onClose, onSuccess }) => {
           </button>
         </div>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col flex-1 overflow-hidden">
+        <form onSubmit={handleSubmit(onSubmit as any)} className="flex flex-col flex-1 overflow-hidden">
           <div className="p-8 space-y-6 overflow-y-auto flex-1">
             <div className="grid grid-cols-1 gap-y-6 sm:grid-cols-2 sm:gap-x-8">
               
