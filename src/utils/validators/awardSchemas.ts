@@ -20,5 +20,7 @@ export const participantAwardSchema = z.object({
     deliveredAt: z.iso.datetime().nullable(),
 });
 
-export const assignAwardSchema = participantAwardSchema.omit({ id: true, deliveredAt: true });
+export const assignAwardSchema = participantAwardSchema
+  .omit({ id: true, deliveredAt: true })
+  .extend({ notes: z.string().optional().nullable() });
 

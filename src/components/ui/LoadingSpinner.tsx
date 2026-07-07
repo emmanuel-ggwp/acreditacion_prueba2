@@ -16,7 +16,6 @@ const spinnerVariants = tv({
   },
 });
 
-// Omitimos 'size' de LucideProps porque las variantes definen su propio tipo ('sm' | 'md' | 'lg').
 interface SpinnerProps extends Omit<LucideProps, 'size'>, VariantProps<typeof spinnerVariants> {}
 
 const LoadingSpinner: React.FC<SpinnerProps> = ({ size, className, ...props }) => {

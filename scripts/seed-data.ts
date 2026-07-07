@@ -125,7 +125,7 @@ const seedData = async () => {
                 password: 'password123',
                 firstName: randomElement(firstNames),
                 lastName: randomElement(lastNames),
-                role: randomElement(['ADMIN', 'ACREDITADOR', 'GUARDIA']),
+                role: randomElement(['ADMIN', 'OPERATOR', 'GUARDIA']),
                 isActive: true
             });
         }
