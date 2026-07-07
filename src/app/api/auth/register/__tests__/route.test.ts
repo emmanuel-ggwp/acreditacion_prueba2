@@ -24,7 +24,7 @@ describe('POST /api/auth/register', () => {
       role: 'ACREDITADOR',
     };
     const mockResponse = { id: '2', ...requestBody };
-    mockedAuthService.register.mockResolvedValue(mockResponse);
+    mockedAuthService.register.mockResolvedValue(mockResponse as any);
 
     const request = new Request('http://localhost/api/auth/register', {
       method: 'POST',
@@ -35,7 +35,7 @@ describe('POST /api/auth/register', () => {
       },
     });
 
-    const response = await POST(request);
+    const response = await (POST as any)(request);
     const body = await response.json();
 
     expect(response.status).toBe(201);
@@ -63,7 +63,7 @@ describe('POST /api/auth/register', () => {
       },
     });
 
-    const response = await POST(request);
+    const response = await (POST as any)(request);
     const body = await response.json();
 
     expect(response.status).toBe(403);
@@ -91,7 +91,7 @@ describe('POST /api/auth/register', () => {
       },
     });
 
-    const response = await POST(request);
+    const response = await (POST as any)(request);
     const body = await response.json();
 
     expect(response.status).toBe(409);
@@ -111,7 +111,7 @@ describe('POST /api/auth/register', () => {
       },
     });
 
-    const response = await POST(request);
+    const response = await (POST as any)(request);
     const body = await response.json();
 
     expect(response.status).toBe(400);

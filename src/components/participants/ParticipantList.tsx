@@ -33,6 +33,7 @@ const ParticipantList = ({ eventId }: { eventId: string }) => {
     fetchParticipantsByEvent,
     setCurrentParticipant,
     deleteParticipant,
+    bulkDeleteParticipants,
     updateParticipant
   } = useParticipantStore();
   const { currentEvent } = useEventStore();
@@ -44,6 +45,8 @@ const ParticipantList = ({ eventId }: { eventId: string }) => {
   const [selectedParticipant, setSelectedParticipant] = useState<Participant | undefined>(undefined);
   const [awarding, setAwarding] = useState<any | null>(null);
   const [awardReasonInput, setAwardReasonInput] = useState('');
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
   const [savingAward, setSavingAward] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Participant | null>(null);
@@ -107,6 +110,38 @@ const ParticipantList = ({ eventId }: { eventId: string }) => {
     );
   }, [participants, filter, showOnlyAwarded]);
 
+  const allSelected = filteredParticipants.length > 0 && selectedIds.length === filteredParticipants.length;
+  const toggleSelect = (id: string) => setSelectedIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
+  const toggleSelectAll = () => setSelectedIds(allSelected ? [] : filteredParticipants.map((p) => p.id));
+
+  const handleDeleteSelected = async () => {
+    if (!selectedIds.length) return;
+    if (!window.confirm(`¿Eliminar ${selectedIds.length} participante(s)? Se borran de forma definitiva junto con sus invitados y acreditaciones.`)) return;
+    setBulkDeleting(true);
+    try {
+      const r = await bulkDeleteParticipants(eventId, { ids: selectedIds });
+      showToast.success(`Eliminados: ${r.deleted} · Invitados: ${r.guestsDeleted}`);
+      setSelectedIds([]);
+      fetchParticipantsByEvent(eventId);
+    } catch (e: any) {
+      showToast.error(e.message || 'No se pudo eliminar');
+    } finally { setBulkDeleting(false); }
+  };
+
+  const handleEmptyAll = async () => {
+    if (!window.confirm(`⚠️ ¿VACIAR TODOS los participantes de "${(currentEvent as any)?.name || 'este evento'}"?\n\nEsta acción es IRREVERSIBLE y borra participantes, invitados y acreditaciones.`)) return;
+    if (!window.confirm('Confirma otra vez: se eliminarán TODOS los participantes del evento.')) return;
+    setBulkDeleting(true);
+    try {
+      const r = await bulkDeleteParticipants(eventId, { all: true });
+      showToast.success(`Participantes vaciados: ${r.deleted} (invitados: ${r.guestsDeleted})`);
+      setSelectedIds([]);
+      fetchParticipantsByEvent(eventId);
+    } catch (e: any) {
+      showToast.error(e.message || 'No se pudo vaciar');
+    } finally { setBulkDeleting(false); }
+  };
+
   const openAward = (p: any) => { setAwarding(p); setAwardReasonInput(p.awardReason || ''); };
 
   const saveAward = async (awarded: boolean) => {
@@ -168,6 +203,26 @@ const ParticipantList = ({ eventId }: { eventId: string }) => {
             <FileDown size={18} />
             {exporting ? 'Exportando…' : 'Exportar'}
           </button>
+          {selectedIds.length > 0 && (
+            <button
+              onClick={handleDeleteSelected}
+              disabled={bulkDeleting}
+              className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 flex items-center gap-2 text-sm font-medium transition-colors disabled:opacity-50"
+              title="Eliminar los participantes seleccionados"
+            >
+              <Trash2 size={18} />
+              Eliminar ({selectedIds.length})
+            </button>
+          )}
+          <button
+            onClick={handleEmptyAll}
+            disabled={bulkDeleting || participants.length === 0}
+            className="border border-red-300 text-red-700 px-4 py-2 rounded-lg hover:bg-red-50 flex items-center gap-2 text-sm font-medium transition-colors disabled:opacity-40"
+            title="Vaciar TODOS los participantes del evento"
+          >
+            <Trash2 size={18} />
+            Vaciar
+          </button>
         </div>
       </div>
 
@@ -186,6 +241,15 @@ const ParticipantList = ({ eventId }: { eventId: string }) => {
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
+              <th scope="col" className="px-4 py-3 w-10">
+                <input
+                  type="checkbox"
+                  checked={allSelected}
+                  onChange={toggleSelectAll}
+                  className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                  title="Seleccionar todos"
+                />
+              </th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nombre</th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Correo</th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Documento</th>
@@ -200,7 +264,15 @@ const ParticipantList = ({ eventId }: { eventId: string }) => {
           <tbody className="bg-white divide-y divide-gray-200">
             {filteredParticipants.length > 0 ? (
               filteredParticipants.map((participant) => (
-                <tr key={participant.id} className="hover:bg-gray-50 transition-colors">
+                <tr key={participant.id} className={`hover:bg-gray-50 transition-colors ${selectedIds.includes(participant.id) ? 'bg-indigo-50/50' : ''}`}>
+                  <td className="px-4 py-4 w-10">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.includes(participant.id)}
+                      onChange={() => toggleSelect(participant.id)}
+                      className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                    />
+                  </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{`${participant.firstName} ${participant.lastName}`}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{participant.email}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{participant.documentNumber || '-'}</td>
@@ -254,7 +326,7 @@ const ParticipantList = ({ eventId }: { eventId: string }) => {
               ))
             ) : (
               <tr>
-                <td colSpan={7} className="px-6 py-10 text-center text-gray-500">
+                <td colSpan={8} className="px-6 py-10 text-center text-gray-500">
                   No se encontraron participantes. Agrega uno para comenzar.
                 </td>
               </tr>

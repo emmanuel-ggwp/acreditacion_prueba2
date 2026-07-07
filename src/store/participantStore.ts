@@ -23,6 +23,7 @@ interface ParticipantState {
   createParticipant: (participantData: z.infer<typeof createParticipantSchema>) => Promise<void>;
   updateParticipant: (id: string, participantData: z.infer<typeof updateParticipantSchema>) => Promise<void>;
   deleteParticipant: (id: string, reason?: string) => Promise<void>;
+  bulkDeleteParticipants: (eventId: string, opts: { ids?: string[]; all?: boolean }) => Promise<{ deleted: number; guestsDeleted: number }>;
   setCurrentParticipant: (participant: ParticipantWithAccreditation | null) => void;
 }
 
@@ -134,6 +135,18 @@ const useParticipantStore = create<ParticipantState>()(
           }));
         } catch (error: any) {
           set({ error: error.message, loading: false });
+        }
+      },
+
+      bulkDeleteParticipants: async (eventId, opts) => {
+        set({ loading: true, error: null });
+        try {
+          const res = await apiClient.delete<{ deleted: number; guestsDeleted: number }>(`/api/events/${eventId}/participants`, { body: opts });
+          set({ loading: false });
+          return res;
+        } catch (error: any) {
+          set({ error: error.message, loading: false });
+          throw error;
         }
       },
 

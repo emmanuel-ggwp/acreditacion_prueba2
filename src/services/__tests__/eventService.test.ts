@@ -43,7 +43,7 @@ describe('EventService', () => {
       const createdEvent = { id: '1', ...eventData, deleted: false };
       (EventMock.create as jest.Mock).mockResolvedValue(createdEvent);
 
-      const result = await eventService.createEvent(eventData);
+      const result = await eventService.createEvent(eventData as any, 'test-user');
 
       expect(EventMock.create).toHaveBeenCalledWith(eventData);
       expect(result).toEqual(createdEvent);
@@ -51,13 +51,13 @@ describe('EventService', () => {
 
     it('should throw a validation error for invalid data', async () => {
       const invalidData = { name: '' }; // name is required
-      await expect(eventService.createEvent(invalidData as any)).rejects.toThrow(z.ZodError);
+      await expect(eventService.createEvent(invalidData as any, 'test-user')).rejects.toThrow(z.ZodError);
     });
   });
 
   describe('updateEvent', () => {
     it('should update an event that exists', async () => {
-      const eventId = 1;
+      const eventId = '1';
       const updateData = { name: 'Updated Test Event' };
       const initialEventData = {
         name: 'Test Event',
@@ -87,13 +87,13 @@ describe('EventService', () => {
 
     it('should throw an error if event not found', async () => {
       (EventMock.findByPk as jest.Mock).mockResolvedValue(null);
-      await expect(eventService.updateEvent(999, { name: 'test' })).rejects.toThrow('Event not found');
+      await expect(eventService.updateEvent('999', { name: 'test' })).rejects.toThrow('Event not found');
     });
   });
 
   describe('deleteEvent', () => {
     it('should soft delete an event', async () => {
-      const eventId = 1;
+      const eventId = '1';
       const eventInstance = { id: eventId, destroy: jest.fn() };
       (EventMock.findByPk as jest.Mock).mockResolvedValue(eventInstance);
 
@@ -107,7 +107,7 @@ describe('EventService', () => {
 
   describe('getEventById', () => {
     it('should return an event by its ID', async () => {
-      const eventId = 1;
+      const eventId = '1';
       const event = { id: eventId, name: 'Test Event' };
       (EventMock.findByPk as jest.Mock).mockResolvedValue(event);
 

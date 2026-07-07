@@ -33,8 +33,8 @@ const ScheduleForm: React.FC<ScheduleFormProps> = ({ eventId, schedule, onClose 
     setValue,
     watch,
     formState: { errors },
-  } = useForm<ScheduleFormInputs, any, ScheduleFormOutput>({
-    resolver: zodResolver(createScheduleSchema),
+  } = useForm<ScheduleFormInputs>({
+    resolver: zodResolver(createScheduleSchema) as any,
     defaultValues: isEditMode
       ? {
         eventId: schedule.eventId,
@@ -95,7 +95,7 @@ const ScheduleForm: React.FC<ScheduleFormProps> = ({ eventId, schedule, onClose 
     <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
       <h4 className="text-lg font-semibold text-gray-900 mb-6">{isEditMode ? 'Editar Horario' : 'Crear Nuevo Horario'}</h4>
       
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+      <form onSubmit={handleSubmit(onSubmit as any)} className="space-y-6">
         <input type="hidden" {...register('eventId')} />
 
         <div>

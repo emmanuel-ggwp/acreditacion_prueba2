@@ -15,7 +15,7 @@ export async function rateLimitMiddleware(request: NextRequest) {
     return new NextResponse('Too many requests', {
       status: 429,
       headers: {
-        'Retry-After': String((e as any).msBeforeNext / 1000),
+        'Retry-After': String(Math.ceil(((e as any).msBeforeNext ?? 1000) / 1000)),
       },
     });
   }

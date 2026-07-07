@@ -6,6 +6,7 @@ import { UploadCloud, X, FileSpreadsheet, Download, Loader2, CheckCircle2, Alert
 import useEventStore from '@/store/eventStore';
 import apiClient from '@/utils/apiClient';
 import { showToast } from '@/components/ui/Toast';
+import { isValidRut } from '@/utils/validators/rut';
 
 interface ParticipantImportProps {
   eventId: string;
@@ -162,17 +163,26 @@ const ParticipantImport: React.FC<ParticipantImportProps> = ({ eventId, guestMod
     });
   };
 
+  // Filas con RUT presente Y válido (se subirán). El RUT debe ser un RUT chileno válido.
   const validCount = useMemo(() => {
     if (!rows.length) return 0;
-    // Solo el RUT es obligatorio.
-    return buildParticipants().filter((p) => p.documentNumber && String(p.documentNumber).trim()).length;
+    return buildParticipants().filter((p) => p.documentNumber && isValidRut(String(p.documentNumber))).length;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, headers, mapping]);
+
+  // Filas con RUT presente pero INVÁLIDO (no se subirán).
+  const invalidRuts = useMemo(() => {
+    if (!rows.length) return [] as any[];
+    return buildParticipants()
+      .map((p, idx) => ({ row: idx + 2, rut: p.documentNumber, name: `${p.firstName || ''} ${p.lastName || ''}`.trim() }))
+      .filter((p) => p.rut && String(p.rut).trim() && !isValidRut(String(p.rut)));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows, headers, mapping]);
 
   const handleImport = async () => {
-    const participants = buildParticipants().filter((p) => p.documentNumber && String(p.documentNumber).trim());
+    const participants = buildParticipants().filter((p) => p.documentNumber && isValidRut(String(p.documentNumber)));
     if (participants.length === 0) {
-      showToast.error('No hay filas válidas. Mapea la columna del RUT (es el único campo obligatorio).');
+      showToast.error('No hay filas con RUT válido. Revisa la columna del RUT (deben ser RUT chilenos válidos).');
       return;
     }
     setImporting(true);
@@ -359,7 +369,26 @@ const ParticipantImport: React.FC<ParticipantImportProps> = ({ eventId, guestMod
                 );
               })()}
 
-              <p className="text-sm text-gray-600">Filas válidas a importar (con RUT): <b>{validCount}</b> de {rows.length}</p>
+              <p className="text-sm text-gray-600">Filas con RUT válido a importar: <b>{validCount}</b> de {rows.length}</p>
+
+              {/* RUT inválidos: NO se subirán */}
+              {invalidRuts.length > 0 && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-sm">
+                  <p className="font-semibold text-red-800 flex items-center gap-2 mb-1">
+                    <AlertTriangle className="h-4 w-4" /> {invalidRuts.length} fila(s) con RUT inválido — NO se subirán
+                  </p>
+                  <p className="text-red-700/90 mb-2">El RUT debe ser un RUT chileno válido (dígito verificador correcto). Corrígelos en el Excel y vuelve a subirlo.</p>
+                  <div className="border border-red-200 rounded-md bg-white max-h-32 overflow-y-auto divide-y">
+                    {invalidRuts.map((r, i) => (
+                      <div key={i} className="px-3 py-1.5 text-xs">
+                        <span className="font-semibold text-gray-800">Fila {r.row}</span>
+                        <span className="text-gray-500"> · RUT {String(r.rut)}</span>
+                        {r.name ? <span className="text-gray-500"> · {r.name}</span> : null}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Loader mientras importa (puede tardar con miles de filas) */}
               {importing && (

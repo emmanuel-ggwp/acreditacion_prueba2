@@ -19,7 +19,8 @@ export const POST = withAuth(async (req: AuthenticatedRequest, { params }: Param
       return NextResponse.json({ message: 'Invalid award ID' }, { status: 400 });
     }
     const body = await req.json();
-    const { participantId, notes } = assignAwardSchema.parse(body);
+    const { participantId } = assignAwardSchema.parse(body);
+    const notes = (body as any)?.notes;
     const assignedBy = req.user.id;
 
     const assignment = await participantAwardService.assignAward(participantId, awardId, assignedBy, notes);

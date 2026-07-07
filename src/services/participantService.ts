@@ -148,6 +148,11 @@ export class ParticipantService {
         if (!pdata.documentNumber || !String(pdata.documentNumber).trim()) {
           throw new Error('Falta el RUT (es el único campo obligatorio).');
         }
+        // El RUT debe ser un RUT chileno válido (dígito verificador correcto),
+        // porque la landing lo exige para inscribirse. Si no, se rechaza la fila.
+        if (!isValidRut(String(pdata.documentNumber))) {
+          throw new Error('RUT inválido (dígito verificador incorrecto).');
+        }
 
         // Dedup por RUT NORMALIZADO (sin puntos, guion ni espacios), así
         // 28088678-5 = 28.088.678-5 = 280886785 se tratan como la misma persona.
@@ -320,6 +325,51 @@ export class ParticipantService {
       });
     }
     return { message: 'Participant and associated guests deleted successfully' };
+  }
+
+  // Elimina varios participantes (o todos los del evento) junto con sus invitados,
+  // inscripciones y acreditaciones. Borrado definitivo, en una transacción.
+  async bulkDeleteParticipants(eventId: string, opts: { ids?: string[]; all?: boolean }, userId?: string) {
+    const tx = await sequelize.transaction();
+    try {
+      const where: any = { eventId };
+      if (!opts.all) {
+        if (!opts.ids || !opts.ids.length) throw new Error('No hay participantes seleccionados.');
+        where.id = { [Op.in]: opts.ids };
+      }
+      const participants = await Participant.findAll({ where, attributes: ['id'], transaction: tx, paranoid: false });
+      const ids = participants.map((p: any) => p.id);
+      if (!ids.length) { await tx.commit(); return { deleted: 0, guestsDeleted: 0 }; }
+
+      const guests = await Guest.findAll({ where: { participantId: { [Op.in]: ids } }, attributes: ['id'], transaction: tx, paranoid: false });
+      const guestIds = guests.map((g: any) => g.id);
+
+      // Acreditaciones (de participantes e invitados)
+      await Accreditation.destroy({
+        where: { [Op.or]: [{ participantId: { [Op.in]: ids } }, ...(guestIds.length ? [{ guestId: { [Op.in]: guestIds } }] : [])] },
+        transaction: tx,
+      });
+      await ParticipantSchedule.destroy({ where: { participantId: { [Op.in]: ids } }, transaction: tx });
+      await Guest.destroy({ where: { participantId: { [Op.in]: ids } }, force: true, transaction: tx });
+      await Participant.destroy({ where: { id: { [Op.in]: ids } }, force: true, transaction: tx });
+
+      if (userId) {
+        await auditLogService.log({
+          userId, action: 'DELETE', entity: 'Participant', entityId: eventId,
+          details: {
+            name: 'Eliminación de participantes',
+            summary: `${opts.all ? 'Vaciar todos' : 'Eliminar seleccionados'}: ${ids.length} participantes y ${guestIds.length} invitados`,
+            operacion: opts.all ? 'Vaciar participantes' : 'Eliminar seleccionados',
+            eliminados: ids.length, invitados: guestIds.length,
+          },
+        });
+      }
+      await tx.commit();
+      return { deleted: ids.length, guestsDeleted: guestIds.length };
+    } catch (e) {
+      await tx.rollback();
+      throw e;
+    }
   }
 
   async getParticipant(participantId: string, includeGuests = false, includeAwards = false) {
