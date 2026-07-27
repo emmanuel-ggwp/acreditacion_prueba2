@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { ParticipantService } from '@/services/participantService';
 import { errorHandler } from '@/utils/errors';
 import { withAuth } from '@/middleware/auth';
@@ -7,10 +7,12 @@ import { ROLES } from '@/utils/constants';
 
 const participantService = new ParticipantService();
 
-export async function GET(
-  request: NextRequest,
+// Ficha completa con relaciones. Solo la consume la pantalla de Participantes,
+// cuyo RoleGuard es [ADMIN, MANAGER, OPERATOR]; el panel de acreditación no llega aquí.
+export const GET = withAuth(async (
+  request: AuthenticatedRequest,
   { params }: { params: Promise<{ participantId: string }> }
-) {
+) => {
   try {
     const { participantId } = await params;
     const participant = await participantService.getParticipant(participantId, true, true);
@@ -20,7 +22,7 @@ export async function GET(
     const status = error.statusCode || 500;
     return NextResponse.json({ message, details }, { status });
   }
-}
+}, [ROLES.ADMIN, ROLES.MANAGER, ROLES.OPERATOR]);
 
 export const PUT = withAuth(async (req: AuthenticatedRequest, { params }: { params: Promise<{ participantId: string }> }) => {
   try {

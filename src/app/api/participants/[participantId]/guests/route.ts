@@ -7,10 +7,13 @@ import { withAuth } from '@/middleware/auth';
 import { AuthenticatedRequest } from '@/types/auth';
 import { ROLES } from '@/utils/constants';
 
-export async function GET(
-  _request: Request,
+// Sin consumidor en el cliente: la UI lee los acompañantes por
+// /api/participants/[id]?includeGuests=true. Mismos roles que esa ficha, porque
+// devuelve un subconjunto de lo que aquélla ya entrega.
+export const GET = withAuth(async (
+  _request: AuthenticatedRequest,
   { params }: { params: Promise<{ participantId: string }> }
-) {
+) => {
   try {
     const { participantId } = await params;
     const guests = await guestService.listGuestsByParticipant(participantId);
@@ -18,7 +21,7 @@ export async function GET(
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-}
+}, [ROLES.ADMIN, ROLES.MANAGER, ROLES.OPERATOR]);
 
 export const POST = withAuth(async (req: AuthenticatedRequest, { params }: { params: Promise<{ participantId: string }> }) => {
   try {

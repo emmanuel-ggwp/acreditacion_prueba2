@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { ParticipantService } from '@/services/participantService';
 import { errorHandler } from '@/utils/errors';
 import { withAuth } from '@/middleware/auth';
@@ -6,12 +6,14 @@ import { AuthenticatedRequest } from '@/types/auth';
 import { ROLES } from '@/utils/constants';
 
 const participantService = new ParticipantService();
-const { ADMIN, OPERATOR } = ROLES;
+const { ADMIN, MANAGER, OPERATOR, GUARD } = ROLES;
 
-export async function GET(
-  request: NextRequest,
+// Lectura del padrón del evento. Los roles replican el RoleGuard de la pantalla más
+// permisiva que la consume: Acreditación, que incluye GUARDIA vía SearchParticipant.
+export const GET = withAuth(async (
+  request: AuthenticatedRequest,
   { params }: { params: Promise<{ eventId: string }> }
-) {
+) => {
   try {
     const { eventId } = await params;
     const searchParams = request.nextUrl.searchParams;
@@ -40,7 +42,7 @@ export async function GET(
     const status = error.statusCode || 500;
     return NextResponse.json({ message, details }, { status });
   }
-}
+}, [ADMIN, MANAGER, OPERATOR, GUARD]);
 
 // Eliminación masiva de participantes: por ids seleccionados o TODOS (vaciar).
 export const DELETE = withAuth(async (req: AuthenticatedRequest, { params }: { params: Promise<{ eventId: string }> }) => {
