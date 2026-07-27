@@ -37,13 +37,43 @@ módulos que hoy sí existen). Mezclar deuda de seguridad con esa lista escondí
 | [SB-10](#sb-10--poweredbyheader-false) | `poweredByHeader: false` | F6-07 | ~5 min |
 | [SB-11](#sb-11--la-suite-de-tests-no-arranca-ninguna-de-las-6-suites-ejecuta) | La suite de tests no arranca: ninguna de las 6 suites ejecuta | — (línea base de remediación) | ~4 h |
 | [SB-12](#sb-12--react-table-sin-mantenimiento-obliga-a-legacy-peer-deps) | `react-table` sin mantenimiento obliga a `legacy-peer-deps` | — (surgido en A7) | ~3 h |
-| [SB-13](#sb-13--postcss-sin-parchear-y-la-trampa-de-npm-audit-fix---force) | `postcss` sin parchear, y la trampa de `npm audit fix --force` | — (surgido en A7) | ~1 h |
+| [SB-13](#sb-13--postcss-sin-parchear-y-la-trampa-de-npm-audit-fix---force) | ⏱ `postcss` sin parchear, y la trampa de `npm audit fix --force` | — (surgido en A7) | ~1 h |
 | [SB-14](#sb-14--params-tratado-como-objeto-sincrono-en-awardspagetsx) | `params` tratado como objeto síncrono en `awards/page.tsx` | — (surgido en A7) | ~15 min |
 | [SB-15](#sb-15--el-script-lint-no-existe-desde-nextjs-16) | El script `lint` no existe desde Next.js 16 | — (surgido en A7) | ~15 min |
+| [SB-16](#sb-16--sustituir-legacy-peer-deps-por-un-overrides-acotado) | ⏱ Sustituir `legacy-peer-deps` por un `overrides` acotado | — (surgido en A7) | ~1 h |
+
+> ⏱ **SB-13 y SB-16 tienen ventana fija, no plazo abierto.** Deben resolverse **al terminar los
+> cambios de la auditoría y, en cualquier caso, ANTES de que la reconstrucción configure CI y
+> Dependabot**. No son deuda diferible: ver [Entradas con ventana fija](#entradas-con-ventana-fija).
 
 **Cerradas:** [SB-01](#sb-01--cerrada--prueba-de-identidad-en-el-registro-público-por-rut),
 [SB-05](#sb-05--cerrada--implementar-o-retirar-next_public_modify_contact_email),
 [SB-08](#sb-08--cerrada--validar-los-bytes-del-fichero-subido-promovida-al-bloque-b).
+
+---
+
+## Entradas con ventana fija
+
+La mayoría de este fichero es deuda diferible: se resuelve cuando haya hueco. **Dos entradas no
+lo son**, y se separan aquí para que no se pierdan en la lista general.
+
+| ID | Debe estar resuelta antes de… |
+|---|---|
+| **SB-16** | que la reconstrucción configure **CI y Dependabot** |
+| **SB-13** | lo mismo — se prueba junto con SB-16, comparten mecanismo (`overrides`) |
+
+**Por qué esa frontera y no otra.** `AUDIT-FINDINGS.md` §7.4 sitúa Dependabot y `npm audit` en CI
+como **la medida de mayor impacto de todo el informe**: es lo que habría avisado del salto
+16.0.6 → 16.0.7 y habría cerrado la ventana de siete meses que acabó en el compromiso.
+
+Con `legacy-peer-deps=true` activo de forma global, esos controles **se estrenan ciegos a los
+conflictos de peer dependencies** — exactamente el tipo de problema que acaba de aparecer en A7 y
+que estuvo oculto precisamente porque nadie lo había registrado. Montar la contramedida principal
+de la auditoría con ese punto ciego incorporado desde el primer día es repetir el patrón que el
+informe entero existe para romper.
+
+De ahí que el momento sea **al terminar los cambios de la auditoría y antes de tocar CI**, no
+«cuando se pueda».
 
 ---
 
@@ -306,10 +336,37 @@ módulos que hoy sí existen). Mezclar deuda de seguridad con esa lista escondí
   > La precaución no depende de esa cifra: la dirección del cambio —degradar `next`— sí está
   > establecida, y la prohibición cuesta cero.
 
-- **Acción**: `npm update postcss` para la copia top-level; vigilar el pin de Next para la
-  anidada; y dejar constancia en el runbook de reconstrucción de que `npm audit fix --force`
-  está **prohibido** en este proyecto. Si se añade `npm audit` a CI (§7.4), configurarlo en modo
-  informe, nunca con corrección automática.
+- **La vía que no se había evaluado: `overrides`.** La afirmación de arriba —«la copia anidada no
+  tiene solución hasta que Vercel suba su pin»— es cierta *si uno se limita a actualizar*. No lo
+  es si se fuerza la resolución desde `package.json`:
+
+  ```json
+  "overrides": { "postcss": "^8.5.18" }
+  ```
+
+  Esto alcanza **también la copia anidada bajo `next`**, que es justamente la que hoy queda
+  abierta por diseño. Si funciona, **cierra los tres advisories** en lugar de la mitad.
+
+  **Riesgo acotado, pero no nulo.** El salto 8.4.31 → 8.5.18 es menor dentro de la misma major y
+  `postcss` es estable en semver, así que lo esperable es que no rompa nada. Pero **Next empaqueta
+  `postcss`** y lo fija con versión exacta por alguna razón: hay que **verificar que el build sigue
+  pasando**, no darlo por hecho.
+
+  **Los dos desenlaces son buenos.** Si funciona, se cierran tres advisories. Si rompe el build, la
+  entrada vuelve al backlog **con la prueba concreta de por qué no era viable** — que es mejor
+  registro que el actual, donde la vía ni siquiera figuraba como evaluada.
+
+- **Acción**, por orden:
+  1. Probar `overrides` de `postcss` **junto con el de SB-16** — comparten mecanismo, así que se
+     prueban y se verifica el build **una sola vez**.
+  2. Si `overrides` no prospera: `npm update postcss` sanea al menos la copia top-level, y la
+     anidada queda a la espera del pin de Next.
+  3. En cualquier caso, dejar constancia en el runbook de reconstrucción de que
+     `npm audit fix --force` está **prohibido** en este proyecto. Si se añade `npm audit` a CI
+     (§7.4), configurarlo en modo informe, **nunca** con corrección automática.
+
+- **Plazo**: ⏱ **ventana fija.** Antes de configurar CI y Dependabot. Ver
+  [Entradas con ventana fija](#entradas-con-ventana-fija) y **SB-16**.
 
 ---
 
@@ -362,6 +419,62 @@ módulos que hoy sí existen). Mezclar deuda de seguridad con esa lista escondí
 
 - **Acción**: migrar a ESLint directo (`eslint .`) siguiendo la guía de Next, o retirar el
   script si no se va a usar. Decidirlo antes de montar CI, no después.
+
+---
+
+## SB-16 — Sustituir `legacy-peer-deps` por un `overrides` acotado
+
+- **Referencia**: surgido en **A7** el **2026-07-27**, al versionar `.npmrc`. Es el seguimiento
+  directo de esa decisión: **SB-12** trata la causa (`react-table`), esta trata el **instrumento**
+  con el que se ha tapado mientras tanto.
+- **Ficheros**: `.npmrc` (a eliminar), `package.json` (a añadir el bloque `overrides`).
+- **Bloquea el redespliegue**: **No.**
+- **Plazo**: ⏱ **ventana fija** — ver abajo. **No es deuda de plazo indefinido.**
+
+- **El problema con la solución actual.** `legacy-peer-deps=true` **desactiva la comprobación de
+  peer dependencies para todo el árbol y de forma permanente**. El conflicto real es **uno solo**:
+  `react-table@7.8.0` con tope en React 18 frente a React 19.2.0. Se ha respondido a un conflicto
+  concreto con un interruptor general. A partir de ahora, **cualquier incompatibilidad futura de
+  cualquier paquete entra en silencio** — sin error, sin aviso, sin rastro.
+
+- **Por qué `overrides` es mejor**:
+
+  ```json
+  "overrides": {
+    "react-table": {
+      "react": "$react"
+    }
+  }
+  ```
+
+  1. Waivea **únicamente** la restricción de `react-table`.
+  2. Deja la resolución de peers **activa para el resto del árbol**.
+  3. Queda **visible en `package.json`**, no escondida tras un flag global en un fichero que
+     casi nadie abre.
+
+  La sintaxis `"$react"` remite a la versión de `react` que ya declara el proyecto, de modo que no
+  hay un número que se quede obsoleto cuando React suba.
+
+- **Reserva honesta, y hay que decirla antes de intentarlo**: el comportamiento de `overrides`
+  frente a **peer** dependencies tiene matices según la versión de npm — `overrides` gobierna con
+  claridad las dependencias resueltas, y su efecto sobre la *comprobación* de peers no es
+  uniforme entre versiones. **Hay que probarlo.** Si no resuelve el conflicto, `legacy-peer-deps`
+  es el **plan B legítimo** y esta entrada se cierra **documentando por qué**, no en silencio.
+
+- **Lo que ninguna de las dos opciones hace.** Ni `overrides` ni `legacy-peer-deps` **validan que
+  `react-table` funcione realmente con React 19**. Ambas se limitan a silenciar la objeción del
+  resolutor. Lo único que cierra esa pregunta es **SB-12**: retirar `react-table` y sustituirlo.
+  Conviene tenerlo presente para no confundir «el install ya no falla» con «esto es compatible».
+
+- **CUÁNDO — condición dura, no preferencia.** Debe resolverse **al terminar los cambios de la
+  auditoría y, en cualquier caso, ANTES de que la reconstrucción configure CI y Dependabot**. El
+  razonamiento completo está en [Entradas con ventana fija](#entradas-con-ventana-fija); en corto:
+  la recomendación central de §7.4 son precisamente Dependabot y `npm audit` en CI, ambos ejecutan
+  instalaciones, y con `legacy-peer-deps` activo **dejan de ver los conflictos de peers**.
+  Estrenarlos así es estrenarlos ciegos al tipo exacto de problema que acabamos de encontrar.
+
+- **Se prueba junto con SB-13**: comparten mecanismo (`overrides`), así que se aplican y se
+  verifica el build **una sola vez**.
 
 ---
 
