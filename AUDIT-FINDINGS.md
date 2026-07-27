@@ -143,7 +143,7 @@ dentro del rango.** El bloque agrupa ~35 advisories, entre ellos:
 
 | Advisory | Relevancia en esta app |
 |---|---|
-| **GHSA-9qr9-h5gf-34mp = CVE-2025-55182 — «React2Shell» — RCE sin autenticación en el protocolo React Flight. CVSS 10.0. Publicado 2025-12-03. Corregido en 15.0.5 / 15.1.9 / 15.2.6 / 15.3.6 / 15.4.8 / 15.5.7 / **16.0.7**. Rango afectado: 15.0.0 – 16.0.6** | **SUPERFICIE PRESENTE Y CONFIRMADA. Vector principal.** Deserialización insegura en el protocolo Flight de RSC; se dispara con **una sola petición POST manipulada**, sin autenticación previa. **No requiere** Server Actions, Image Optimizer ni bypass de middleware — basta App Router con RSC, que es exactamente lo que usa esta app. La versión desplegada, **16.0.6, está una única versión de parche por debajo del fix (16.0.7)**. Ver §7. |
+| **GHSA-9qr9-h5gf-34mp — «React2Shell» — RCE sin autenticación en el protocolo React Flight. CVSS 10.0. Publicado 2025-12-03. Corregido en 15.0.5 / 15.1.9 / 15.2.6 / 15.3.6 / 15.4.8 / 15.5.7 / **16.0.7**. Rango afectado: 15.0.0 – 16.0.6.** *(Sobre la relación con CVE-2025-55182, ver la nota justo debajo de la tabla: **no son el mismo identificador**.)* | **SUPERFICIE PRESENTE Y CONFIRMADA. Vector principal.** Deserialización insegura en el protocolo Flight de RSC; se dispara con **una sola petición POST manipulada**, sin autenticación previa. **No requiere** Server Actions, Image Optimizer ni bypass de middleware — basta App Router con RSC, que es exactamente lo que usa esta app. La versión desplegada, **16.0.6, está una única versión de parche por debajo del fix (16.0.7)**. Ver §7. |
 | GHSA-c4j6-fc7j-m34r — **SSRF vía WebSocket upgrades** (el CVE-2026-44578 del plan) | Superficie **presente si** corría con `next start`. Ver §2. |
 | GHSA-267c-6grr-h53f, GHSA-26hh-7cqf-hhc6, GHSA-492v-c6pp-mqqv, GHSA-6gpp-xcg3-4w24, GHSA-36qx-fr4f-26g5 — **bypass de Middleware / Proxy** | **Impacto degradado en esta app.** Ver §3: el middleware no autentica. |
 | GHSA-3g8h-86w9-wvmq, GHSA-vfv6-92ff-j949, GHSA-wfc6-r584-vfw7, GHSA-68g3-v927-f742 — cache poisoning de RSC / respuestas | Superficie presente; requiere capa de caché intermedia para impacto real (no verificable desde el repo). |
@@ -152,6 +152,29 @@ dentro del rango.** El bloque agrupa ~35 advisories, entre ellos:
 | GHSA-9g9p-9gw9-jx7f, GHSA-h64f-5h5j-jqjh, GHSA-q8wf-6r8g-63ch, GHSA-3x4c-7xq6-9pq8 — Image Optimizer | **No aplican / superficie mínima.** `next.config.js` no define bloque `images` ni `remotePatterns`. |
 | GHSA-p9j2-gv94-2wf4 — **SSRF en rewrites vía hostname de destino controlado por atacante** | **No aplica.** El único rewrite (`next.config.js:14-16`) tiene destino estático interno `/api/uploads/:file`, sin interpolación de host. |
 | GHSA-ggv3-7p47-pfv8 — HTTP request smuggling en rewrites | Superficie presente (hay un rewrite activo). No verificable desde el repo. |
+
+> **Rectificación de identificadores (2026-07-27) — `GHSA-9qr9-h5gf-34mp` y `CVE-2025-55182` NO
+> son intercambiables.** Este informe los presentó como equivalentes (`=`). Consultada la API de
+> GitHub, la equivalencia no se sostiene:
+>
+> | Identificador | Lado | Paquetes afectados | Parche relevante aquí |
+> |---|---|---|---|
+> | **`GHSA-9qr9-h5gf-34mp`** | **Next.js** | `next` | **16.0.7** en la rama 16 |
+> | **`CVE-2025-55182`** → `GHSA-fv66-9v8q-g76r` | **React** | `react-server-dom-webpack`, `react-server-dom-turbopack`, `react-server-dom-parcel` | — |
+>
+> La API devuelve **`cve_id: null`** para `GHSA-9qr9-h5gf-34mp`: no tiene CVE asignado.
+> `CVE-2025-55182` mapea a un advisory **distinto**, del lado de React.
+>
+> **Es la misma vulnerabilidad de fondo** —RCE en el protocolo Flight de React Server
+> Components, divulgada popularmente como **React2Shell**— y **no cambia nada práctico**: el
+> advisory que aplica a este repositorio es el del lado Next.js, su parche en la rama 16 sigue
+> siendo **16.0.7**, y `next` vendoriza `react-server-dom-*` en `dist/compiled` sin entrada
+> propia en el lockfile. Lo que cambia es que **quien consulte este informe dentro de seis meses
+> necesita poder llegar a los dos advisories**, y con la equivalencia escrita solo llegaba a uno.
+>
+> Donde este documento diga «CVE-2025-55182» a secas —§1 más abajo, §7.1, §7.5— léase **la
+> vulnerabilidad**, no el identificador del advisory de Next. Registrado en §7.0 como sexta
+> corrección.
 
 **Versión objetivo — resuelto (2026-07-26).** La tabla de umbrales del plan de auditoría
 (15.5.16 / 16.2.5 / 16.2.6) era **incorrecta**: omitía CVE-2025-55182, que es el advisory más
@@ -1968,7 +1991,7 @@ fichero del código del proyecto fue modificado, creado ni borrado.**
 
 ## 7.0 Correcciones producidas al consolidar
 
-Consolidar obligó a revisar afirmaciones de fases anteriores contra el conjunto. **Cuatro no
+Consolidar obligó a revisar afirmaciones de fases anteriores contra el conjunto. **Seis no
 sobrevivieron**, y se corrigen aquí en vez de dejarlas contradiciéndose en silencio.
 
 | Qué se afirmó | Qué es cierto | Dónde queda corregido |
@@ -1978,10 +2001,11 @@ sobrevivieron**, y se corrigen aquí en vez de dejarlas contradiciéndose en sil
 | **Fase 1 §2:** *"no pude verificar el modo de arranque real"*, luego la superficie del handler de upgrade WebSocket quedaba en condicional | **Verificado: PM2 + `next start`.** El servidor Node integrado **estaba en uso** y esa superficie **existía**. Deja de ser una atenuación apoyada en una incógnita | Fase 1 §2, nota de cierre |
 | **Fase 4 §8 Q1:** *"¿se usa el modo `rut` en algún evento? No determinable desde el código"* | **Determinado por el usuario, aunque no desde el código:** **no hubo eventos reales con participantes reales** antes del compromiso. F4-01 y F3-01 son **bugs encontrados a tiempo, no exposiciones consumadas** | §7.1 y §7.5 |
 | **F1-04:** `safeFilename` clasificada como *"control correcto"* que cerraba el path traversal en `/api/uploads`, con la implicación tácita de que **protegía la lectura de ficheros en producción** | **La guarda es correcta — pero no estaba en el camino de lectura.** En el despliegue anterior los ficheros se servían por un **symlink dentro de `public/`**, y los estáticos ganan al rewrite de `afterFiles`: el handler nunca se ejecutaba. **Confirmación empírica** de lo deducido en la Fase 6 §3, llegada después de cerrar la fase. **La clasificación no cambia y el recuento tampoco**: cambia qué se creía que protegía | Ficha F1-04, §7.2 y §7.4 |
+| **Fase 1 §1 y §7.1:** `GHSA-9qr9-h5gf-34mp` **=** `CVE-2025-55182`, presentados como el mismo identificador | **No son intercambiables.** La API de GitHub devuelve `cve_id: null` para `GHSA-9qr9-h5gf-34mp` (advisory del lado **Next.js**, paquete `next`, parche 16.0.7 en la rama 16). `CVE-2025-55182` mapea a `GHSA-fv66-9v8q-g76r`, advisory del lado **React**, paquetes `react-server-dom-*`. **Misma vulnerabilidad de fondo —React2Shell—, dos advisories distintos.** No cambia nada práctico: el que aplica aquí es el de Next y A7 lo supera | Fase 1 §1 (nota bajo la tabla), §7.1 |
 
 Se añaden a las dos correcciones que las propias fases ya habían registrado —el conteo de rutas
 por método HTTP (Fase 3 §2) y la premisa fallida de `NEXT_PUBLIC_MODIFY_CONTACT_EMAIL`
-(F6-10)—. **Siete correcciones en total.** Se dejan visibles a propósito: un informe que solo
+(F6-10)—. **Ocho correcciones en total.** Se dejan visibles a propósito: un informe que solo
 muestra sus aciertos no permite calibrar cuánto fiarse del resto.
 
 **La quinta merece una lectura aparte.** Las cuatro primeras son errores de análisis corregidos
@@ -1992,12 +2016,36 @@ Fase 6 tenía delante todo lo necesario para plantear la pregunta y no la plante
 correctamente el mecanismo no equivale a comprobar el estado real**, y esa distinción es
 justamente la que separa una auditoría de código de una auditoría de sistema.
 
+**La sexta tiene otra procedencia, y conviene separarla de las anteriores.** Las cinco primeras
+son fallos de análisis: se miró el repositorio y se concluyó mal. Esta no nació del análisis del
+código sino de **material externo aportado en la conversación** y aceptado sin contrastar — el
+mismo material cuya procedencia la Fase 1 §1 ya marcaba explícitamente como *«no verificados de
+forma independiente desde este entorno»*. La advertencia estaba escrita; lo que faltó fue actuar
+en consecuencia y comprobar el identificador antes de propagarlo a tres secciones.
+
+Se detectó al ejecutar **A7**, consultando la API de GitHub como **fuente primaria**. La regla que
+deja es simétrica de la que rige para el código: **el informe puede estar equivocado, y un
+identificador aportado de fuera no adquiere autoridad por repetirse en tres sitios del
+documento.** Un dato heredado sin verificar es un dato pendiente de verificar, aunque venga de
+fuentes reputadas y aunque su sustancia acabe siendo correcta — que aquí lo es.
+
 ## 7.1 Veredicto consolidado sobre el vector
 
-### Hipótesis principal: CVE-2025-55182 / React2Shell — confianza alta, sin prueba
+### Hipótesis principal: React2Shell — confianza alta, sin prueba
 
-**CVE-2025-55182** (GHSA-9qr9-h5gf-34mp), **RCE sin autenticación** en el protocolo React Flight
-de React Server Components. **CVSS 10.0**, publicado el **3 de diciembre de 2025**.
+**RCE sin autenticación** en el protocolo React Flight de React Server Components. **CVSS 10.0**,
+publicado el **3 de diciembre de 2025**. Divulgada popularmente como **React2Shell**.
+
+**Identificadores — no son intercambiables** (rectificado el 2026-07-27; ver §7.0, sexta
+corrección, y la nota de la Fase 1 §1):
+
+| Identificador | Lado | Aplica a este repositorio |
+|---|---|---|
+| **`GHSA-9qr9-h5gf-34mp`** | **Next.js** (`next`) | **Sí.** Es el advisory que gobierna aquí. Parche de la rama 16: **16.0.7**. Sin CVE asignado según la API de GitHub (`cve_id: null`) |
+| **`CVE-2025-55182`** → `GHSA-fv66-9v8q-g76r` | **React** (`react-server-dom-*`) | Indirectamente: `next` vendoriza esos paquetes en `dist/compiled`, sin entrada propia en el lockfile |
+
+Misma vulnerabilidad de fondo, dos advisories. El informe los presentó como equivalentes; **no lo
+son**, aunque la conclusión práctica no varía.
 
 | Elemento | Estado |
 |---|---|
