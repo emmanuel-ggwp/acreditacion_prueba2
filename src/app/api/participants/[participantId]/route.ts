@@ -7,8 +7,10 @@ import { ROLES } from '@/utils/constants';
 
 const participantService = new ParticipantService();
 
-// Ficha completa con relaciones. Solo la consume la pantalla de Participantes,
-// cuyo RoleGuard es [ADMIN, MANAGER, OPERATOR]; el panel de acreditación no llega aquí.
+// Ficha completa con relaciones. La consumen /participants y la pestaña Participantes de
+// /events/[eventId] (participantStore.ts:70, guestStore.ts:29); la unión de sus RoleGuard
+// es [ADMIN, MANAGER, OPERATOR]. El panel de acreditación no llega aquí: su búsqueda ya
+// trae guests y schedules embebidos (participantService.ts:483-487).
 export const GET = withAuth(async (
   request: AuthenticatedRequest,
   { params }: { params: Promise<{ participantId: string }> }
