@@ -540,3 +540,119 @@ aplica en el mismo cambio que cierra F4-01, **no es deuda diferida**: forma part
 **Requisito que viaja con ella:** la variable debe quedar documentada en `.example.env`, que hoy
 la declara vacía, junto con las otras dos que faltan (`ALLOWED_ORIGIN` y `DB_SSL`) — elemento
 **A10**.
+
+---
+
+## SB-17 — Doble cabecera `Authorization` en el reintento tras un 401
+
+- **Referencia**: surgido en **A1** el **2026-07-27**, al barrer los consumidores de los tres
+  endpoints. **No lo causa A1** — afecta ya a los 68 handlers con `withAuth` —, pero A1 lo vuelve
+  alcanzable en las tres lecturas de más tráfico, que hasta ahora nunca devolvían 401.
+- **Ficheros**: `src/utils/apiClient.ts:25-27, 58-60`, `src/middleware/auth.ts:26`.
+- **Bloquea el redespliegue**: **No**, pero es el primer candidato del Bloque B.
+
+**El defecto, verificado leyendo el código.** `apiClient.ts:25` construye las cabeceras con
+`new Headers(options.headers || {})` y `:27` añade el token con **`append`**, no con `set`. Ante
+un 401, `:58` hace `headers.set('Authorization', ...)` con el token nuevo y `:60` reinyecta ese
+mismo objeto como `options.headers` de la llamada recursiva. En esa segunda vuelta, `:25` lo
+reconstruye —ya trae `Authorization`— y `:27` vuelve a hacer `append`:
+
+```
+Authorization: Bearer <token>, Bearer <token>
+```
+
+`auth.ts:26` hace `authHeader.split(' ')[1]`, que sobre esa cadena devuelve `<token>,` — un token
+inválido. Resultado: **401 de nuevo**, nuevo refresh, nueva recursión. El `retryConfig` no acota
+nada porque la llamada recursiva es una invocación nueva con los valores por defecto.
+
+**Por qué importa.** No se dispara con un token válido, así que no aparece en pruebas cortas: se
+manifiesta en la primera sesión que caduque durante el uso. El síntoma sería un cierre de sesión
+inexplicable o un bucle, justo en las pantallas de padrón y acreditación.
+
+**Corrección**: usar `set` en lugar de `append` en `:27`, no reenviar la cabecera previa en el
+reintento, y acotar la profundidad de recursión.
+
+---
+
+## SB-18 — `MANAGER` no puede listar eventos: el rol está roto de facto
+
+- **Referencia**: surgido en **A1** el **2026-07-27**. Quedó **fuera del alcance** de A1 (W2).
+- **Ficheros**: `src/app/api/events/route.ts:56`, `src/app/api/events/[eventId]/schedules/route.ts:45`,
+  frente a `src/components/layout/Sidebar.tsx:20-25` y los `RoleGuard` de `src/app/*/page.tsx`.
+- **Bloquea el redespliegue**: **No.**
+
+`GET /api/events` es `[ADMIN, OPERATOR, GUARD]` y **omite `MANAGER`**, pese a que `/participants`
+(`participants/page.tsx:27`) y `/accreditation` (`accreditation/page.tsx:12`) sí lo admiten y
+**ambas arrancan pidiendo la lista de eventos** (`participants/page.tsx:16`,
+`AccreditationPanel.tsx:58`). Un `MANAGER` nunca obtiene un `eventId`, así que no llega a disparar
+ninguno de los tres endpoints de A1.
+
+**Consecuencia para A1**: los permisos de `MANAGER` que A1 concede son **hoy inertes**. Se
+incluyeron igualmente porque la elección es dominante —si el rol está muerto no conceden nada a
+nadie; si está vivo, omitirlos rompe su pantalla—, pero **la incoherencia real está en
+`/api/events`, no en A1**.
+
+**Decisión pendiente, y es de producto**: o `MANAGER` es un rol vivo, y entonces hay que añadirlo
+a `/api/events` y a `schedules`; o no lo es, y hay que retirarlo de los `RoleGuard` que lo
+prometen. Hoy el sistema afirma las dos cosas a la vez. Relacionado: `ASSIGNABLE_ROLES`
+(`constants.ts:25`) solo ofrece `[ADMIN, GUARD]` en la pantalla de Usuarios, pero el servidor
+acepta los cuatro roles (`authSchemas.ts:22`): `MANAGER` y `OPERATOR` no se pueden crear por UI
+pero **sí por API**.
+
+---
+
+## SB-19 — Tres páginas que muestran PII sin guarda de rol
+
+- **Referencia**: surgido en **A1** el **2026-07-27**.
+- **Ficheros**: `src/app/participants/[participantId]/page.tsx`,
+  `src/app/participants/[participantId]/edit/page.tsx`,
+  `src/app/events/[eventId]/participants/page.tsx` (cero coincidencias de
+  `RoleGuard`/`ProtectedRoute`), y `src/app/events/[eventId]/page.tsx:16`, que usa
+  `ProtectedRoute` **sin** `allowedRoles` y por tanto deja pasar a cualquier rol autenticado
+  (`ProtectedRoute.tsx:31`).
+- **Bloquea el redespliegue**: **No.** **A1 ya cierra la fuga de datos en el servidor**, que es lo
+  que importa; esto es coherencia de la UI.
+
+Tras A1 el servidor responde `403` a quien no corresponda, así que **no hay fuga**. Lo que queda es
+una arista fea: un `GUARDIA` que escriba la URL a mano ve el esqueleto de la página y un error de
+carga en vez de una redirección. **Corrección**: `RoleGuard [ADMIN, MANAGER, OPERATOR]` en las tres
+páginas y `allowedRoles` explícito en la cuarta.
+
+---
+
+## SB-20 — El cliente no distingue un 403, y la búsqueda se traga el error
+
+- **Referencia**: surgido en **A1** el **2026-07-27**.
+- **Ficheros**: `src/utils/apiClient.ts:71-80`, `src/store/participantStore.ts:89-92`,
+  `src/components/accreditation/SearchParticipant.tsx:31-33`.
+- **Bloquea el redespliegue**: **No.**
+
+`apiClient` contempla `401`, `404` y `422`; **`403` cae en el `default`** y se degrada a un
+`ServerError` genérico, indistinguible de un 500. Peor: `participantStore.searchParticipants`
+**captura el error y devuelve `[]`**, y `SearchParticipant` lo vuelve a tragar. Un fallo de
+permisos se presenta al usuario como **«No se encontraron resultados»**.
+
+**Por qué se registra ahora.** Es la razón por la que un recorte de roles en estos endpoints sería
+**invisible**: no falla ruidosamente, falla en silencio y parece un padrón vacío. Con W7 inoperante
+(**SB-11**) y sin cobertura de tests en estos endpoints, no hay ninguna red que lo detecte.
+**Corrección**: `case 403` con mensaje propio, y que la búsqueda distinga «sin resultados» de
+«fallo».
+
+---
+
+## SB-21 — `GET /api/participants/[id]/guests` es un endpoint huérfano
+
+- **Referencia**: surgido en **A1** el **2026-07-27**.
+- **Ficheros**: `src/app/api/participants/[participantId]/guests/route.ts`.
+- **Bloquea el redespliegue**: **No.**
+
+**Cero consumidores en el cliente.** La UI lee los acompañantes por
+`/api/participants/{id}?includeGuests=true` (`guestStore.ts:29`); el `POST` de esa misma ruta sí se
+usa (`guestStore.ts:40`), el `GET` no. A1 lo ha protegido con `[ADMIN, MANAGER, OPERATOR]` —los
+mismos roles que la ficha de la que es subconjunto—, que es lo correcto mientras exista.
+**Evaluar si se elimina** en vez de mantener superficie sin función.
+
+**De paso, en el endpoint hermano**: `participantStore.ts:64-70` envía `includeGuests`,
+`includeAwards` e `includeSchedules` como query params, pero
+`participants/[participantId]/route.ts` llama a `getParticipant(participantId, true, true)` con
+booleanos fijos y **los ignora**. Contrato cliente-servidor desalineado; sin impacto de seguridad.
