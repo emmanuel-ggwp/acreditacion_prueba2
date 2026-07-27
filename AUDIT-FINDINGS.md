@@ -792,8 +792,23 @@ correo, teléfono, número de documento (RUT), preferencias alimentarias— de c
 partiendo únicamente de una URL pública. Sin credenciales, sin CVE, sin condiciones previas.
 **Esto es explotable y la prueba está en el código.**
 
-**Corrección (bloqueante del redespliegue):** envolver los tres `GET` con
-`withAuth(..., [ADMIN, OPERATOR])`, igual que sus `PUT`/`DELETE` hermanos.
+**Corrección (bloqueante del redespliegue):** envolver los tres `GET` con `withAuth`.
+
+> **Rectificado al ejecutar A1 (2026-07-27) — ver §7.0, séptima corrección.** La lista de roles
+> que esta ficha proponía (`[ADMIN, OPERATOR]`, *«igual que sus `PUT`/`DELETE` hermanos»*) es
+> **incorrecta**, y la de la fila A1 de §7.3 (`[ADMIN, OPERATOR, GUARD]`) **también**. Las dos
+> omiten `MANAGER`, que `Sidebar.tsx:23` encamina a `/participants`. Listas aplicadas, cada una
+> la **unión de los `RoleGuard` de las pantallas que consumen el endpoint**:
+>
+> | Endpoint | Roles | Por qué |
+> |---|---|---|
+> | `GET /api/events/[eventId]/participants` | `[ADMIN, MANAGER, OPERATOR, GUARD]` | `SearchParticipant.tsx:19,28` → `participantStore.ts:86` lo llama desde el panel de acreditación, cuyo guard es `[ADMIN, MANAGER, OPERATOR, GUARD]` (`accreditation/page.tsx:12`) |
+> | `GET /api/participants/[participantId]` | `[ADMIN, MANAGER, OPERATOR]` | Solo lo consume `/participants` (`participantStore.ts:70`, `guestStore.ts:29`), guard `[ADMIN, MANAGER, OPERATOR]` |
+> | `GET /api/participants/[id]/guests` | `[ADMIN, MANAGER, OPERATOR]` | Sin consumidor en el cliente; devuelve un subconjunto de la ficha anterior |
+>
+> El error de la ficha tiene una causa concreta: **alinear los `GET` con sus `PUT`/`DELETE`
+> hermanos es el criterio equivocado.** Escribir y leer no tienen los mismos consumidores — un
+> `GUARDIA` busca en el padrón para acreditar y no modifica nada.
 
 #### F3-02 — ALTO — `lookup` público es un oráculo de enumeración por RUT
 `src/app/api/public/events/[slug]/lookup/route.ts:26-31`
@@ -1991,8 +2006,9 @@ fichero del código del proyecto fue modificado, creado ni borrado.**
 
 ## 7.0 Correcciones producidas al consolidar
 
-Consolidar obligó a revisar afirmaciones de fases anteriores contra el conjunto. **Seis no
-sobrevivieron**, y se corrigen aquí en vez de dejarlas contradiciéndose en silencio.
+Consolidar obligó a revisar afirmaciones de fases anteriores contra el conjunto. **Siete no
+sobrevivieron**, y se corrigen aquí en vez de dejarlas contradiciéndose en silencio. La séptima no
+salió de consolidar sino de **ejecutar** la corrección, que es un filtro más severo.
 
 | Qué se afirmó | Qué es cierto | Dónde queda corregido |
 |---|---|---|
@@ -2002,10 +2018,11 @@ sobrevivieron**, y se corrigen aquí en vez de dejarlas contradiciéndose en sil
 | **Fase 4 §8 Q1:** *"¿se usa el modo `rut` en algún evento? No determinable desde el código"* | **Determinado por el usuario, aunque no desde el código:** **no hubo eventos reales con participantes reales** antes del compromiso. F4-01 y F3-01 son **bugs encontrados a tiempo, no exposiciones consumadas** | §7.1 y §7.5 |
 | **F1-04:** `safeFilename` clasificada como *"control correcto"* que cerraba el path traversal en `/api/uploads`, con la implicación tácita de que **protegía la lectura de ficheros en producción** | **La guarda es correcta — pero no estaba en el camino de lectura.** En el despliegue anterior los ficheros se servían por un **symlink dentro de `public/`**, y los estáticos ganan al rewrite de `afterFiles`: el handler nunca se ejecutaba. **Confirmación empírica** de lo deducido en la Fase 6 §3, llegada después de cerrar la fase. **La clasificación no cambia y el recuento tampoco**: cambia qué se creía que protegía | Ficha F1-04, §7.2 y §7.4 |
 | **Fase 1 §1 y §7.1:** `GHSA-9qr9-h5gf-34mp` **=** `CVE-2025-55182`, presentados como el mismo identificador | **No son intercambiables.** La API de GitHub devuelve `cve_id: null` para `GHSA-9qr9-h5gf-34mp` (advisory del lado **Next.js**, paquete `next`, parche 16.0.7 en la rama 16). `CVE-2025-55182` mapea a `GHSA-fv66-9v8q-g76r`, advisory del lado **React**, paquetes `react-server-dom-*`. **Misma vulnerabilidad de fondo —React2Shell—, dos advisories distintos.** No cambia nada práctico: el que aplica aquí es el de Next y A7 lo supera | Fase 1 §1 (nota bajo la tabla), §7.1 |
+| **F3-01 y §7.3 A1:** la lista de roles para los tres `GET`, dada como `[ADMIN, OPERATOR]` en la ficha y como `[ADMIN, OPERATOR, GUARD]` en el plan | **Las dos incorrectas, y contradictorias entre sí.** Ninguna incluye `MANAGER`, a quien `Sidebar.tsx:23` encamina a `/participants`: ambas le habrían devuelto **403 en su propia pantalla**. La ficha además se quedaba corta con `GUARD`, que necesita el padrón para buscar en el panel de acreditación (`SearchParticipant.tsx:19,28` → `participantStore.ts:86`). Listas aplicadas: `[ADMIN, MANAGER, OPERATOR, GUARD]` para el padrón, `[ADMIN, MANAGER, OPERATOR]` para la ficha y los acompañantes | Ficha F3-01 (nota tras la corrección), fila A1 de §7.3 |
 
 Se añaden a las dos correcciones que las propias fases ya habían registrado —el conteo de rutas
 por método HTTP (Fase 3 §2) y la premisa fallida de `NEXT_PUBLIC_MODIFY_CONTACT_EMAIL`
-(F6-10)—. **Ocho correcciones en total.** Se dejan visibles a propósito: un informe que solo
+(F6-10)—. **Nueve correcciones en total.** Se dejan visibles a propósito: un informe que solo
 muestra sus aciertos no permite calibrar cuánto fiarse del resto.
 
 **La quinta merece una lectura aparte.** Las cuatro primeras son errores de análisis corregidos
@@ -2028,6 +2045,27 @@ deja es simétrica de la que rige para el código: **el informe puede estar equi
 identificador aportado de fuera no adquiere autoridad por repetirse en tres sitios del
 documento.** Un dato heredado sin verificar es un dato pendiente de verificar, aunque venga de
 fuentes reputadas y aunque su sustancia acabe siendo correcta — que aquí lo es.
+
+**La séptima es de otra clase, y es la más incómoda de las nueve.** No la destapó consolidar ni
+una fuente externa, sino **ejecutar la corrección**: al ir a aplicar A1 hubo que decidir una lista
+de roles concreta, y ahí se vio que el informe daba **dos listas distintas en dos sitios** —
+`[ADMIN, OPERATOR]` en la ficha F3-01, `[ADMIN, OPERATOR, GUARD]` en la fila A1 de §7.3— sin que
+nadie hubiera notado la contradicción. **Ninguna de las dos era correcta.**
+
+Lo que falló no fue la detección del agujero, que era sólida y está probada, sino **el diseño de
+su tapón**: la ficha razonó *«los `GET` deben llevar los roles de sus `PUT`/`DELETE` hermanos»*,
+que suena a simetría y es un criterio equivocado — **leer y escribir no tienen los mismos
+consumidores**. Nadie miró qué pantallas llaman a cada endpoint hasta que hubo que escribir el
+código. La lista correcta no sale del fichero de la ruta: sale de los `RoleGuard` de las pantallas
+que la consumen, y eso obliga a recorrer la cadena `componente → store → URL`.
+
+**La regla que deja:** una corrección propuesta en un informe es una **hipótesis** hasta que se
+implementa. Detectar bien un fallo no garantiza haber diseñado bien su arreglo, y un plan de
+remediación merece el mismo escrutinio que el hallazgo que lo motiva. De haberse aplicado
+cualquiera de las dos listas tal cual, A1 habría cerrado una fuga de PII **rompiendo a la vez** la
+pantalla de Participantes de `MANAGER` —y, con la lista de la ficha, la acreditación en puerta de
+`GUARDIA`—: una regresión funcional introducida por una corrección de seguridad, que es
+exactamente el modo de fallo que las reglas W2 y W3 existen para evitar.
 
 ## 7.1 Veredicto consolidado sobre el vector
 
@@ -2220,7 +2258,7 @@ implementación **más su verificación**; no incluyen la regresión general.
 
 | # | ID | Corrección concreta | Esfuerzo | Dependencias |
 |---|---|---|---|---|
-| **A1** | **F3-01** | Exigir autenticación en los tres endpoints de la cadena: `withAuth([ADMIN, OPERATOR, GUARD])`. **Sin aislamiento por ámbito** — el personal puede ver todos los eventos (decisión de producto), así que la corrección se limita a exigir auth | ~1 h | Ninguna |
+| **A1** | **F3-01** | ~~`withAuth([ADMIN, OPERATOR, GUARD])`~~ **Lista rectificada al ejecutar — ver la ficha F3-01 y §7.0, séptima corrección.** Padrón del evento: `[ADMIN, MANAGER, OPERATOR, GUARD]`; ficha del participante y sus acompañantes: `[ADMIN, MANAGER, OPERATOR]`. **Sin aislamiento por ámbito** — el personal puede ver todos los eventos (decisión de producto), así que la corrección se limita a exigir auth | ~1 h | Ninguna |
 | **A2** | **F1-01** | `withAuth` en `POST /api/participants` y **dejar de leer `userId` del body**: derivarlo del token | ~30 min | Ninguna |
 | **A3** | **F4-01** | **Cerrar el camino de escritura, no asegurarlo.** Si el `participantId` corresponde a un participante **ya inscrito**, **rechazar** (409) y devolver el mensaje de contacto — sin actualizar ningún campo. Si no está inscrito: `safeParse` **obligatorio** y lista blanca de campos sobrescribibles | ~3 h | **Decisión de producto P2, ya tomada.** Incorpora la implementación de `NEXT_PUBLIC_MODIFY_CONTACT_EMAIL` |
 | **A4** | **F4-02** | Leer los invitados de `validation.data`, no del body crudo; **tope** por `allowedGuests` y por cupo del evento | ~1 h | **Mismo fichero que A3 — hacer en la misma sesión** |
