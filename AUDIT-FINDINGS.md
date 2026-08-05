@@ -2283,7 +2283,8 @@ significa hacerlas sobre un sistema ya en producción.
 
 | ID | Corrección concreta | Esfuerzo |
 |---|---|---|
-| **F3-03** | `bcrypt.compare` asíncrono en lugar de `compareSync` — `User.ts:65` ya expone el método correcto. **Corrección de una línea con impacto de DoS: el primero del bloque** | ~10 min |
+| **SB-17** | **Decisión 2026-08-05: primer elemento del bloque.** `set` en vez de `append` en `apiClient.ts:27`, no reenviar la cabecera previa en el reintento, acotar la recursión — ver la ficha en `SECURITY-BACKLOG.md` | ~1 h |
+| **F3-03** | `bcrypt.compare` asíncrono en lugar de `compareSync` — `User.ts:65` ya expone el método correcto. Corrección de una línea con impacto de DoS | ~10 min |
 | **F4-07** | **Promovido desde el Bloque C** (ver justificación bajo la tabla). Validar los **bytes mágicos** del fichero contra la extensión declarada, en `api/uploads/route.ts:31` | ~2 h |
 | **F3-02** | Rate limiting por RUT en el `lookup`, y respuesta uniforme que no distinga "existe" de "no existe" | ~2 h |
 | **F3-05** | Bloqueo de cuenta y backoff exponencial tras intentos fallidos | ~3 h |

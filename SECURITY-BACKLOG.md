@@ -572,6 +572,10 @@ inexplicable o un bucle, justo en las pantallas de padrón y acreditación.
 **Corrección**: usar `set` en lugar de `append` en `:27`, no reenviar la cabecera previa en el
 reintento, y acotar la profundidad de recursión.
 
+**Decisión (2026-08-05)**: va al **Bloque B como primer elemento**, por delante de F3-03. Criterio:
+salida a producción lo antes posible — no abre agujero de seguridad, es preexistente a A1 y no
+bloquea el redespliegue.
+
 ---
 
 ## SB-18 — `MANAGER` no puede listar eventos: el rol está roto de facto
@@ -586,6 +590,11 @@ reintento, y acotar la profundidad de recursión.
 **ambas arrancan pidiendo la lista de eventos** (`participants/page.tsx:16`,
 `AccreditationPanel.tsx:58`). Un `MANAGER` nunca obtiene un `eventId`, así que no llega a disparar
 ninguno de los tres endpoints de A1.
+
+**Decisión (2026-08-05)**: por criterio de mínimo tiempo para el redespliegue, `MANAGER` **queda
+inerte** — no se toca `/api/events` ni los `RoleGuard` antes de salir. No es grave: los permisos
+inertes no conceden acceso a nadie. La decisión de producto (rol vivo o retirado) queda abierta en
+esta entrada y se resuelve en el Bloque B.
 
 **Consecuencia para A1**: los permisos de `MANAGER` que A1 concede son **hoy inertes**. Se
 incluyeron igualmente porque la elección es dominante —si el rol está muerto no conceden nada a
