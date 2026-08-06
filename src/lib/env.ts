@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import fs from 'fs';
+import path from 'path';
 
 /**
  * Validación del entorno al arranque (F6-05 / F2-07).
@@ -71,6 +73,36 @@ const envSchema = z.object({
     : z.string().optional(),
 });
 
+/**
+ * D6 (plan 08): UPLOADS_DIR ni se creaba ni se comprobaba. El directorio se
+ * creaba perezosamente en la PRIMERA SUBIDA, así que con `ProtectSystem=strict`
+ * (o cualquier ruta no escribible) el fallo no aparecía en el arranque sino
+ * como un 500 días después, delante de un usuario. Aquí se garantiza en el
+ * arranque: se crea si falta (con `StateDirectory=tuacreditacion`, systemd
+ * aprovisiona el padre `/var/lib/tuacreditacion` escribible y este mkdir solo
+ * añade el subdirectorio) y se prueba una escritura real. Si algo falla, el
+ * proceso NO arranca: un fallo de configuración debe ser ruidoso e inmediato,
+ * no una petición rota.
+ */
+function assertUploadsDirWritable(dir: string): void {
+  const probe = path.join(dir, `.probe-arranque-${process.pid}`);
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(probe, '');
+    fs.unlinkSync(probe);
+  } catch (e) {
+    const code = (e as NodeJS.ErrnoException)?.code ?? 'desconocido';
+    console.error(
+      `\nUPLOADS_DIR no existe o no se puede escribir (código ${code}). La aplicación no arranca.\n\n` +
+        '  - La ruta debe existir y ser escribible ANTES del arranque: la aprovisiona\n' +
+        '    systemd (StateDirectory=) o el runbook, no la primera subida.\n' +
+        '  - Con ProtectSystem=strict, todo lo que no cuelgue de StateDirectory= o\n' +
+        '    ReadWritePaths= es de solo lectura para el servicio.\n'
+    );
+    process.exit(1);
+  }
+}
+
 export function validateEnv(): void {
   // Todas las exigencias de arriba cuelgan de NODE_ENV, así que un NODE_ENV
   // equivocado las desactiva TODAS en silencio. Matiz medido en el build real
@@ -88,7 +120,14 @@ export function validateEnv(): void {
 
   const result = envSchema.safeParse(process.env);
 
-  if (result.success) return;
+  if (result.success) {
+    // Solo en producción: en desarrollo UPLOADS_DIR es opcional y el respaldo
+    // (cwd()/uploads) se crea perezosamente sin systemd de por medio.
+    if (isProduction && result.data.UPLOADS_DIR) {
+      assertUploadsDirWritable(result.data.UPLOADS_DIR);
+    }
+    return;
+  }
 
   // R2: se nombra la variable y el motivo, nunca el valor.
   const detalle = result.error.issues
