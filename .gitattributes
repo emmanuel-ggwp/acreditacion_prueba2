@@ -1,3 +1,7 @@
 # Los scripts de workflow deben quedarse en LF: el dialogo de aprobacion del
 # Workflow rechaza scripts con CRLF ("script contains control characters").
 *.workflow.js text eol=lf
+
+# Todo lo que se ejecuta en Linux (droplet) o en Git Bash debe ir en LF.
+*.sh text eol=lf
+infra/** text eol=lf
