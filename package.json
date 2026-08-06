@@ -11,6 +11,8 @@
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "db:sync": "tsx src/scripts/sync-db.ts",
+    "db:migrate": "tsx scripts/migrate.ts up",
+    "db:migrate:status": "tsx scripts/migrate.ts status",
     "db:seed:users": "tsx scripts/seed-users.ts",
     "db:seed": "tsx scripts/seed-data.ts"
   },
@@ -38,7 +40,8 @@
     "tailwindcss": "^4.1.17",
     "ts-jest": "^29.4.5",
     "tsx": "^4.22.4",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "umzug": "^3.8.3"
   },
   "dependencies": {
     "@emailjs/browser": "^4.4.1",
