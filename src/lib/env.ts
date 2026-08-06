@@ -52,6 +52,31 @@ const envSchema = z.object({
           'debe ser una URL con esquema postgres:// o postgresql:// ' +
           '(y los caracteres especiales de la contraseña, percent-encoded)',
       }
+    )
+    // P07-D7.10 — la URL se guarda SIN query string. La que da la consola de
+    // DigitalOcean trae `?sslmode=require`, y está VERIFICADO EJECUTANDO (sonda
+    // de la fase 2 del plan 07) que con sequelize 6.37.7 cualquier `sslmode` en
+    // la URL hace que `lib/sequelize.js:93-95` fusione el parse de la URL sobre
+    // dialectOptions y SUSTITUYA `ssl` por `{}`: se pierden rejectUnauthorized
+    // y la CA de DB_CA_CERT en silencio — cifrado sin autenticación, el defecto
+    // que F6-04 corrigió. DB_SSL es la única fuente de decisión; rechazar aquí
+    // TODA query string impide que el copy-paste desde la consola reintroduzca
+    // el clobbering (ningún otro parámetro de query nos hace falta: los que no
+    // pisan `ssl` también acaban fusionados en dialectOptions como ruido).
+    .refine(
+      (v) => {
+        try {
+          return new URL(v).search === '';
+        } catch {
+          return false;
+        }
+      },
+      {
+        message:
+          'no debe llevar query string: quita el `?sslmode=...` que trae la URL ' +
+          'de la consola de DigitalOcean (pisa la configuración SSL real; el SSL ' +
+          'lo deciden DB_SSL y DB_CA_CERT)',
+      }
     ),
   JWT_SECRET: signingSecret,
   JWT_REFRESH_SECRET: signingSecret,
