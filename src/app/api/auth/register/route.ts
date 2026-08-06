@@ -9,6 +9,10 @@ import { ROLES } from '@/utils/constants';
 const { ADMIN, OPERATOR, GUARD} = ROLES;
 
 async function registerHandler(request: AuthenticatedRequest) {
+  // Límite general, no el estricto de credenciales: este endpoint ya exige ADMIN
+  // (withAuth abajo), así que no hay fuerza bruta anónima que frenar, y el cubo de
+  // 10 intentos/15 min bloquearía a un administrador dando de alta varios usuarios
+  // seguidos — y por IP, con lo que se cerraría también su propio login.
   const rateLimitResult = await rateLimitMiddleware(request as any);
   if (rateLimitResult) return rateLimitResult;
 

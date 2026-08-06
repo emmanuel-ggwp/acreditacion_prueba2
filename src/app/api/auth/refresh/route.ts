@@ -1,8 +1,16 @@
 
-import { NextResponse } from 'next/server';
+import { NextResponse, NextRequest } from 'next/server';
 import { authService } from '../../../../services/authService';
+import { authRateLimit } from '@/lib/auth-rate-limit';
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
+  // No tenía ningún límite propio, y acepta un token por el cuerpo: es una
+  // superficie de adivinación tan válida como el login.
+  const rateLimitResponse = await authRateLimit(request);
+  if (rateLimitResponse) {
+    return rateLimitResponse;
+  }
+
   try {
     const body = await request.json();
     const { refreshToken } = body;

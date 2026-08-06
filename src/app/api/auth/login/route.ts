@@ -2,10 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { authService } from '../../../../services/authService';
 import { loginSchema } from '../../../../utils/validators/authSchemas';
 import { ZodError } from 'zod';
-import { rateLimitMiddleware } from '@/lib/rate-limit';
+import { authRateLimit, resetAuthRateLimit } from '@/lib/auth-rate-limit';
 
 export async function POST(request: NextRequest) {
-  const rateLimitResponse = await rateLimitMiddleware(request);
+  const rateLimitResponse = await authRateLimit(request);
   if (rateLimitResponse) {
     return rateLimitResponse;
   }
@@ -15,6 +15,10 @@ export async function POST(request: NextRequest) {
     const validatedData = loginSchema.parse(body);
 
     const result = await authService.login(validatedData);
+
+    // Acertar la contraseña devuelve el intento a la cuota: el límite persigue
+    // la fuerza bruta, no al usuario que se equivocó una vez antes de acertar.
+    await resetAuthRateLimit(request);
 
     return NextResponse.json({ success: true, data: result });
   } catch (error) {
