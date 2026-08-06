@@ -58,6 +58,23 @@ const envSchema = z.object({
         .refine((v) => v.startsWith('/'), { message: 'debe ser una ruta absoluta' })
     : z.string().optional(),
 
+  // El puerto decide a qué upstream apunta Nginx: era la única variable del
+  // inventario sin declarar ni validar (D7/D8.6, plan 08). Opcional porque
+  // `next start` también lo acepta por CLI (`-p`) y sin nada cae al 3000 —
+  // ambos caminos son legítimos. Medido (2026-08-06): con `next start`, un
+  // PORT malformado NUNCA llega aquí — el CLI de Next rechaza los no numéricos
+  // nombrando la variable, y un fuera de rango revienta el bind (el servidor
+  // escucha ANTES de que corra register()). Esta entrada existe para que el
+  // inventario de variables esté completo y para cualquier arranque futuro
+  // que no pase por el CLI de Next.
+  PORT: z
+    .string()
+    .regex(/^\d+$/, 'debe ser un número de puerto TCP (1-65535)')
+    .refine((v) => Number(v) >= 1 && Number(v) <= 65535, {
+      message: 'debe estar entre 1 y 65535',
+    })
+    .optional(),
+
   // La cadena vacía se acepta explícitamente: `DB_SSL=` en un fichero de entorno
   // llega como '' y no como undefined, y es la forma natural de escribir "sin SSL"
   // en un EnvironmentFile de systemd. Sin este `literal('')` el arranque abortaría
