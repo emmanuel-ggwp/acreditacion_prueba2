@@ -11,7 +11,14 @@ export const meta = {
 }
 
 // args: { plan: "01-regresiones-bloque-a" }  (nombre del fichero sin .md)
-const planName = (args && args.plan) || '01-regresiones-bloque-a'
+// Tolerar args que llegan como texto JSON: el 2026-08-06 un lanzamiento con
+// {plan: "02-..."} llego como string, args.plan salio undefined y el script cayo
+// EN SILENCIO al plan 01. Sin plan explicito ahora se para, no se adivina.
+const argsObj = typeof args === 'string' ? JSON.parse(args) : args
+const planName = argsObj && argsObj.plan
+if (!planName) {
+  return { error: 'Falta args.plan (nombre del fichero de planes/ sin .md). No se asume ningun plan por defecto.' }
+}
 const planPath = `planes/${planName}.md`
 
 const REGLAS = `
