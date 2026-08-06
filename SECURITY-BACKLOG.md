@@ -189,19 +189,39 @@ De ahí que el momento sea **al terminar los cambios de la auditoría y antes de
 
 ---
 
-## SB-09 — Validar el certificado de la base de datos si alguna vez se externaliza
+## SB-09 — ⚠ ACTIVADA — Validar el certificado de la base de datos administrada
 
-- **Referencia**: **F2-06** en `AUDIT-FINDINGS.md`. — **Fichero**: `src/lib/sequelize.ts:27`.
-- **Bloquea el redespliegue**: **No**, y conviene entender por qué. `rejectUnauthorized: false`
-  anula la protección frente a un intermediario activo, **pero la reconstrucción usa PostgreSQL
-  autoalojado en el mismo droplet**, por localhost o socket Unix: **no hay red intermedia**, luego
-  no hay nada que interceptar.
-- **Cuándo deja de ser backlog**: **el día que la base de datos salga de la máquina.** Entonces
-  pasa a bloqueante inmediato.
-- **Propuesta**: `rejectUnauthorized: true` con el certificado de CA del proveedor.
-- **No confundir con F6-04**, que toca las mismas dos líneas y **sí** es bloqueante (Bloque A,
-  A8): aquel es que **`DB_SSL` no puede desactivarse**, lo que impide arrancar contra un Postgres
-  local. Mismo fichero, dos problemas distintos.
+- **Referencia**: **F2-06** en `AUDIT-FINDINGS.md`. — **Fichero**: `src/lib/sequelize.ts:12, 29`.
+- **Bloquea el redespliegue**: **SÍ, desde el 2026-08-06.**
+
+**Esta entrada decía «si alguna vez se externaliza». Ya se externalizó:** la decisión del
+**2026-08-06** es usar la **base administrada de DigitalOcean** en lugar de PostgreSQL en el
+droplet. Su propia condición de activación —«el día que la base de datos salga de la máquina»— se
+cumplió, así que deja de ser backlog y pasa a requisito de despliegue.
+
+**Situación exacta del código hoy**, que es lo que hay que entender antes de tocarlo:
+
+- `sequelize.ts:12` — `DB_SSL` es la única fuente de decisión (A8). Correcto y sigue valiendo; lo
+  que cambia es que ahora **debe estar en `true`**: las bases administradas de DigitalOcean exigen
+  SSL.
+- `sequelize.ts:29` — `rejectUnauthorized: true`, que A8 ya dejó puesto. Es lo que SB-09 pedía, **y
+  ahí está el problema**: DigitalOcean firma con una CA propia que Node no lleva en su almacén, así
+  que **sin darle esa CA la aplicación no conecta**. No es una mejora pendiente: es un fallo de
+  arranque garantizado en el primer despliegue.
+
+**Lo que NO es la solución**: bajar a `rejectUnauthorized: false`. Eso convierte el SSL en cifrado
+sin autenticación, que es exactamente el defecto que F6-04 corrigió — y con la base fuera de la
+máquina ahora sí hay red intermedia que interceptar, que era la razón por la que esta entrada
+existía.
+
+**Corrección**: pasar la CA de DigitalOcean, por `dialectOptions.ssl.ca` o `NODE_EXTRA_CA_CERTS`,
+con variable nueva declarada en `.example.env` y **validada en `env.ts`**: si `DB_SSL=true` y no hay
+CA, que aborte diciéndolo. Los detalles concretos —formato del fichero, si la URL necesita
+`sslmode`, caducidad y rotación del certificado— los produce **la fase 2 del plan 07**, que existe
+para eso y no los da por supuestos.
+
+- **No confundir con F6-04**, que toca las mismas dos líneas y ya se corrigió (Bloque A, A8): aquel
+  era que **`DB_SSL` no podía desactivarse**. Mismo fichero, dos problemas distintos.
 
 ---
 

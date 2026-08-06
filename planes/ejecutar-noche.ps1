@@ -265,11 +265,17 @@ foreach ($p in $seleccion) {
     # droplet real. Un script sin probar es una hipotesis con aspecto de certeza, asi que de
     # noche se escribe y se valida en seco, y ahi para.
     if ($plan -like '07-*') {
-        $prompt += "`n`nIMPORTANTE PARA ESTE PLAN: ejecuta SOLO las fases 1, 2 y 3. La fase 4 exige"
-        $prompt += "`nun droplet real delante y NO se ejecuta de noche. Escribe el script de"
-        $prompt += "`naprovisionamiento y validalo EN SECO (bash -n, shellcheck, nginx -t dentro de un"
-        $prompt += "`ncontenedor, systemd-analyze verify, y ejecutarlo dos veces en un contenedor Ubuntu"
-        $prompt += "`nlimpio para comprobar que es idempotente). No intentes conectar con ningun servidor."
+        $prompt += "`n`nIMPORTANTE PARA ESTE PLAN: ejecuta SOLO las fases 1, 2, 3 y 4. La fase 5 exige"
+        $prompt += "`nun droplet real delante y NO se ejecuta de noche. Escribe los scripts y validalos"
+        $prompt += "`nEN SECO (bash -n, shellcheck, nginx -t dentro de un contenedor, systemd-analyze"
+        $prompt += "`nverify, y ejecutarlos dos veces en un contenedor Ubuntu limpio para comprobar que"
+        $prompt += "`nson idempotentes). NO intentes conectar con ningun servidor ni con la base de datos"
+        $prompt += "`nde DigitalOcean."
+        $prompt += "`n`nLa FASE 2 es investigacion documental sobre la base administrada de DigitalOcean"
+        $prompt += "`n-- decision del 2026-08-06, ya NO se instala PostgreSQL en el droplet. Busca en la"
+        $prompt += "`ndocumentacion oficial, no supongas, y lo que no puedas confirmar sin credenciales"
+        $prompt += "`nde DigitalOcean sale como pregunta para Emmanuel, no como valor por defecto"
+        $prompt += "`ninventado. Sin ese documento la fase 3 NO empieza."
     }
 
     # El 06 pone la suite en verde, y con ello cambia la linea base de W7 que el resto usa como

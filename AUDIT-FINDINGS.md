@@ -2486,7 +2486,7 @@ reconstrucción del droplet con la especificación de §7.4.
 | A1 | F3-01 | `94555bd` | Cadena de exfiltración de PII: 401 sin token, 403 por rol |
 | A5 | F1-02 | `e3197e9` | `stats`: 401 sin token, 200 con los cuatro roles |
 | A2 | F1-01 | `f6d0959` | `created_by` sale del token; el `userId` del body se descarta |
-| A8 | F6-04 | `9700a6c` | Conecta con `NODE_ENV=production` sin SSL; `DB_SSL=true` lo exige |
+| A8 | F6-04 | `9700a6c` | Conecta con `NODE_ENV=production` sin SSL; `DB_SSL=true` lo exige. **Ver el aviso de abajo: la premisa cambió el 2026-08-06** |
 | A11 | F6-06 | `ac3607b` | `.env` destrackeado; los tres scripts de BD siguen funcionando |
 | A9 | F1-07 | `ebd8911` | 18 vulnerabilidades (4 críticas) → 11 (0 críticas) |
 | A10 | F6-05 / F2-07 | `41eb4da` | El arranque aborta si falta una variable crítica, sin esperar petición |
@@ -2523,6 +2523,30 @@ reconstrucción del droplet con la especificación de §7.4.
 
 **Decisiones tomadas el 2026-08-05 con criterio de mínimo tiempo hasta producción** (SB-17 al
 Bloque B, `MANAGER` inerte, el 500 público a backlog como SB-23): ver §7.0 y las fichas.
+
+### ⚠ Cambio de decisión del 2026-08-06 — la base de datos ya no vive en el droplet
+
+**Se usará la base administrada de DigitalOcean**, no PostgreSQL autoalojado. El motivo es directo:
+el servidor anterior se comprometió y hubo que destruirlo **sin snapshot**. Con la base en la misma
+máquina, los datos mueren con ella; con la administrada, se destruye el droplet y los datos siguen.
+
+Esto **no invalida A8** —`DB_SSL` como única fuente de decisión sigue siendo lo correcto— pero sí
+cambia su consecuencia práctica, y hay un efecto que muerde en el primer arranque:
+
+- `DB_SSL` pasa a **`true`**: las bases administradas de DigitalOcean exigen SSL.
+- **`rejectUnauthorized: true` (`sequelize.ts:29`) impide arrancar sin la CA de DigitalOcean.** La
+  firma una CA propia que Node no lleva en su almacén. Hace falta pasársela y **declarar una
+  variable nueva**, validada al arranque. Bajar a `rejectUnauthorized: false` **no** es la salida.
+- **SB-09 se activa**: era «validar el certificado si alguna vez se externaliza», y ya se
+  externalizó. Deja de ser deuda y pasa a bloqueante.
+- **SB-22 sube de prioridad**: el limitador comparte el pool de 5 conexiones, que se dimensionó
+  contra una base en localhost. Ahora cada consulta paga latencia de red y el límite de conexiones
+  lo fija el plan contratado.
+- La restricción de red que daba el `127.0.0.1` se sustituye por *trusted sources* en DigitalOcean.
+
+Los datos concretos que faltan —formato de la CA, `sslmode` en la cadena, límite de conexiones,
+permisos del usuario, rotación del certificado— **no se asumen**: los produce la **fase 2 del plan
+07**, que se añadió para eso.
 
 ### Antes de redesplegar — dos condiciones que este bloque deja abiertas
 

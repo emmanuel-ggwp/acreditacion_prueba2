@@ -37,7 +37,7 @@ de manera que no se pueda deshacer. Eso se deja propuesto y **se espera**.
 
 | # | Plan · Fase | Decisión | Por qué | Alternativa descartada | Coste de cambiarla |
 |---|---|---|---|---|---|
-| — | — | *(vacío hasta la primera ejecución)* | | | |
+| **D0** | **Tomada por Emmanuel** · 2026-08-06 | **Base de datos administrada de DigitalOcean**, no PostgreSQL en el droplet | El servidor anterior se comprometió y hubo que destruirlo **sin snapshot**. Con la base en la misma máquina, los datos mueren con ella. Backups y parches gestionados, y sobrevive a un redespliegue del droplet | **PostgreSQL local con backups propios.** Descartada porque «como la vez anterior» significa que la vez anterior **no había backups**, y montarlos, probar que restauran y vigilarlos es trabajo recurrente que se abandona a los meses | **Alto una vez haya datos reales**: migrar una base en producción. Barato ahora, antes del primer evento |
 
 ---
 

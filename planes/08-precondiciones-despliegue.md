@@ -73,8 +73,14 @@ propio `.env`.
 ### D5 — El limitador necesita `CREATE TABLE`, y sin él degrada en silencio
 
 `RateLimiterPostgres` lanza `CREATE TABLE IF NOT EXISTS rate_limits` **en el primer login**, no al
-arrancar. §7.4 exige un usuario de base de datos sin SUPERUSER, y en PostgreSQL 15+ (Ubuntu 24.04
-trae PG16) el esquema `public` ya no concede `CREATE` a `PUBLIC`: el rol recibe *permission denied*.
+arrancar. §7.4 exige un usuario de base de datos sin SUPERUSER, y en PostgreSQL 15+ el esquema
+`public` ya no concede `CREATE` a `PUBLIC`: el rol recibe *permission denied*.
+
+> **Cambio del 2026-08-06:** la base pasa a ser la **administrada de DigitalOcean**, así que los
+> permisos ya no se conceden con un `psql` local sino desde su consola o con el usuario que ella
+> provee. Qué permisos trae el usuario por defecto y si conviene uno acotado lo responde la **fase 2
+> del plan 07** (pregunta I4). El fallo que hay que evitar es el mismo: sin `CREATE`, el limitador
+> **degrada a memoria en silencio** y la protección contra fuerza bruta queda decorativa.
 
 Entonces `auth-rate-limit.ts:79-84` escribe un `console.error` y **degrada a memoria**, con lo que
 la protección contra fuerza bruta queda decorativa y nada más lo señala.

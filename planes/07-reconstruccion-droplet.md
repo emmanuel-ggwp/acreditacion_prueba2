@@ -13,9 +13,13 @@ puede es darlo por bueno sin ejecutarlo: no hay droplet contra el que probarlo, 
 infraestructura no verificado es una hipótesis con aspecto de certeza — exactamente el modo de
 fallo que la auditoría documenta una y otra vez.
 
-De ahí la forma del plan: el script se escribe, se valida en seco todo lo validable en seco
-(sintaxis, idempotencia, `nginx -t` en contenedor), y **la ejecución real contra el droplet es una
-fase supervisada, no nocturna**. Lo que sí puede correr de noche es todo lo anterior.
+De ahí la forma del plan: **las fases 1 a 4 corren de noche** —investigar, escribir, validar en seco
+lo validable en seco (sintaxis, idempotencia, `nginx -t` en contenedor)— y **la fase 5, que es
+ejecutar contra el droplet real, es supervisada**.
+
+**La fase 2 es investigación pura y no toca nada**: existe porque el 2026-08-06 se decidió usar la
+base **administrada de DigitalOcean** en vez de PostgreSQL en el droplet, y ese cambio dejó el plan
+sin los datos que el script necesita. Se documenta primero, se escribe después.
 
 **Los secretos no entran nunca en el repositorio ni en el script.** El script consume un fichero
 de entorno que se genera en la máquina y nunca se versiona. Ningún agente debe imprimir su
@@ -55,7 +59,39 @@ el validador de GitHub.
 
 ---
 
-## Fase 2 — Escribir el script de aprovisionamiento
+## Fase 2 — Investigar la base administrada de DigitalOcean
+
+**Existe porque el cambio del 2026-08-06 dejó el plan sin datos, y el script de la fase siguiente no
+se puede escribir sin ellos.** Nada de esto se supone: se busca en la documentación oficial de
+DigitalOcean y se contrasta con la consola del proyecto. Lo que no se pueda confirmar sale como
+pregunta para Emmanuel, no como valor por defecto inventado.
+
+### Qué hay que averiguar
+
+| # | Pregunta | Por qué bloquea |
+|---|---|---|
+| I1 | **La CA**: ¿cómo se obtiene el certificado de la base, en qué formato, y cómo se le pasa a Node? ¿`dialectOptions.ssl.ca` con el contenido, una ruta de fichero, o `NODE_EXTRA_CA_CERTS`? | Sin esto, `rejectUnauthorized: true` **impide arrancar**. Decide la variable nueva y cómo la valida `env.ts` |
+| I2 | **La cadena de conexión**: ¿qué formato exacto da DigitalOcean? ¿Necesita `?sslmode=require` o `sslmode=verify-full`? ¿Interfiere con lo que Sequelize ya hace con `dialectOptions`? | `DATABASE_URL` mal formada hoy da un `TypeError` opaco en la primera petición (plan 08, D8) |
+| I3 | **Límite de conexiones** del plan contratado, y cómo se reparte entre la aplicación y el pool del limitador | `pool.max: 5` se fijó contra una base local. Agotar el límite de la administrada tumba la aplicación entera, no una consulta |
+| I4 | **Usuario y permisos**: ¿el usuario por defecto vale, o conviene uno acotado? ¿Tiene `CREATE` en el esquema `public`? | El limitador crea `rate_limits` en el primer login; sin `CREATE` **degrada a memoria en silencio** |
+| I5 | **Red**: cómo se restringe el acceso para que solo el droplet alcance la base (*trusted sources*), y qué pasa con el acceso desde la máquina de desarrollo | Sustituye al `127.0.0.1` que se pierde al externalizar |
+| I6 | **Copias de seguridad**: qué incluye DigitalOcean por defecto, retención, y **cómo se restaura** | Un backup sin restauración probada no es un backup |
+| I7 | **Rotación del certificado de la CA**: ¿caduca? ¿qué hay que hacer cuando DigitalOcean lo renueve? | Es una bomba de relojería: el día que caduque, la aplicación deja de conectar sin que nadie haya tocado nada |
+| I8 | **Latencia y región**: ¿la base queda en la misma región que el droplet? | Cada consulta pasa a pagar red. El limitador consulta en cada intento de login |
+
+### Entregable
+
+Un documento en `planes/resultados/` con **una respuesta por pregunta, cada una con su fuente**
+(enlace a la documentación oficial o captura de lo que dice la consola). Las que no se puedan
+responder sin credenciales de DigitalOcean se listan aparte como preguntas para Emmanuel.
+
+**Sin este documento, la fase 3 no empieza.** Escribir el script de aprovisionamiento con valores
+inventados para I1–I4 produce exactamente lo que este plan advierte en su encabezado: una hipótesis
+con aspecto de certeza.
+
+---
+
+## Fase 3 — Escribir el script de aprovisionamiento
 
 Un script idempotente —ejecutarlo dos veces no debe romper nada— que deje el droplet listo.
 Entregable: `infra/provision.sh` más los ficheros de configuración que instala.
@@ -68,13 +104,39 @@ Entregable: `infra/provision.sh` más los ficheros de configuración que instala
 - Firewall: solo 22, 80 y 443. **PostgreSQL nunca expuesto.**
 - SSH: sin contraseña, sin root, solo clave.
 
-**PostgreSQL local**
-- Escuchando **solo en `127.0.0.1`**. Es lo que hace correcta la decisión de A8 de no exigir SSL.
-- Usuario de aplicación con permisos acotados a su base. **Necesita `CREATE`**: el limitador crea
-  su tabla `rate_limits` al arrancar (`auth-rate-limit.ts`). Si no lo tiene, degrada a memoria en
-  silencio y se descubre tarde.
-- Copias de seguridad automáticas con **restauración probada**. Un backup que nunca se ha
-  restaurado no es un backup.
+**PostgreSQL — CAMBIO DE DECISIÓN del 2026-08-06: base ADMINISTRADA de DigitalOcean**
+
+Ya no se instala PostgreSQL en el droplet. Eso invalida varias premisas del Bloque A y de este
+plan, y hay que tratarlas una por una **antes** de escribir el script:
+
+- **`DB_SSL=true` pasa a ser obligatorio.** Las bases administradas de DigitalOcean **exigen** SSL.
+  La corrección A8 dejó `DB_SSL` como única fuente de decisión, y eso sigue siendo correcto — lo que
+  cambia es el valor.
+- **`rejectUnauthorized: true` (`sequelize.ts:29`) IMPIDE ARRANCAR sin la CA de DigitalOcean.** Su
+  certificado lo firma una CA propia que Node no lleva en su almacén. Hay que dársela, por
+  `dialectOptions.ssl.ca` leyendo un fichero, o por `NODE_EXTRA_CA_CERTS` en el `EnvironmentFile`.
+  **Requiere variable nueva** (p. ej. `DB_CA_CERT` con la ruta), y por tanto tocar `.example.env` y
+  la validación de `env.ts`: si `DB_SSL=true` y no hay CA, debe abortar con un mensaje que lo diga.
+  Bajar a `rejectUnauthorized: false` **no** es la salida: convierte el SSL en cifrado sin
+  autenticación, que es el defecto que F6-04 corrigió.
+- **SB-09 deja de ser deuda futura y pasa a ser requisito de este plan.** Estaba redactada como
+  «validar el certificado *si alguna vez* se externaliza». Ya se externalizó.
+- **Acceso de red**: la base **no** debe quedar abierta a Internet. Configurar *trusted sources* en
+  DigitalOcean para que solo el droplet (y, si acaso, una IP de administración) la alcance. Es el
+  equivalente al `127.0.0.1` que se pierde.
+- **Permisos del usuario de aplicación**: el limitador crea `rate_limits` con `CREATE TABLE` en el
+  primer login. Si el usuario no tiene `CREATE`, **degrada a memoria en silencio** y la protección
+  contra fuerza bruta queda decorativa. Crear la tabla en el aprovisionamiento y conceder solo DML
+  (plan 08, D8.4).
+- **Pool y latencia, que ahora importan.** `sequelize.ts:18-23` fija `pool.max: 5`. La base deja de
+  estar en localhost: cada consulta paga latencia de red, y el limitador consulta **en cada intento
+  de login** compartiendo ese mismo pool (SB-22). Comprobar el límite de conexiones del plan
+  contratado y dimensionar el pool en consecuencia — con la base administrada, SB-22 sube de
+  prioridad.
+- **Copias de seguridad**: DigitalOcean las gestiona. Sigue haciendo falta **probar una
+  restauración**: un backup que nunca se ha restaurado no es un backup, lo gestione quien lo gestione.
+
+Los datos concretos que faltan **no se asumen**: los produce la **fase 2**, que existe para eso.
 
 **Nginx** — es la capa donde probablemente se materializó la redirección del ataque, así que su
 configuración versionada es la mitad del valor de este plan:
@@ -115,7 +177,7 @@ Ubuntu limpio y comprobar que la segunda no rompe nada.
 
 ---
 
-## Fase 3 — Script de despliegue y vuelta atrás
+## Fase 4 — Script de despliegue y vuelta atrás
 
 Separado del aprovisionamiento a propósito: aprovisionar se hace una vez, desplegar muchas.
 
@@ -136,7 +198,7 @@ deliberado y comprobar la vuelta atrás.
 
 ---
 
-## Fase 4 — Comprobación posterior al despliegue *(supervisada, no nocturna)*
+## Fase 5 — Comprobación posterior al despliegue *(supervisada, no nocturna)*
 
 Lista de comprobación ejecutable contra el servidor ya en pie:
 
