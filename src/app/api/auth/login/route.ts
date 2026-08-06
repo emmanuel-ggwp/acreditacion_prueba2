@@ -2,9 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { authService } from '../../../../services/authService';
 import { loginSchema } from '../../../../utils/validators/authSchemas';
 import { ZodError } from 'zod';
-import { authRateLimit, resetAuthRateLimit } from '@/lib/auth-rate-limit';
+import { authRateLimit, accountRateLimit, resetAccountRateLimit } from '@/lib/auth-rate-limit';
 
 export async function POST(request: NextRequest) {
+  // Límite por IP: holgado, para no dejar fuera a toda una sede tras el mismo NAT.
   const rateLimitResponse = await authRateLimit(request);
   if (rateLimitResponse) {
     return rateLimitResponse;
@@ -14,11 +15,18 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const validatedData = loginSchema.parse(body);
 
+    // Límite por cuenta: estricto, y es el que de verdad frena la adivinación de
+    // una contraseña. Se comprueba aquí porque hasta ahora no se sabía el email.
+    const accountLimited = await accountRateLimit(validatedData.email);
+    if (accountLimited) {
+      return accountLimited;
+    }
+
     const result = await authService.login(validatedData);
 
-    // Acertar la contraseña devuelve el intento a la cuota: el límite persigue
-    // la fuerza bruta, no al usuario que se equivocó una vez antes de acertar.
-    await resetAuthRateLimit(request);
+    // Acertar devuelve la cuota de SU cuenta; el cubo por IP se mantiene a
+    // propósito, o bastaría una credencial válida para reiniciarlo a voluntad.
+    await resetAccountRateLimit(validatedData.email);
 
     return NextResponse.json({ success: true, data: result });
   } catch (error) {

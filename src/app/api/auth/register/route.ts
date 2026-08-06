@@ -10,9 +10,12 @@ const { ADMIN, OPERATOR, GUARD} = ROLES;
 
 async function registerHandler(request: AuthenticatedRequest) {
   // Límite general, no el estricto de credenciales: este endpoint ya exige ADMIN
-  // (withAuth abajo), así que no hay fuerza bruta anónima que frenar, y el cubo de
-  // 10 intentos/15 min bloquearía a un administrador dando de alta varios usuarios
-  // seguidos — y por IP, con lo que se cerraría también su propio login.
+  // (withAuth abajo), así que no hay fuerza bruta anónima que frenar, y el cubo
+  // estricto bloquearía a un administrador dando de alta varios usuarios seguidos.
+  //
+  // Precisión: este cubo NO es el mismo que aplica el middleware. `rate-limit.ts`
+  // se instancia una vez en el runtime Edge (middleware) y otra en Node (esta
+  // ruta), así que son dos contadores en memoria independientes.
   const rateLimitResult = await rateLimitMiddleware(request as any);
   if (rateLimitResult) return rateLimitResult;
 

@@ -4,48 +4,62 @@ import { sequelize } from '@/lib/sequelize';
 import { clientIdentifier, tooManyRequests } from '@/lib/rate-limit';
 
 /**
- * Límite estricto para las rutas de credenciales (F1-03).
+ * Límites para las rutas de credenciales (F1-03).
  *
- * Va aparte del limitador general por dos motivos:
+ * Son DOS cubos con propósitos distintos, y la separación no es cosmética: un solo
+ * cubo por IP no puede proteger la contraseña sin castigar a usuarios legítimos.
  *
- * 1. **Umbral.** 120 req/min es holgado para navegar la aplicación y absurdo para
- *    un formulario de login: son 120 contraseñas por minuto y por IP.
- * 2. **Almacén.** Este vive en PostgreSQL, así que el contador sobrevive a un
- *    reinicio y se comparte entre procesos. El general no puede: se ejecuta desde
- *    `middleware.ts`, que Next compila para el runtime Edge —verificado en
- *    `.next/server/middleware-manifest.json`, entrada `server/edge/chunks`— donde
- *    no hay acceso a la base de datos. Los handlers de `app/api/**` sí corren en
- *    Node, y ahí es donde se aplica este.
+ * - **Por cuenta** (`account:<email>`): estricto. Es el que de verdad frena la
+ *   adivinación de una contraseña, porque el atacante no puede cambiar de objetivo
+ *   sin empezar de cero.
+ * - **Por IP** (`auth:<ip>`): holgado. Frena el barrido de muchas cuentas desde un
+ *   mismo origen. Es holgado a propósito: en un evento, todo el personal de
+ *   acreditación comparte la IP pública de la sede, así que un umbral estrecho
+ *   dejaría fuera a toda la puerta a la vez.
  *
- * No hace falta infraestructura nueva: `RateLimiterPostgres` acepta la instancia
- * de Sequelize que la aplicación ya tiene y crea su propia tabla con
- * `CREATE TABLE IF NOT EXISTS`.
+ * El almacén es PostgreSQL: el contador sobrevive a un reinicio y se comparte entre
+ * procesos. No hace falta infraestructura nueva —`RateLimiterPostgres` acepta la
+ * instancia de Sequelize que ya existe y crea su tabla con `CREATE TABLE IF NOT
+ * EXISTS`—. El limitador general de `middleware.ts` no puede usarlo porque Next
+ * compila el middleware al runtime Edge, donde no hay base de datos.
  */
 
-const POINTS = 10; // intentos...
-const DURATION = 900; // ...por cada 15 minutos
-const BLOCK_DURATION = 900; // y 15 minutos de bloqueo al agotarlos
+const ACCOUNT_POINTS = 10; // intentos contra UNA cuenta...
+const ACCOUNT_DURATION = 900; // ...por cada 15 minutos
+const ACCOUNT_BLOCK = 900;
+
+// Por IP se cuentan las peticiones de credenciales de toda una sede compartiendo
+// NAT. 60 en 15 minutos corta un barrido automatizado y no estorba al uso real.
+const IP_POINTS = 60;
+const IP_DURATION = 900;
+const IP_BLOCK = 900;
 
 /**
- * Si PostgreSQL no responde, el limitador degrada a memoria en vez de dejar pasar
- * la petición. Es menos estricto que el almacén compartido, pero un fallo de base
- * de datos no debe convertirse en barra libre sobre el formulario de login.
+ * Si PostgreSQL no responde, el limitador degrada a memoria en vez de dejar pasar.
+ * Verificado deteniendo el contenedor: el bloqueo se mantiene. Un fallo de base de
+ * datos no puede convertirse en barra libre sobre el formulario de login.
  */
-const insuranceLimiter = new RateLimiterMemory({
-  keyPrefix: 'auth_insurance',
-  points: POINTS,
-  duration: DURATION,
-  blockDuration: BLOCK_DURATION,
-});
+function insurance(keyPrefix: string, points: number, duration: number, blockDuration: number) {
+  return new RateLimiterMemory({ keyPrefix: `${keyPrefix}_insurance`, points, duration, blockDuration });
+}
 
-let limiter: RateLimiterAbstract | null = null;
+const limiters = new Map<string, RateLimiterAbstract>();
 
 /**
  * Construcción perezosa: el módulo se importa durante `next build`, y crear el
  * limitador al importarlo obligaría a tener PostgreSQL disponible para compilar.
  */
-function getLimiter(): RateLimiterAbstract {
-  if (limiter) return limiter;
+function getLimiter(
+  keyPrefix: string,
+  points: number,
+  duration: number,
+  blockDuration: number
+): RateLimiterAbstract {
+  const cached = limiters.get(keyPrefix);
+  if (cached) return cached;
+
+  const fallback = insurance(keyPrefix, points, duration, blockDuration);
+  let limiter: RateLimiterAbstract = fallback;
 
   try {
     limiter = new RateLimiterPostgres(
@@ -53,57 +67,71 @@ function getLimiter(): RateLimiterAbstract {
         storeClient: sequelize,
         storeType: 'sequelize',
         tableName: 'rate_limits',
-        keyPrefix: 'auth',
-        points: POINTS,
-        duration: DURATION,
-        blockDuration: BLOCK_DURATION,
-        insuranceLimiter,
+        keyPrefix,
+        points,
+        duration,
+        blockDuration,
+        insuranceLimiter: fallback,
       },
       // El callback es obligatorio en la práctica: el constructor lanza el
       // CREATE TABLE de forma asíncrona y, sin él, un fallo se convierte en un
-      // throw fuera de este try — una promesa rechazada sin manejar que tumba
-      // el proceso. Con callback, el fallo se registra y queda el de memoria.
+      // throw fuera de este try — una promesa rechazada sin manejar.
       (err) => {
         if (err) {
-          console.error('El limitador no pudo crear su tabla; degrada a memoria.', err);
-          limiter = insuranceLimiter;
+          console.error(`El limitador "${keyPrefix}" no pudo crear su tabla; degrada a memoria.`, err);
+          limiters.set(keyPrefix, fallback);
         }
       }
     );
   } catch (e) {
-    console.error('No se pudo inicializar el limitador en PostgreSQL; se usa memoria.', e);
-    limiter = insuranceLimiter;
+    console.error(`No se pudo inicializar el limitador "${keyPrefix}" en PostgreSQL; se usa memoria.`, e);
   }
 
+  limiters.set(keyPrefix, limiter);
   return limiter;
 }
 
-/**
- * Devuelve una respuesta 429 si la IP agotó sus intentos, o `null` si puede seguir.
- * Se llama al principio de cada handler de credenciales.
- */
-export async function authRateLimit(request: NextRequest) {
+const ipLimiter = () => getLimiter('auth', IP_POINTS, IP_DURATION, IP_BLOCK);
+const accountLimiter = () => getLimiter('account', ACCOUNT_POINTS, ACCOUNT_DURATION, ACCOUNT_BLOCK);
+
+async function consume(limiter: RateLimiterAbstract, key: string) {
   try {
-    await getLimiter().consume(clientIdentifier(request));
+    await limiter.consume(key);
     return null;
   } catch (e) {
-    // `consume` rechaza tanto por límite agotado como por un fallo del almacén.
-    // Un RateLimiterRes trae msBeforeNext; un error de verdad, no.
-    if (e instanceof Error) {
-      console.error('Fallo del limitador de autenticación:', e.message);
-      return null;
-    }
+    // `consume` rechaza con un RateLimiterRes cuando se agota la cuota. Los fallos
+    // del almacén NO llegan aquí: el insuranceLimiter los absorbe antes. Si alguno
+    // se colara, se responde 429 igualmente — este límite falla CERRADO.
     return tooManyRequests(e);
   }
 }
 
 /**
- * Descuenta el intento consumido cuando el login fue correcto: quien acierta la
- * contraseña no debe gastar su cuota.
+ * Límite por IP. Se llama al principio del handler, antes de leer el cuerpo.
  */
-export async function resetAuthRateLimit(request: NextRequest) {
+export async function authRateLimit(request: NextRequest) {
+  return consume(ipLimiter(), clientIdentifier(request));
+}
+
+/**
+ * Límite por cuenta. Se llama DESPUÉS de validar el cuerpo, cuando ya se conoce a
+ * qué usuario se intenta acceder.
+ */
+export async function accountRateLimit(email: string) {
+  return consume(accountLimiter(), email.trim().toLowerCase());
+}
+
+/**
+ * Devuelve la cuota de UNA CUENTA tras un login correcto: quien acierta no debe
+ * gastar los intentos de su propia cuenta.
+ *
+ * Deliberadamente NO toca el cubo por IP. Borrarlo sería un agujero: bastaría con
+ * poseer una credencial válida cualquiera para intercalar un acierto propio cada
+ * pocos intentos y adivinar contra otras cuentas de forma indefinida.
+ */
+export async function resetAccountRateLimit(email: string) {
   try {
-    await getLimiter().delete(clientIdentifier(request));
+    await accountLimiter().delete(email.trim().toLowerCase());
   } catch {
     // Un fallo aquí solo significa que el usuario conserva el intento gastado.
   }

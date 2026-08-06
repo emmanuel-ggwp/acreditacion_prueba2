@@ -1,12 +1,16 @@
 
 import { NextResponse, NextRequest } from 'next/server';
 import { authService } from '../../../../services/authService';
-import { authRateLimit } from '@/lib/auth-rate-limit';
+import { rateLimitMiddleware } from '@/lib/rate-limit';
 
 export async function POST(request: NextRequest) {
-  // No tenía ningún límite propio, y acepta un token por el cuerpo: es una
-  // superficie de adivinación tan válida como el login.
-  const rateLimitResponse = await authRateLimit(request);
+  // Límite GENERAL, no el de credenciales. El cliente refresca solo, cerca de la
+  // caducidad (authStore.ts:132) y ante cualquier 401 (apiClient.ts:52), así que
+  // meterlo en el cubo estricto lo agotaría con tráfico legítimo: una sede con
+  // varias pestañas abiertas se autobloquearía sin un solo intento de contraseña,
+  // y el 429 encadena logout y deja el login bloqueado detrás.
+  // El token de refresco no es adivinable por fuerza bruta como una contraseña.
+  const rateLimitResponse = await rateLimitMiddleware(request);
   if (rateLimitResponse) {
     return rateLimitResponse;
   }
