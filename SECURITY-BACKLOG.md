@@ -50,6 +50,11 @@ módulos que hoy sí existen). Mezclar deuda de seguridad con esa lista escondí
 | [SB-23](#sb-23--endpoint-público-de-evento-roto-desde-siempre-y-sin-consumidores) | Endpoint público de evento roto desde siempre y sin consumidores | — (surgido en A3) | ~30 min |
 | [SB-24](#sb-24--la-capacidad-del-evento-no-cuenta-invitados) | La capacidad del evento no cuenta invitados | — (surgido en A4) | decisión de producto |
 | [SB-25](#sb-25--un-volcado-con-datos-reales-está-versionado) | ⚠ Un volcado con datos reales está versionado | — (revisión de despliegue) | ~1 h + decisión |
+| [SB-26](#sb-26--no-hay-migraciones-el-único-camino-de-esquema-borra-los-datos) | No hay migraciones: el único camino de esquema borra los datos | — (revisión de despliegue) | ~2 h |
+| [SB-27](#sb-27--get-apipubliceventsslug-devuelve-500-siempre-include-sin-alias) | `GET /api/public/events/[slug]` devuelve 500 siempre | — (surgido en R1-01) | ~30 min |
+| [SB-28](#sb-28--el-login-distingue-cuenta-deshabilitada-de-credenciales-inválidas-enumeración-de-estado-de-cuenta) | El login distingue «cuenta deshabilitada» de «credenciales inválidas» | — (surgido en R2-01) | ~30 min |
+| [SB-29](#sb-29--dos-logins-o-refresh-del-mismo-usuario-en-el-mismo-segundo--500-por-token-idéntico) | Dos logins del mismo usuario en el mismo segundo → 500 por token idéntico | — (surgido en R2-02) | ~1 h |
+| [SB-30](#sb-30--el-cliente-descarta-el-refresh-token-rotado-cierre-de-sesión-forzoso-en-el-segundo-refresh) | El cliente descarta el refresh token rotado: logout forzoso en el 2º refresh | — (surgido en R2-02) | ~30 min |
 
 > ⏱ **SB-13 y SB-16 tienen ventana fija, no plazo abierto.** Deben resolverse **al terminar los
 > cambios de la auditoría y, en cualquier caso, ANTES de que la reconstrucción configure CI y
@@ -896,3 +901,54 @@ distinción solo en el registro de auditoría (que ya existe: `auditLogService.l
 **Nota de alcance (W2)**: se detectó al decidir qué caminos de fallo consumen cuota en R2-01
 (ambos consumen, así que el limitador sí lo frena); cambiar el mensaje era tocar contrato de
 respuesta fuera del alcance de la fase.
+
+---
+
+## SB-29 — Dos logins (o refresh) del mismo usuario en el mismo segundo → 500 por token idéntico
+
+- **Referencia**: encontrado durante la verificación W3 de **R2-02** (plan 02, fase 2), 2026-08-06.
+- **Ficheros**: `src/lib/jwt.ts:16-20` (`generateTokens`), `src/services/authService.ts`
+  (`login` y `refreshAccessToken`, ambos hacen `RefreshToken.create`), modelo `RefreshToken`
+  (unique sobre `token`).
+- **Bloquea el despliegue**: **no** — requiere coincidencia al segundo del MISMO usuario, pero es
+  alcanzable con uso normal (dos pestañas, doble clic en «Entrar», dos puestos con cuenta
+  compartida).
+
+El payload del JWT solo contiene `id, role, email, username` más `iat`/`exp`, y `iat` tiene
+resolución de **1 segundo**: dos `jwt.sign` del mismo usuario dentro del mismo segundo producen
+**bytes idénticos**. El segundo `RefreshToken.create` choca con la unique
+`refresh_tokens_token_key` y el error sale como **500** en `/api/auth/login` (observado con dos
+logins consecutivos del usuario `acreditador` a <1 s) o como **401** en `/api/auth/refresh` (el
+`catch` genérico lo convierte en 401 con el mensaje de Sequelize en el cuerpo — que además filtra
+el token en el `detail` del error al log).
+
+**Corrección propuesta**: añadir un claim `jti` (UUID) al refresh token en `generateTokens`, que
+además es lo que la rotación necesita para ser robusta. Alternativa mínima: capturar la violación
+de unique y reutilizar la fila existente (mismo token = misma sesión lógica).
+
+---
+
+## SB-30 — El cliente descarta el refresh token rotado: cierre de sesión forzoso en el segundo refresh
+
+- **Referencia**: encontrado durante la verificación W3 de **R2-02** (plan 02, fase 2), 2026-08-06.
+- **Ficheros**: `src/store/authStore.ts:78-91` (`refreshAuthToken`, solo guarda `accessToken`),
+  frente a `src/services/authService.ts:107-125` (rota: revoca el usado y devuelve
+  `refreshToken` nuevo).
+- **Bloquea el despliegue**: **no**, pero es una regresión funcional visible: con `JWT_EXPIRES_IN`
+  corto, el usuario acaba expulsado en el **segundo** ciclo de refresh.
+
+El servidor rota el refresh token (revoca el usado, devuelve uno nuevo en `data.refreshToken`),
+pero `refreshAuthToken` solo hace `set({ accessToken })`: el cliente conserva el token **ya
+revocado**. El primer refresh funciona; el segundo devuelve 401 (`Invalid or revoked refresh
+token`) y el `catch` ejecuta `logout()`. Verificado en W3 de R2-02: reutilizar el token tras un
+refresh → 401; adoptando el rotado → 200 siempre.
+
+Hoy se disimula porque el valor por defecto de `JWT_EXPIRES_IN` son **7 días** (`jwt.ts:5`) y
+nadie aguanta la pestaña abierta tanto tiempo — pero **SB-07 propone acortar la vida del access
+token apoyándose en «la rotación de refresh que ya funciona correctamente»**: funciona en el
+servidor, no en el cliente. Acortar el token sin arreglar esto convierte cada expiración par en
+un logout.
+
+**Corrección propuesta**: `set({ accessToken, refreshToken: response.data.refreshToken })` en
+`refreshAuthToken` (el dato ya viaja en la respuesta). Un cambio de una línea, pero toca el flujo
+de sesión: probar el ciclo doble de refresh al hacerlo.
