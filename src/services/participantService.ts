@@ -218,6 +218,8 @@ export class ParticipantService {
             dietaryPreference: (g.dietaryPreference && String(g.dietaryPreference).trim()) || null,
             confirmed: !!schedule,
             scheduleId: schedule ? schedule.id : null,
+            // Carga precargada por el organizador: NO consume el cupo del asistente (D1.2).
+            registrationSource: 'IMPORT',
           } as any, { transaction: tx });
           results.guestsCreated++;
         }

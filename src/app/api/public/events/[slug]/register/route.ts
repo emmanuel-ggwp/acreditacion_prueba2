@@ -251,20 +251,38 @@ export async function POST(
     // invitados (`capacityService.ts:4`), así que hacerlo sería una regla nueva y
     // cambiaría el significado de las plazas que la landing ya muestra. Queda
     // registrado como SB-24.
-    const eventGuestCap = Number(
-      (event as any).registrationConfig?.guests?.max ?? (event as any).maxGuestsPerParticipant ?? 0
-    );
-    const participantCap = Number((participant as any).allowedGuests ?? 0);
+    //
+    // Saneo de la entrada del cálculo (R1-01). `Math.max(0, NaN)` es `NaN` y
+    // `createdGuests >= NaN` es SIEMPRE falso: un `allowedGuests` corrupto no relajaba
+    // el tope, lo hacía desaparecer. Negativos y decimales tampoco son topes.
+    const toCap = (v: unknown): number => {
+      const n = Number(v);
+      return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
+    };
+    // `registrationConfig.guests.max` solo manda cuando declara algo. Su esquema lo trae
+    // con `.default(0)` (`eventSchemas.ts:36`), así que TODO evento guardado desde la
+    // aplicación lo lleva a 0; con `??` ese 0 tapaba `maxGuestsPerParticipant` y el cupo
+    // real nunca se leía. Un 0 ahí significa «no configurado», no «cero invitados»:
+    // para cero invitados está `allowGuests = false`.
+    const eventGuestCap = toCap((event as any).registrationConfig?.guests?.max)
+      || toCap((event as any).maxGuestsPerParticipant);
+    const participantCap = toCap((participant as any).allowedGuests);
     const effectiveGuestCap = (event as any).allowGuests === false
       ? 0
       : participantCap > 0
         ? (eventGuestCap > 0 ? Math.min(participantCap, eventGuestCap) : participantCap)
         : eventGuestCap;
 
-    // Los invitados que ya tiene cuentan contra el mismo tope: sin esto, reenviar el
-    // formulario varias veces acumula sin límite.
+    // Los invitados que el propio asistente creó desde el landing cuentan contra el tope:
+    // sin esto, reenviar el formulario varias veces acumula sin límite.
+    //
+    // Las CARGAS PRECARGADAS por el organizador NO cuentan (D1.2): son presupuesto suyo,
+    // no del asistente. Contándolas, un precargado con 2 cargas y máximo 2 se quedaba sin
+    // poder traer acompañante, y las cargas que ni siquiera seleccionaba le comían el cupo.
+    // Se distinguen por `registrationSource`, columna añadida en esta corrección: `guestType`
+    // no vale, es una etiqueta libre que el administrador configura por evento.
     const currentGuestCount = await Guest.count({
-      where: { participantId: participant.id },
+      where: { participantId: participant.id, registrationSource: 'PUBLIC_FORM' },
       transaction: t,
     });
     const remainingGuestSlots = Math.max(0, effectiveGuestCap - currentGuestCount);
@@ -281,6 +299,7 @@ export async function POST(
     }
 
     let createdGuests = 0;
+    let skippedGuests = 0;
     for (const g of guestsInput) {
       if (g.id) {
         // Carga precargada seleccionada → marcar confirmada para esta fecha
@@ -293,9 +312,11 @@ export async function POST(
         }
       } else if (g.firstName) {
         // Invitado nuevo (ej. acompañante). Solo mientras queden plazas: agotado el
-        // cupo, los sobrantes se ignoran en silencio en lugar de rechazar toda la
-        // inscripción — el participante queda inscrito, que es lo que vino a hacer.
-        if (createdGuests >= remainingGuestSlots) continue;
+        // cupo, los sobrantes NO se crean — el participante queda inscrito, que es lo
+        // que vino a hacer. Pero el descarte deja de ser silencioso: se cuenta y la
+        // respuesta lo dice (D1.3), porque un 201 mudo produjo el correo que listaba
+        // acompañantes que nunca se guardaron.
+        if (createdGuests >= remainingGuestSlots) { skippedGuests++; continue; }
         createdGuests++;
         await Guest.create(
           {
@@ -307,6 +328,8 @@ export async function POST(
             dietaryPreference: g.dietaryPreference ?? null,
             confirmed: true,
             scheduleId: primaryScheduleId,
+            // Este sí consume el cupo del asistente: lo creó él, no el organizador.
+            registrationSource: 'PUBLIC_FORM',
           },
           { transaction: t }
         );
@@ -315,7 +338,15 @@ export async function POST(
 
     await t.commit();
     return NextResponse.json(
-      { message: 'Registration successful', participantId: participant.id },
+      {
+        message: 'Registration successful',
+        participantId: participant.id,
+        // Cuántos invitados NUEVOS se guardaron y cuántos no cupieron (D1.3). El cliente
+        // los necesita para no prometer en pantalla ni por correo lo que no existe.
+        guestsCreated: createdGuests,
+        guestsSkipped: skippedGuests,
+        guestCap: effectiveGuestCap,
+      },
       { status: 201 }
     );
   } catch (error: any) {

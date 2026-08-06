@@ -19,6 +19,7 @@ class Guest extends Model {
   declare public customData: Record<string, any> | null;
   declare public confirmed: boolean;
   declare public scheduleId: string | null;
+  declare public registrationSource: 'MANUAL' | 'IMPORT' | 'PUBLIC_FORM';
 
   declare public readonly createdAt: Date;
   declare public readonly updatedAt: Date;
@@ -96,6 +97,18 @@ Guest.init(
       type: DataTypes.UUID,
       allowNull: true,
       comment: 'Horario/fecha al que el invitado fue confirmado',
+    },
+    // Quién creó la fila. Sin esto no se puede distinguir una CARGA PRECARGADA por el
+    // organizador de un ACOMPAÑANTE que el asistente añadió desde el landing, y el cupo
+    // del asistente acababa consumido por las cargas del organizador (R1-01, D1.2).
+    // `guestType` no sirve para esto: es una etiqueta configurable por evento y el
+    // administrador puede darle cualquier valor.
+    // STRING y no ENUM a propósito: no hay migraciones (SB-26) y un ENUM exige CREATE TYPE.
+    registrationSource: {
+      type: DataTypes.STRING,
+      allowNull: false,
+      defaultValue: 'MANUAL',
+      comment: "Origen de la fila: MANUAL (ficha), IMPORT (precarga), PUBLIC_FORM (landing)",
     },
     createdAt: {
       type: DataTypes.DATE,

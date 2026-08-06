@@ -836,3 +836,37 @@ reconstrucción.
 **Nota comprobada, para que nadie la reabra**: `force: true` **no** borra la tabla `rate_limits` del
 limitador — `sync` solo opera sobre los 16 modelos registrados en `src/models/index.ts`, y esa
 tabla no es un modelo.
+
+---
+
+## SB-27 — `GET /api/public/events/[slug]` devuelve 500 siempre: `include` sin alias
+
+- **Referencia**: encontrado durante la verificación W3 de **R1-01** (plan 01, fase 1), 2026-08-06.
+- **Fichero**: `src/app/api/public/events/[slug]/route.ts:17-24`.
+- **Bloquea el despliegue**: **no** — hoy no lo llama nadie.
+
+La asociación se declara con alias (`Event.hasMany(EventSchedule, { as: 'schedules' })`,
+`src/models/EventSchedule.ts:110`) pero el `include` del handler no lo pasa:
+
+```js
+include: [{ model: EventSchedule }]   // sin `as: 'schedules'`
+```
+
+Sequelize lo rechaza con `SequelizeEagerLoadingError`, el `catch` lo convierte en 500 y el
+endpoint **nunca ha podido responder 200**. Comprobado ejecutando:
+
+```
+GET /api/public/events/r101-cap0-mshf9a9a → 500 {"error":"Internal server error"}
+```
+
+**Por qué no es urgente y aun así hay que arreglarlo**: la landing pública **no** usa este
+endpoint — `src/app/public/events/[slug]/page.tsx:19-25` hace su propia consulta y **sí** pasa
+`as: 'schedules'`. Una búsqueda por los llamadores no encuentra ninguno. Es decir, es una ruta
+pública muerta que solo sabe devolver 500.
+
+**Corrección**: añadir `as: 'schedules'` al `include`, o **borrar la ruta** si se confirma que la
+página cubre el caso. Lo segundo es preferible: una ruta pública sin usar es superficie de ataque
+sin contrapartida.
+
+**Comentario de método**: esto lo encontró la verificación de otra cosa. El fichero está
+intacto desde `37f6060` y ningún test lo cubre — es exactamente el hueco que SB-11 deja abierto.
