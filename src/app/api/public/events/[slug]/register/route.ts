@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 import { Event, Participant, EventSchedule, Guest } from '@/models/index';
 import {
   publicRegistrationSchema,
@@ -41,12 +42,45 @@ export async function POST(
 
     const mode = (event as any).registrationConfig?.mode === 'rut' ? 'rut' : 'open';
 
-    // 2. Validar horarios seleccionados
-    const scheduleIds: string[] = Array.isArray(body.scheduleIds) ? body.scheduleIds : [];
-    if (scheduleIds.length === 0) {
+    // 2. VALIDAR EL CUERPO. Va aquí, antes de la primera consulta que lo use (R1-04).
+    //
+    // `03a2ad1` presumía de que «`participantId` pasa a validarse como UUID, lo que de
+    // paso cierra un 500». La validación se añadió, pero VEINTE LÍNEAS DESPUÉS del
+    // código que ya consumía entrada sin validar: `scheduleIds` salía crudo del cuerpo
+    // y se metía tal cual en un `WHERE id IN (...)` contra una columna `uuid`.
+    // `POST {"scheduleIds":["x"]}` → `invalid input syntax for type uuid` → catch → 500.
+    //
+    // No era un problema de esquema —el esquema ya exigía UUID— sino de ORDEN. Por eso
+    // la corrección es mover la validación, no añadir otra comprobación: mientras la
+    // primera consulta preceda al `safeParse`, cada campo nuevo que alguien use antes
+    // vuelve a abrir el mismo agujero.
+    //
+    // El evento SÍ se busca antes, y es correcto: solo usa el `slug` de la ruta, no el
+    // cuerpo, y hace falta para saber qué esquema aplica.
+    const validation = mode === 'rut'
+      ? rutRegistrationSchema.safeParse(body)
+      : publicRegistrationSchema.safeParse(body);
+    if (!validation.success) {
       await t.rollback();
-      return NextResponse.json({ error: 'Selecciona una fecha de asistencia.' }, { status: 400 });
+      // La fecha es el primer paso del formulario: merece su mensaje, no el genérico.
+      const issues = validation.error.issues;
+      if (issues.some((i) => i.path[0] === 'scheduleIds')) {
+        return NextResponse.json({ error: 'Selecciona una fecha de asistencia.' }, { status: 400 });
+      }
+      // `format()` describe la forma del esquema al público. Queda anotado como F2-05
+      // y se recorta en el plan 04 (D4.1): hoy es lo único que dice al asistente QUÉ
+      // campo rechazó la petición, y quitarlo sin poner un mensaje por campo en su
+      // lugar cambiaría un 400 explicable por uno mudo.
+      return NextResponse.json(
+        { error: 'Validation error', details: validation.error.format() },
+        { status: 400 }
+      );
     }
+    // A partir de aquí `scheduleIds` son UUID comprobados: el esquema los exige en los
+    // dos modos (`z.array(z.string().uuid()).min(1)`).
+    const scheduleIds: string[] = validation.data.scheduleIds;
+
+    // 2b. Los horarios existen y son de ESTE evento.
     const schedules = await EventSchedule.findAll({
       where: { id: scheduleIds, eventId: event.id },
       transaction: t,
@@ -57,9 +91,8 @@ export async function POST(
     }
     const primaryScheduleId = scheduleIds[0];
 
-    // Se rellena dentro de cada rama a partir del resultado VALIDADO. Antes salía de
-    // `body.guests` —el cuerpo crudo—, con lo que el esquema de invitados, que existe,
-    // resultaba decorativo en los dos modos (F4-02).
+    // Sale del resultado VALIDADO. Antes salía de `body.guests` —el cuerpo crudo—, con
+    // lo que el esquema de invitados, que existe, resultaba decorativo (F4-02).
     let guestsInput: PublicGuestInput[] = [];
 
     // 3. Obtener/crear el participante según el modo
@@ -68,17 +101,7 @@ export async function POST(
 
     if (mode === 'rut') {
       // Confirmar un participante precargado identificado por RUT (lookup previo).
-      // El body se valida ANTES de tocar nada: la rama `rut` escribía 12 campos
-      // tomados del cuerpo crudo, sin comprobar tipo, formato ni longitud (F4-01).
-      const validation = rutRegistrationSchema.safeParse(body);
-      if (!validation.success) {
-        await t.rollback();
-        return NextResponse.json(
-          { error: 'Validation error', details: validation.error.format() },
-          { status: 400 }
-        );
-      }
-      const data = validation.data;
+      const data = validation.data as z.infer<typeof rutRegistrationSchema>;
       guestsInput = data.guests ?? [];
 
       participant = await Participant.findOne({
@@ -112,16 +135,8 @@ export async function POST(
         if (Object.keys(upd).length) await participant.update(upd, { transaction: t });
       }
     } else {
-      // Modo abierto: validar; reutilizar participante por correo o crear uno nuevo.
-      const validation = publicRegistrationSchema.safeParse(body);
-      if (!validation.success) {
-        await t.rollback();
-        return NextResponse.json(
-          { error: 'Validation error', details: validation.error.format() },
-          { status: 400 }
-        );
-      }
-      const data = validation.data;
+      // Modo abierto: reutilizar participante por RUT o crear uno nuevo.
+      const data = validation.data as z.infer<typeof publicRegistrationSchema>;
       guestsInput = data.guests ?? [];
 
       // Reutilizar participante SOLO por RUT (normalizado: sin puntos, guión ni espacios),
