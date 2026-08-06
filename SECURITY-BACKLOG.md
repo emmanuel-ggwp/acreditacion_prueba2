@@ -57,6 +57,7 @@ módulos que hoy sí existen). Mezclar deuda de seguridad con esa lista escondí
 | [SB-30](#sb-30--el-cliente-descarta-el-refresh-token-rotado-cierre-de-sesión-forzoso-en-el-segundo-refresh) | El cliente descarta el refresh token rotado: logout forzoso en el 2º refresh | — (surgido en R2-02) | ~30 min |
 | [SB-31](#sb-31--esquemas-de-login-duplicados-y-ya-divergentes-dos-loginschema-y-dos-registerschema) | Esquemas de login duplicados y ya divergentes entre validators | — (surgido en R2-03a) | ~30 min |
 | [SB-32](#sb-32--npm-run-dbsync-ejecuta-sequelizesync-force-true--borra-todos-los-datos-y-hay-dos-sync-dbts-divergentes) | ⚠ `db:sync` hace `force: true` (borra todo) y hay dos `sync-db.ts` divergentes | — (surgido en R2-03b) | ~1 h |
+| [SB-33](#sb-33--next-16-declara-obsoleta-la-convención-middleware-la-fuente-única-de-cors-vive-en-una-api-en-retirada) | La convención `middleware` está deprecada en Next 16 y ahora es la fuente única de CORS | — (surgido en P08-D1) | ~1 h |
 
 > ⏱ **SB-13 y SB-16 tienen ventana fija, no plazo abierto.** Deben resolverse **al terminar los
 > cambios de la auditoría y, en cualquier caso, ANTES de que la reconstrucción configure CI y
@@ -992,3 +993,20 @@ comportamientos opuestos (`force` vs `alter`), y cuál corre depende de si se in
 ruta — R2-03b tuvo que averiguarlo para saber dónde crear `rate_limits`. **Corrección propuesta**:
 borrar el huérfano, exigir confirmación explícita (variable `FORCE_SYNC=yes`) para `force: true`,
 y que el aprovisionamiento de producción use el camino del plan 08/D8.4, nunca `db:sync` (~1 h).
+
+---
+
+## SB-33 — Next 16 declara obsoleta la convención `middleware`: la fuente única de CORS vive en una API en retirada
+
+- **Referencia**: encontrado durante la implementación de **P08-D1** (plan 08, fase 1), 2026-08-06.
+- **Ficheros**: `src/middleware.ts` (convención `middleware`, matcher `/api/:path*`) y
+  `src/middleware/security.ts`.
+- **Bloquea el despliegue**: no.
+
+Cada `next build` avisa: *«The "middleware" file convention is deprecated. Please use "proxy"
+instead»*. Tras P08-D1/D8.2, ese fichero es la **fuente única** de CORS (y de las cabeceras de
+seguridad de `/api`): el día que una versión de Next retire la convención, el build seguirá
+compilando la aplicación pero **sin CORS ni límites de tasa**, que es exactamente la degradación
+silenciosa que esta remediación combate. **Corrección propuesta**: migrar a la convención `proxy`
+siguiendo la guía oficial y re-ejecutar la batería W3 de CORS y rate-limit (~1 h). Conviene
+hacerlo antes de la siguiente subida de versión de Next.
