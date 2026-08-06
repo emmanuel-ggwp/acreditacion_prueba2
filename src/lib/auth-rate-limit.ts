@@ -26,8 +26,11 @@ import { clientIdentifier, tooManyRequests } from '@/lib/rate-limit';
  * Además, la cuota por credencial **solo se consume cuando el intento FALLA**
  * (D2.3): se comprueba con `get()` antes de verificar la contraseña —para no gastar
  * CPU en bcrypt cuando ya está agotada— y se consume después, únicamente en el
- * camino de fallo. Quien acierta la contraseña entra aunque la cuota esté gastada,
- * lo que elimina de raíz el bloqueo del usuario legítimo.
+ * camino de fallo. Quien acierta la contraseña entra aunque lleve cuota gastada
+ * (de 1 a 9 fallos previos); con la cuota AGOTADA la comprobación previa responde
+ * 429 sin mirar la contraseña. Eso elimina el bloqueo del usuario legítimo en el
+ * caso real (fallos sueltos por dedos torpes) sin regalar bcrypt a quien ya agotó
+ * los 10 intentos.
  *
  * El almacén es PostgreSQL: el contador sobrevive a un reinicio y se comparte entre
  * procesos. No hace falta infraestructura nueva —`RateLimiterPostgres` acepta la
@@ -141,9 +144,11 @@ function accountKey(email: string, request: NextRequest): string {
 
 /**
  * Comprueba la cuota de credenciales SIN consumirla. Se llama después de validar
- * el cuerpo y ANTES de verificar la contraseña: si la cuota está agotada se
- * responde 429 sin gastar CPU en bcrypt, pero un intento correcto nunca queda
- * fuera por cuota gastada — el consumo solo ocurre en `penalizeAccountRateLimit`.
+ * el cuerpo y ANTES de verificar la contraseña: si la cuota está AGOTADA se
+ * responde 429 sin gastar CPU en bcrypt (también a quien traiga la contraseña
+ * correcta: con 10 fallos acumulados ya no se distingue de un atacante); mientras
+ * quede al menos un punto, un intento correcto entra — el consumo solo ocurre en
+ * `penalizeAccountRateLimit`.
  *
  * `get()` de rate-limiter-flexible devuelve `null` si la clave no existe y un
  * `RateLimiterRes` (con `remainingPoints` y `msBeforeNext`) si existe; los fallos

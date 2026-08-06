@@ -28,7 +28,9 @@ export async function POST(request: NextRequest) {
     // Límite por credencial (email, ip): estricto, y es el que de verdad frena la
     // adivinación de una contraseña. Se COMPRUEBA aquí —antes de bcrypt, para no
     // regalar CPU con la cuota agotada— pero solo se CONSUME si el intento falla:
-    // quien acierta la contraseña entra aunque la cuota esté gastada (R2-01).
+    // quien acierta la contraseña entra mientras quede al menos un punto (1-9
+    // fallos previos); con la cuota AGOTADA este 429 llega antes de mirar la
+    // contraseña (R2-01).
     const accountLimited = await checkAccountRateLimit(email, request);
     if (accountLimited) {
       return accountLimited;
