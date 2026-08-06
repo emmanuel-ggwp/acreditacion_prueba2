@@ -159,7 +159,7 @@ for (const fase of plan.fases) {
 
   const impl = await agent(
     `Eres el IMPLEMENTADOR de una fase de remediacion de seguridad.
-     Repositorio: C:\\Users\\Joseph\\Documents\\acreditacion_prueba2, rama remediacion/bloque-a.
+     Repositorio: el directorio de trabajo actual, rama remediacion/bloque-a.
 
      PLAN COMPLETO: lee ${planPath} entero antes de tocar nada. Tu fase es la ${fase.numero}
      ("${fase.titulo}").
@@ -192,7 +192,7 @@ for (const fase of plan.fases) {
 
   const critica = await agent(
     `Eres el CRITICO de una fase de remediacion. Tu trabajo NO es aprobar: es comprobar.
-     Repositorio: C:\\Users\\Joseph\\Documents\\acreditacion_prueba2, rama remediacion/bloque-a.
+     Repositorio: el directorio de trabajo actual, rama remediacion/bloque-a.
 
      El implementador dice haber cerrado la fase ${fase.numero} ("${fase.titulo}") del plan
      ${planPath}. Su informe:
