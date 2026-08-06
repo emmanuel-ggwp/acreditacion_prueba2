@@ -10,12 +10,12 @@
 # El Workflow no se invoca desde la linea de comandos: vive dentro de Claude Code. Por eso el
 # modo "workflow" lanza igualmente `claude`, con la instruccion de arrancarlo y esperarlo.
 #
-# Uso:
-#   pwsh planes/ejecutar-noche.ps1                        # los 3 que bloquean el despliegue
-#   pwsh planes/ejecutar-noche.ps1 -Conjunto todos        # los 8, en orden de dependencias
-#   pwsh planes/ejecutar-noche.ps1 -SoloPrecondiciones    # comprueba, lista y sale
-#   pwsh planes/ejecutar-noche.ps1 -TodoDirecto           # sin workflows, mas barato
-#   pwsh planes/ejecutar-noche.ps1 -Conjunto personalizado -Planes @('03-bloque-b-sesion')
+# Uso (powershell -File: en esta maquina no hay pwsh y el script esta hecho a prueba de 5.1):
+#   powershell -File planes/ejecutar-noche.ps1                      # los 3 que bloquean el despliegue
+#   powershell -File planes/ejecutar-noche.ps1 -Conjunto todos      # los 8, en orden de dependencias
+#   powershell -File planes/ejecutar-noche.ps1 -SoloPrecondiciones  # comprueba, lista y sale
+#   powershell -File planes/ejecutar-noche.ps1 -TodoDirecto         # sin workflows, mas barato
+#   powershell -File planes/ejecutar-noche.ps1 -Conjunto personalizado -Planes 03-bloque-b-sesion
 #
 # Por que en cadena y no en paralelo: los planes comparten la rama de git, la base de datos
 # (db:sync borra las 16 tablas), el puerto de la aplicacion y el directorio .next. En paralelo
@@ -93,9 +93,17 @@ $seleccion = switch ($Conjunto) {
     default         { $CATALOGO | Where-Object { $BLOQUEANTES -contains $_.nombre } }
 }
 
+# Con un solo plan, Where-Object devuelve la hashtable pelada y .Count cuenta sus CLAVES (5),
+# no los planes (1). Forzar array lo corrige.
+$seleccion = @($seleccion)
+
 if ($seleccion.Count -eq 0) { Write-Host 'Ningun plan seleccionado.' -ForegroundColor Red; exit 1 }
 
-$ErrorActionPreference = 'Stop'
+# 'Continue' y no 'Stop' a proposito: esto corre bajo Windows PowerShell 5.1 (no hay pwsh en la
+# maquina), donde EAP=Stop + redireccion de stderr (2>&1) convierte CUALQUIER linea de stderr de
+# un comando nativo en excepcion terminante — un aviso benigno de claude o docker con exit 0
+# mataria la cadena entera a mitad de noche. Los fallos reales ya se detectan con $LASTEXITCODE.
+$ErrorActionPreference = 'Continue'
 $raiz = Split-Path -Parent $PSScriptRoot
 Set-Location $raiz
 
@@ -272,7 +280,11 @@ foreach ($p in $seleccion) {
     $inicio = Get-Date
 
     # --permission-mode acceptEdits: sin nadie delante, un prompt de permiso cuelga la noche.
-    & claude -p $prompt --permission-mode acceptEdits *>&1 | Tee-Object -FilePath $logPlan
+    # En PowerShell 5.1 cada linea de stderr llega como ErrorRecord; se desenvuelve a texto para
+    # que el log no se llene de ruido de NativeCommandError.
+    & claude -p $prompt --permission-mode acceptEdits 2>&1 |
+        ForEach-Object { if ($_ -is [System.Management.Automation.ErrorRecord]) { $_.ToString() } else { $_ } } |
+        Tee-Object -FilePath $logPlan
     $codigo = $LASTEXITCODE
 
     $duracion = [int]((Get-Date) - $inicio).TotalMinutes
