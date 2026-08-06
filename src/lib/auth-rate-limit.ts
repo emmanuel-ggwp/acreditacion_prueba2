@@ -3,6 +3,7 @@ import { createHash } from 'crypto';
 import { NextRequest } from 'next/server';
 import { sequelize } from '@/lib/sequelize';
 import { clientIdentifier, tooManyRequests } from '@/lib/rate-limit';
+import { normalizeEmail } from '@/utils/email';
 
 /**
  * Límites para las rutas de credenciales (F1-03, rediseñado en R2-01).
@@ -253,7 +254,7 @@ const ACCOUNT_RAW_MAX = PG_KEY_MAX - 'account:'.length;
  * profundidad, no el freno principal (R2-03a).
  */
 function accountKey(email: string, request: NextRequest): string {
-  const raw = `${email.trim().toLowerCase()}::${clientIdentifier(request)}`;
+  const raw = `${normalizeEmail(email)}::${clientIdentifier(request)}`;
   if (raw.length <= ACCOUNT_RAW_MAX) return raw;
   return createHash('sha256').update(raw).digest('hex');
 }
