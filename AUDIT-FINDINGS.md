@@ -2532,5 +2532,22 @@ Bloque B, `MANAGER` inerte, el 500 público a backlog como SB-23): ver §7.0 y l
 2. **A6 asume la topología de §7.4.** Sin Nginx delante reescribiendo `X-Forwarded-For` y con el
    puerto expuesto, el limitador es evadible. La configuración de Nginx **debe** quedar versionada.
 
+### Comportamiento degradado de A6, comprobado y no supuesto
+
+La pregunta que decide si un limitador sirve: **qué hace cuando su almacén no responde.** Un
+limitador que falla abierto es peor que no tenerlo, porque da una confianza que no sostiene.
+
+Prueba ejecutada deteniendo el contenedor de PostgreSQL y lanzando 14 intentos de login contra un
+límite de 10:
+
+```
+500 500 500 500 500 500 500 500 500 500 429 429 429 429
+```
+
+Los diez primeros devuelven **500** —el login no puede verificar credenciales sin base de datos,
+que es correcto— y **a partir del undécimo el limitador bloquea con 429**: el `insuranceLimiter`
+en memoria toma el relevo cuando el almacén compartido cae. **Falla cerrado.** Un corte de base de
+datos no se convierte en barra libre sobre el formulario de login.
+
 **Siguiente paso:** reconstrucción del droplet con §7.4, y después el Bloque B — que ahora
 empieza por **SB-17**.
