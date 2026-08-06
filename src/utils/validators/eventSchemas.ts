@@ -94,7 +94,11 @@ export const eventSchema = z.object({
   location: z.string().optional(),
   maxCapacity: z.number().int().positive(),
   allowGuests: z.boolean().default(true),
-  maxGuestsPerParticipant: z.number().int().min(0).default(0),
+  // El defecto es 2, no 0, y es el mismo que declara el modelo (`Event.ts:99-102`).
+  // Con `.default(0)` todo evento creado desde la aplicación nacía con cupo 0 y el
+  // registro público descartaba en silencio a TODOS los acompañantes (R1-01 / D1.1).
+  // 0 sigue siendo un valor legítimo, pero hay que escribirlo: significa «sin invitados».
+  maxGuestsPerParticipant: z.number().int().min(0).default(2),
   publicSlug: z.string().optional().nullable(),
   publicTemplate: z.string().optional().nullable(),
   isPublic: z.boolean().default(false),

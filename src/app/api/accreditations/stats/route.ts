@@ -3,8 +3,14 @@ import { Op } from 'sequelize';
 import { startOfDay, endOfDay } from 'date-fns';
 import Accreditation from '@/models/Accreditation';
 import EventSchedule from '@/models/EventSchedule';
+import { withAuth, AuthenticatedRequest } from '@/middleware/auth';
+import { ROLES } from '@/utils/constants';
 
-export async function GET(request: Request) {
+// Volumetría de acreditación por evento. Hoy sin consumidor montado (la acción
+// getAccreditationStats de accreditationStore no se invoca desde ningún componente);
+// los roles son los del RoleGuard de la pantalla de acreditación, que es donde
+// vive el store que la expone.
+export const GET = withAuth(async (request: AuthenticatedRequest) => {
   try {
     const { searchParams } = new URL(request.url);
     const eventId = searchParams.get('eventId');
@@ -31,4 +37,4 @@ export async function GET(request: Request) {
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-}
+}, [ROLES.ADMIN, ROLES.MANAGER, ROLES.OPERATOR, ROLES.GUARD]);

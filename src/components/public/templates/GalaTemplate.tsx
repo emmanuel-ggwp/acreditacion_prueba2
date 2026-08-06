@@ -6,7 +6,7 @@ import { isValidRut } from '@/utils/validators/rut';
 import { sendConfirmationEmail } from '@/lib/emailjs';
 import { buildGuestSummary } from '@/utils/guests';
 import { getFormFields, guestDietaryEnabled, getGuestMode } from '@/utils/formFields';
-import { getDietaryOptions, isFreeTextDiet, dietaryFull, dietaryLabel, ensureDietOption } from '@/utils/dietary';
+import { getDietaryOptions, isFreeTextDiet, dietaryFull, dietaryLabel, ensureDietOption, DIET_COMMENTS_MAX, GUEST_DIET_DETAIL_MAX } from '@/utils/dietary';
 import { hexToRgba } from '@/utils/color';
 import { CONTACT_EMAIL } from '@/utils/contact';
 import { getTitleFont, googleFontHref } from '@/utils/fonts';
@@ -69,6 +69,9 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
+  // Invitados que el servidor no pudo guardar por falta de cupo. Se enseñan: descartarlos
+  // en silencio con un 201 es lo que hacía que el asistente creyera traer acompañante.
+  const [guestsSkipped, setGuestsSkipped] = useState(0);
 
   // Modo RUT
   const [rutInput, setRutInput] = useState('');
@@ -79,8 +82,13 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
   const [acompEnabled, setAcompEnabled] = useState(false);
   const [acomp, setAcomp] = useState({ firstName: '', lastName: '' });
 
-  // Modo abierto: invitados que agrega el asistente (hasta el máximo del evento)
-  const maxGuests = Number(event.maxGuestsPerParticipant) || 0;
+  // Cupo de invitados. Se calcula IGUAL que en el servidor
+  // (`api/public/events/[slug]/register/route.ts`): `registrationConfig.guests.max` solo
+  // manda si declara algo, porque su esquema lo guarda en 0 por defecto y taparía el
+  // máximo real del evento. Si el cupo es 0 no se ofrece ningún invitado — antes se
+  // ofrecía acompañante mirando solo `allowGuests` y el servidor lo descartaba (R1-01).
+  const capOf = (v: any) => { const n = Number(v); return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0; };
+  const maxGuests = capOf(event.registrationConfig?.guests?.max) || capOf(event.maxGuestsPerParticipant);
   const guestMode = getGuestMode(event.registrationConfig);
   const [countGuests, setCountGuests] = useState(0);
   const [companion, setCompanion] = useState(false);
@@ -249,21 +257,39 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
         throw new Error(data.error || 'No se pudo completar la inscripción.');
       }
 
+      // El 201 dice cuántos invitados NUEVOS se guardaron y cuántos no cupieron (D1.3).
+      // Sin esto el correo listaba acompañantes que el servidor había descartado.
+      const ok = await res.json().catch(() => ({} as any));
+      const createdGuests = Number.isFinite(Number(ok?.guestsCreated)) ? Number(ok.guestsCreated) : Number.MAX_SAFE_INTEGER;
+      const skippedGuests = Number(ok?.guestsSkipped) || 0;
+      const serverCap = Number.isFinite(Number(ok?.guestCap)) ? Number(ok.guestCap) : maxGuests;
+      setGuestsSkipped(skippedGuests);
+
       // Correo de confirmación con EmailJS — la inscripción ya quedó guardada, así que
       // un fallo de correo NO debe romper el éxito.
       try {
         const templateId = event.emailTemplate?.templateId;
         if (templateId) {
           const schedule = schedules.find((s) => s.id === selectedScheduleId);
-          const guestsList = mode === 'rut'
-            ? [
-                ...cargas.filter((c) => c.selected).map((c) => `${c.firstName} ${c.lastName || ''}`.trim()),
-                ...(acompEnabled && acomp.firstName.trim() ? [`${acomp.firstName} ${acomp.lastName}`.trim() + ' (Acompañante)'] : []),
-              ]
+          // Solo se nombran los invitados que el servidor CONFIRMÓ. Los que ya existían
+          // (cargas seleccionadas por id) se guardan siempre; los nuevos, hasta el cupo.
+          const existingNames = mode === 'rut'
+            ? cargas.filter((c) => c.selected).map((c) => `${c.firstName} ${c.lastName || ''}`.trim())
+            : [];
+          const newNames = mode === 'rut'
+            ? (acompEnabled && acomp.firstName.trim() ? [`${acomp.firstName} ${acomp.lastName}`.trim() + ' (Acompañante)'] : [])
             : openGuests.filter((g) => g.firstName.trim()).map((g) => `${g.firstName} ${g.lastName || ''}`.trim());
+          const guestsList = [...existingNames, ...newNames.slice(0, createdGuests)];
           const nombre = `${form.firstName} ${form.lastName}`.trim();
           // Invitados según el modo del evento (un solo texto sirve para los 3 modos).
-          const gs = buildGuestSummary(guestMode, { names: guestsList, count: countGuests, companion, loads });
+          // Los modos numéricos no crean filas: se recortan contra el cupo que devolvió
+          // el servidor, que es el mismo con el que recorta `guestCount`.
+          const gs = buildGuestSummary(guestMode, {
+            names: guestsList,
+            count: Math.min(countGuests, serverCap),
+            companion,
+            loads: Math.min(loads, serverCap),
+          });
           await sendConfirmationEmail(templateId, {
             to_email: form.email,
             email: form.email,
@@ -334,6 +360,14 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
           <CheckCircle2 className="h-16 w-16 mx-auto mb-4" style={{ color: primary }} />
           <h1 className="text-2xl font-bold text-white mb-2">¡Inscripción exitosa!</h1>
           <p className="text-white/80">Tu inscripción a <b>{event.name}</b> fue registrada correctamente.</p>
+          {guestsSkipped > 0 && (
+            <p className="mt-4 text-sm text-amber-200">
+              {guestsSkipped === 1
+                ? 'No pudimos registrar a 1 de tus invitados: se alcanzó el cupo de invitados del evento.'
+                : `No pudimos registrar a ${guestsSkipped} de tus invitados: se alcanzó el cupo de invitados del evento.`}
+              {' '}Si necesitas ese cupo, escribe a <b>{CONTACT_EMAIL}</b>.
+            </p>
+          )}
         </div>
       </div>
     );
@@ -552,7 +586,7 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
                       {ensureDietOption(dietOpts, form.dietaryPreference).map((o) => <option key={o.value} value={o.value} style={{ color: '#111' }}>{o.label}</option>)}
                     </select>
                     {isFreeTextDiet(form.dietaryPreference) && (
-                      <input className={`${inputClass} mt-2`} style={inputStyle} placeholder={String(form.dietaryPreference).toUpperCase().includes('ALERG') ? 'Especifica tu alergia' : 'Especifica tu requerimiento'} value={form.dietaryComments} onChange={(e) => setField('dietaryComments', e.target.value)} />
+                      <input className={`${inputClass} mt-2`} style={inputStyle} maxLength={DIET_COMMENTS_MAX} placeholder={String(form.dietaryPreference).toUpperCase().includes('ALERG') ? 'Especifica tu alergia' : 'Especifica tu requerimiento'} value={form.dietaryComments} onChange={(e) => setField('dietaryComments', e.target.value)} />
                     )}
                   </div>
                 )}
@@ -578,8 +612,8 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
                 </div>
               )}
 
-              {/* Acompañante */}
-              {event.allowGuests && (
+              {/* Acompañante — solo si el evento deja cupo para uno. */}
+              {event.allowGuests && maxGuests > 0 && (
                 <div className="mb-2">
                   <label className="flex items-center gap-3 text-white font-semibold cursor-pointer">
                     <input type="checkbox" checked={acompEnabled} onChange={(e) => setAcompEnabled(e.target.checked)} className="w-5 h-5" style={{ accentColor: primary }} />
@@ -625,6 +659,7 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
                       <input
                         className={`${inputClass} mt-2`}
                         style={inputStyle}
+                        maxLength={DIET_COMMENTS_MAX}
                         placeholder={String(form.dietaryPreference).toUpperCase().includes('ALERG') ? 'Especifica tu alergia' : 'Especifica tu requerimiento'}
                         value={form.dietaryComments}
                         onChange={(e) => setField('dietaryComments', e.target.value)}
@@ -653,6 +688,9 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
                         <input
                           className={`${inputClass} mt-2`}
                           style={inputStyle}
+                          // Más corto: este detalle viaja compuesto dentro de
+                          // `dietaryPreference`, no en columna propia. Ver `dietary.ts`.
+                          maxLength={GUEST_DIET_DETAIL_MAX}
                           placeholder={String(g.dietaryPreference).toUpperCase().includes('ALERG') ? 'Especifica la alergia' : 'Especifica el requerimiento'}
                           value={g.dietaryComments || ''}
                           onChange={(e) => updateOpenGuest(i, 'dietaryComments', e.target.value)}

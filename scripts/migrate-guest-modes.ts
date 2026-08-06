@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { sequelize } from '../src/lib/sequelize';
 
 // Migración idempotente: agrega las columnas para los modos de invitados (count / companion).

@@ -6,7 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { publicRegistrationSchema } from '@/utils/validators/participantSchemas';
 import { getFormFields, guestDietaryEnabled, getGuestMode } from '@/utils/formFields';
-import { getDietaryOptions, isFreeTextDiet, dietaryFull, ensureDietOption } from '@/utils/dietary';
+import { getDietaryOptions, isFreeTextDiet, dietaryFull, ensureDietOption, DIET_COMMENTS_MAX, GUEST_DIET_DETAIL_MAX } from '@/utils/dietary';
 import { sendConfirmationEmail } from '@/lib/emailjs';
 import { buildGuestSummary } from '@/utils/guests';
 import DateSelectModal from '@/components/public/DateSelectModal';
@@ -36,6 +36,9 @@ interface PublicRegistrationFormProps {
 export default function PublicRegistrationForm({ event, slug, onSelectedSchedulesChange }: PublicRegistrationFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+  // Invitados que el servidor no pudo guardar por falta de cupo: se enseñan en pantalla
+  // en lugar de descartarlos tras un 201 mudo (D1.3).
+  const [guestsSkipped, setGuestsSkipped] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
   const theme: any = (event as any).registrationConfig?.theme || {};
@@ -61,7 +64,11 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
   const [showDateModal, setShowDateModal] = useState(availableSchedules.length > 1);
   const guestDiet = guestDietaryEnabled((event as any).registrationConfig);
   const dietOpts = getDietaryOptions((event as any).registrationConfig);
-  const maxGuests = Number((event as any).maxGuestsPerParticipant) || 0;
+  // Mismo cálculo que el servidor (`api/public/events/[slug]/register/route.ts`):
+  // `registrationConfig.guests.max` solo manda si declara algo — su esquema lo guarda
+  // en 0 por defecto y taparía el máximo real del evento (R1-01).
+  const capOf = (v: any) => { const n = Number(v); return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0; };
+  const maxGuests = capOf((event as any).registrationConfig?.guests?.max) || capOf((event as any).maxGuestsPerParticipant);
   const allowGuests = (event as any).allowGuests !== false;
   const guestMode = getGuestMode((event as any).registrationConfig);
   // Modo 'count': solo un número. Modo 'companion': acompañante (sí/no) + cargas.
@@ -75,8 +82,12 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
   const [rutPassed, setRutPassed] = useState(false);
   const [lookupLoading, setLookupLoading] = useState(false);
   const [lookupError, setLookupError] = useState('');
-  const [openGuests, setOpenGuests] = useState<{ firstName: string; lastName: string; dietaryPreference?: string; dietaryComments?: string }[]>([]);
-  const addGuest = () => setOpenGuests((g) => (g.length < maxGuests ? [...g, { firstName: '', lastName: '', dietaryPreference: 'NONE', dietaryComments: '' }] : g));
+  // `id` presente = carga PRECARGADA por el organizador, traída por el lookup. Se envía
+  // por id para confirmarla, nunca como invitado nuevo: sin el id, el servidor creaba un
+  // DUPLICADO en cada inscripción (D1.4). El tope solo lo consumen los que no tienen id.
+  const [openGuests, setOpenGuests] = useState<{ id?: string; firstName: string; lastName: string; dietaryPreference?: string; dietaryComments?: string }[]>([]);
+  const newGuestCount = openGuests.filter((g) => !g.id).length;
+  const addGuest = () => setOpenGuests((g) => (g.filter((x) => !x.id).length < maxGuests ? [...g, { firstName: '', lastName: '', dietaryPreference: 'NONE', dietaryComments: '' }] : g));
   const removeGuest = (i: number) => setOpenGuests((g) => g.filter((_, idx) => idx !== i));
   const updateGuest = (i: number, k: string, v: string) => setOpenGuests((g) => g.map((x, idx) => (idx === i ? { ...x, [k]: v } : x)));
 
@@ -122,6 +133,8 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
       setValue('dietaryComments', p.dietaryComments || '');
       if (Array.isArray(data.guests) && data.guests.length) {
         setOpenGuests(data.guests.map((g: any) => ({
+          // El id viaja de vuelta en el envío: identifica la fila que ya existe (D1.4).
+          id: g.id,
           firstName: g.firstName || '',
           lastName: g.lastName || '',
           dietaryPreference: g.dietaryPreference || 'NONE',
@@ -176,8 +189,11 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
           guestData.guestCount = Math.min(total, maxGuests);
         } else {
           guests = openGuests
-            .filter((g) => g.firstName.trim())
+            .filter((g) => g.id || g.firstName.trim())
             .map((g) => {
+              // Carga precargada: se confirma por id. Reenviarla como invitado nuevo era
+              // lo que la duplicaba en cada inscripción (D1.4).
+              if (g.id) return { id: g.id };
               const gd: any = {};
               if (guestDiet) {
                 // El invitado no tiene columna de comentarios: si eligió Alergia/Otro y escribió,
@@ -203,6 +219,7 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
       if (!response.ok) {
         throw new Error(result.error || 'Error en el registro');
       }
+      setGuestsSkipped(Number(result?.guestsSkipped) || 0);
 
       // Correo de confirmación con EmailJS (best-effort): la inscripción ya quedó
       // guardada, así que un fallo de correo NO debe romper el éxito.
@@ -212,11 +229,21 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
           const schedule = ((event as any).schedules || []).find((s: any) => s.id === (data.scheduleIds || [])[0]);
           const nombre = `${data.firstName} ${data.lastName}`.trim();
           // Invitados según el modo del evento (un solo texto sirve para los 3 modos).
+          // Solo se nombra lo que el servidor confirmó: las cargas que ya existían
+          // (enviadas por id) y los invitados nuevos que cupieron en el cupo (D1.3).
+          // El array `guests` ya no sirve para esto: las cargas viajan solo con su id.
+          const createdGuests = Number.isFinite(Number(result?.guestsCreated)) ? Number(result.guestsCreated) : Number.MAX_SAFE_INTEGER;
+          const serverCap = Number.isFinite(Number(result?.guestCap)) ? Number(result.guestCap) : maxGuests;
+          const shown = openGuests.filter((g) => g.id || g.firstName.trim());
+          const names = [
+            ...shown.filter((g) => g.id).map((g) => `${g.firstName} ${g.lastName || ''}`.trim()),
+            ...shown.filter((g) => !g.id).slice(0, createdGuests).map((g) => `${g.firstName} ${g.lastName || ''}`.trim()),
+          ];
           const gs = buildGuestSummary(guestMode, {
-            names: guests.map((g: any) => `${g.firstName} ${g.lastName || ''}`.trim()),
-            count: guestData.guestCount,
+            names,
+            count: Math.min(Number(guestData.guestCount) || 0, serverCap),
             companion,
-            loads,
+            loads: Math.min(loads, serverCap),
           });
           await sendConfirmationEmail(templateId, {
             to_email: data.email,
@@ -266,6 +293,12 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
           Te has registrado correctamente en <strong>{event.name}</strong>.
           Hemos enviado un correo de confirmación a tu dirección.
         </p>
+        {guestsSkipped > 0 && (
+          <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-md p-3 mb-6">
+            No pudimos registrar a {guestsSkipped} de tus invitados: se alcanzó el cupo de
+            invitados del evento. Si necesitas ese cupo, escríbenos a {CONTACT_EMAIL}.
+          </p>
+        )}
         <p className="text-xs text-gray-400 mb-6">
           ¿Necesitas modificar tu inscripción? Escríbenos a{' '}
           <a href={`mailto:${CONTACT_EMAIL}`} className="underline">{CONTACT_EMAIL}</a>
@@ -525,6 +558,9 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
               <textarea
                 id="dietaryComments"
                 rows={3}
+                // El freno se ve ANTES de enviar: sin él, el texto de más se descubría
+                // como «Validation error» después de rellenar todo el formulario.
+                maxLength={DIET_COMMENTS_MAX}
                 {...register('dietaryComments')}
                 className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
               />
@@ -540,21 +576,30 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
           </label>
           <div className="space-y-2">
             {openGuests.map((g, i) => (
-              <div key={i} className="border border-gray-200 rounded-md p-2 space-y-2">
+              <div key={g.id || i} className="border border-gray-200 rounded-md p-2 space-y-2">
+                {/* Carga precargada: se muestra para confirmarla, no para editarla. El
+                    servidor solo la enlaza por id, así que un campo editable prometería
+                    un cambio que nunca se guarda. */}
+                {g.id && <p className="text-xs text-gray-500">Registrado por el organizador</p>}
                 <div className="flex gap-2">
-                  <input value={g.firstName} onChange={(e) => updateGuest(i, 'firstName', e.target.value)} placeholder={`Nombre del invitado ${i + 1}`} className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" />
-                  <input value={g.lastName} onChange={(e) => updateGuest(i, 'lastName', e.target.value)} placeholder="Apellido" className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" />
+                  <input value={g.firstName} readOnly={!!g.id} onChange={(e) => updateGuest(i, 'firstName', e.target.value)} placeholder={`Nombre del invitado ${i + 1}`} className={`flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 ${g.id ? 'bg-gray-50 text-gray-600' : ''}`} />
+                  <input value={g.lastName} readOnly={!!g.id} onChange={(e) => updateGuest(i, 'lastName', e.target.value)} placeholder="Apellido" className={`flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 ${g.id ? 'bg-gray-50 text-gray-600' : ''}`} />
                   <button type="button" onClick={() => removeGuest(i)} title="Quitar" className="px-3 text-gray-400 hover:text-red-600 border border-gray-300 rounded-md flex-shrink-0">✕</button>
                 </div>
-                {guestDiet && (
+                {guestDiet && !g.id && (
                   <select value={g.dietaryPreference || 'NONE'} onChange={(e) => updateGuest(i, 'dietaryPreference', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white">
                     {ensureDietOption(dietOpts, g.dietaryPreference).map((o) => <option key={o.value} value={o.value}>Preferencia alimenticia: {o.label}</option>)}
                   </select>
                 )}
-                {guestDiet && isFreeTextDiet(g.dietaryPreference) && (
+                {guestDiet && !g.id && isFreeTextDiet(g.dietaryPreference) && (
                   <input
                     value={g.dietaryComments || ''}
                     onChange={(e) => updateGuest(i, 'dietaryComments', e.target.value)}
+                    // Más corto que el del participante a propósito: este detalle NO va
+                    // a una columna propia, se compone como «<etiqueta>: <detalle>» y
+                    // viaja dentro de `dietaryPreference`. El margen es para la etiqueta,
+                    // que cada evento configura y puede ser larga.
+                    maxLength={GUEST_DIET_DETAIL_MAX}
                     placeholder={String(g.dietaryPreference).toUpperCase().includes('ALERG') ? 'Especifica la alergia' : 'Especifica el requerimiento'}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
                   />
@@ -562,7 +607,8 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
               </div>
             ))}
           </div>
-          {openGuests.length < maxGuests && (
+          {/* El cupo lo consumen los invitados NUEVOS; las cargas del organizador no (D1.2). */}
+          {newGuestCount < maxGuests && (
             <button type="button" onClick={addGuest} className="mt-2 text-sm font-medium" style={{ color: primary }}>+ Agregar invitado</button>
           )}
         </div>

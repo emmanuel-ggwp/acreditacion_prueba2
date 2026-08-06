@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { sequelize } from '../src/lib/sequelize';
 
 // Hace opcional el correo del participante (en precargas/cargas masivas solo el RUT es obligatorio).

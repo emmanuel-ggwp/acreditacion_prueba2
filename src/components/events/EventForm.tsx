@@ -164,7 +164,10 @@ const EventForm: React.FC<EventFormProps> = ({ event, onClose, onSuccess }) => {
       location: event?.location || '',
       maxCapacity: event?.maxCapacity ?? undefined,
       allowGuests: event?.allowGuests ?? true,
-      maxGuestsPerParticipant: event?.maxGuestsPerParticipant ?? 0,
+      // Evento nuevo → 2, el mismo defecto del modelo y del esquema. Con 0 aquí, cada
+      // evento creado desde la aplicación nacía sin cupo de invitados (R1-01 / D1.1).
+      // Un evento existente conserva su valor, incluido el 0 puesto a mano.
+      maxGuestsPerParticipant: event?.maxGuestsPerParticipant ?? 2,
       isPublic: event?.isPublic ?? false,
       registrationOpen: event?.registrationOpen ?? true,
       allowMultipleSchedules: event?.allowMultipleSchedules ?? false,
@@ -401,9 +404,11 @@ const EventForm: React.FC<EventFormProps> = ({ event, onClose, onSuccess }) => {
                 <input
                   type="number"
                   id="maxGuestsPerParticipant"
-                  placeholder="0"
+                  placeholder="2"
                   {...register('maxGuestsPerParticipant', {
-                    setValueAs: (v) => (v === '' ? 0 : parseInt(v, 10)),
+                    // Campo vacío = «no declarado» = el defecto del modelo (2), no 0.
+                    // Para «sin invitados» se escribe 0 o se desmarca "Permitir invitados".
+                    setValueAs: (v) => (v === '' ? 2 : parseInt(v, 10)),
                   })}
                   className="block w-full rounded-xl border-gray-200 bg-gray-50 px-4 py-3 text-gray-900 focus:border-indigo-500 focus:bg-white focus:ring-2 focus:ring-indigo-500/20 transition-all duration-200 sm:text-sm"
                 />

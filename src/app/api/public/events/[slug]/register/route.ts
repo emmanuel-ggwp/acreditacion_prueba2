@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 import { Event, Participant, EventSchedule, Guest } from '@/models/index';
-import { publicRegistrationSchema } from '@/utils/validators/participantSchemas';
+import {
+  publicRegistrationSchema,
+  rutRegistrationSchema,
+  RUT_UPDATABLE_FIELDS,
+  type PublicGuestInput,
+} from '@/utils/validators/participantSchemas';
+import { CONTACT_EMAIL } from '@/utils/contact';
 import { sequelize } from '@/lib/sequelize';
 import { Op, fn, col, where as sqlWhere } from 'sequelize';
 import { getScheduleParticipantCount, getEventParticipantCount } from '@/services/capacityService';
@@ -35,12 +42,45 @@ export async function POST(
 
     const mode = (event as any).registrationConfig?.mode === 'rut' ? 'rut' : 'open';
 
-    // 2. Validar horarios seleccionados
-    const scheduleIds: string[] = Array.isArray(body.scheduleIds) ? body.scheduleIds : [];
-    if (scheduleIds.length === 0) {
+    // 2. VALIDAR EL CUERPO. Va aquí, antes de la primera consulta que lo use (R1-04).
+    //
+    // `03a2ad1` presumía de que «`participantId` pasa a validarse como UUID, lo que de
+    // paso cierra un 500». La validación se añadió, pero VEINTE LÍNEAS DESPUÉS del
+    // código que ya consumía entrada sin validar: `scheduleIds` salía crudo del cuerpo
+    // y se metía tal cual en un `WHERE id IN (...)` contra una columna `uuid`.
+    // `POST {"scheduleIds":["x"]}` → `invalid input syntax for type uuid` → catch → 500.
+    //
+    // No era un problema de esquema —el esquema ya exigía UUID— sino de ORDEN. Por eso
+    // la corrección es mover la validación, no añadir otra comprobación: mientras la
+    // primera consulta preceda al `safeParse`, cada campo nuevo que alguien use antes
+    // vuelve a abrir el mismo agujero.
+    //
+    // El evento SÍ se busca antes, y es correcto: solo usa el `slug` de la ruta, no el
+    // cuerpo, y hace falta para saber qué esquema aplica.
+    const validation = mode === 'rut'
+      ? rutRegistrationSchema.safeParse(body)
+      : publicRegistrationSchema.safeParse(body);
+    if (!validation.success) {
       await t.rollback();
-      return NextResponse.json({ error: 'Selecciona una fecha de asistencia.' }, { status: 400 });
+      // La fecha es el primer paso del formulario: merece su mensaje, no el genérico.
+      const issues = validation.error.issues;
+      if (issues.some((i) => i.path[0] === 'scheduleIds')) {
+        return NextResponse.json({ error: 'Selecciona una fecha de asistencia.' }, { status: 400 });
+      }
+      // `format()` describe la forma del esquema al público. Queda anotado como F2-05
+      // y se recorta en el plan 04 (D4.1): hoy es lo único que dice al asistente QUÉ
+      // campo rechazó la petición, y quitarlo sin poner un mensaje por campo en su
+      // lugar cambiaría un 400 explicable por uno mudo.
+      return NextResponse.json(
+        { error: 'Validation error', details: validation.error.format() },
+        { status: 400 }
+      );
     }
+    // A partir de aquí `scheduleIds` son UUID comprobados: el esquema los exige en los
+    // dos modos (`z.array(z.string().uuid()).min(1)`).
+    const scheduleIds: string[] = validation.data.scheduleIds;
+
+    // 2b. Los horarios existen y son de ESTE evento.
     const schedules = await EventSchedule.findAll({
       where: { id: scheduleIds, eventId: event.id },
       transaction: t,
@@ -51,7 +91,9 @@ export async function POST(
     }
     const primaryScheduleId = scheduleIds[0];
 
-    const guestsInput: any[] = Array.isArray(body.guests) ? body.guests : [];
+    // Sale del resultado VALIDADO. Antes salía de `body.guests` —el cuerpo crudo—, con
+    // lo que el esquema de invitados, que existe, resultaba decorativo (F4-02).
+    let guestsInput: PublicGuestInput[] = [];
 
     // 3. Obtener/crear el participante según el modo
     let participant: any;
@@ -59,52 +101,43 @@ export async function POST(
 
     if (mode === 'rut') {
       // Confirmar un participante precargado identificado por RUT (lookup previo).
-      if (!body.participantId) {
-        await t.rollback();
-        return NextResponse.json(
-          { error: 'Debes identificarte con tu RUT para inscribirte en este evento.' },
-          { status: 400 }
-        );
-      }
+      const data = validation.data as z.infer<typeof rutRegistrationSchema>;
+      guestsInput = data.guests ?? [];
+
       participant = await Participant.findOne({
-        where: { id: body.participantId, eventId: event.id },
+        where: { id: data.participantId, eventId: event.id },
         transaction: t,
       });
       if (!participant) {
         await t.rollback();
         return NextResponse.json({ error: 'Participante no encontrado.' }, { status: 404 });
       }
-      // Completar/actualizar los datos que el asistente rellenó o confirmó en el formulario
-      // (en precargas suele venir solo el RUT; aquí se guardan nombre, correo, dieta, etc.).
-      const upd: any = {};
-      const setIf = (k: string, v: any) => { if (v !== undefined && v !== null && String(v).trim() !== '') upd[k] = v; };
-      setIf('firstName', body.firstName);
-      setIf('lastName', body.lastName);
-      setIf('email', body.email);
-      setIf('phone', body.phone);
-      setIf('company', body.company);
-      setIf('position', body.position);
-      setIf('numeroSap', body.numeroSap);
-      setIf('dietaryPreference', body.dietaryPreference);
-      if (body.dietaryComments !== undefined) upd.dietaryComments = body.dietaryComments;
-      if (body.guestCount !== undefined) upd.guestCount = body.guestCount;
-      if (body.guestCompanion !== undefined) upd.guestCompanion = body.guestCompanion;
-      if (body.guestLoads !== undefined) upd.guestLoads = body.guestLoads;
-      if (Object.keys(upd).length) await participant.update(upd, { transaction: t });
 
+      // Los horarios ya inscritos se leen ANTES de cualquier escritura. Antes se leían
+      // después del update, y solo el rollback de más abajo salvaba el caso: cuando el
+      // evento permite varias fechas, la transacción llegaba a commit y los campos
+      // quedaban sobrescritos.
       const existing = await (participant as any).getSchedules({ transaction: t });
       existingScheduleIds = existing.map((s: any) => s.id);
-    } else {
-      // Modo abierto: validar; reutilizar participante por correo o crear uno nuevo.
-      const validation = publicRegistrationSchema.safeParse(body);
-      if (!validation.success) {
-        await t.rollback();
-        return NextResponse.json(
-          { error: 'Validation error', details: validation.error.format() },
-          { status: 400 }
-        );
+
+      // Decisión de producto: un participante ya inscrito NO se modifica solo; contacta
+      // con una persona. Por eso el camino de escritura se cierra, no se asegura.
+      // La inscripción a una fecha adicional sigue permitida cuando el evento lo admite
+      // —es funcionalidad viva—, pero sin tocar ni un campo personal.
+      if (existingScheduleIds.length === 0) {
+        const upd: Record<string, unknown> = {};
+        for (const field of RUT_UPDATABLE_FIELDS) {
+          const value = (data as Record<string, unknown>)[field];
+          if (value === undefined || value === null) continue;
+          if (typeof value === 'string' && value.trim() === '') continue;
+          upd[field] = value;
+        }
+        if (Object.keys(upd).length) await participant.update(upd, { transaction: t });
       }
-      const data = validation.data;
+    } else {
+      // Modo abierto: reutilizar participante por RUT o crear uno nuevo.
+      const data = validation.data as z.infer<typeof publicRegistrationSchema>;
+      guestsInput = data.guests ?? [];
 
       // Reutilizar participante SOLO por RUT (normalizado: sin puntos, guión ni espacios),
       // así la misma persona no se duplica aunque use otro correo. El RUT es obligatorio.
@@ -164,7 +197,14 @@ export async function POST(
       if (!effectiveMulti) {
         await t.rollback();
         return NextResponse.json(
-          { error: 'Ya estás inscrito en este evento.', code: 'ALREADY_REGISTERED', registeredScheduleIds: existingScheduleIds },
+          {
+            error: 'Ya estás inscrito en este evento.',
+            code: 'ALREADY_REGISTERED',
+            registeredScheduleIds: existingScheduleIds,
+            // Quien ya está inscrito no puede modificar sus datos por su cuenta:
+            // el camino es escribir a esta dirección.
+            contactEmail: CONTACT_EMAIL,
+          },
           { status: 409 }
         );
       }
@@ -172,7 +212,12 @@ export async function POST(
       if (dup) {
         await t.rollback();
         return NextResponse.json(
-          { error: 'Ya estás inscrito para esa fecha. Elige otra.', code: 'ALREADY_REGISTERED_DATE', registeredScheduleIds: existingScheduleIds },
+          {
+            error: 'Ya estás inscrito para esa fecha. Elige otra.',
+            code: 'ALREADY_REGISTERED_DATE',
+            registeredScheduleIds: existingScheduleIds,
+            contactEmail: CONTACT_EMAIL,
+          },
           { status: 409 }
         );
       }
@@ -210,43 +255,184 @@ export async function POST(
 
     await (participant as any).addSchedules(schedulesToAdd, { transaction: t });
 
-    // 5. Invitados (cargas/acompañante): individuales, nunca concatenados
-    for (const g of guestsInput) {
-      if (g.id) {
-        // Carga precargada seleccionada → marcar confirmada para esta fecha
-        const guest = await Guest.findOne({
-          where: { id: g.id, participantId: participant.id },
-          transaction: t,
-        });
-        if (guest) {
-          await guest.update({ confirmed: true, scheduleId: primaryScheduleId }, { transaction: t });
-        }
-      } else if (g.firstName) {
-        // Invitado nuevo (ej. acompañante)
-        await Guest.create(
-          {
-            participantId: participant.id,
-            firstName: g.firstName,
-            lastName: g.lastName ?? null,
-            documentNumber: g.documentNumber ?? null,
-            guestType: g.guestType ?? null,
-            dietaryPreference: g.dietaryPreference ?? null,
-            confirmed: true,
-            scheduleId: primaryScheduleId,
-          },
-          { transaction: t }
-        );
+    // 5. Invitados (cargas/acompañante): individuales, nunca concatenados.
+    //
+    // Tope efectivo (F4-02). El bucle no tenía ningún freno: cada elemento con
+    // `firstName` creaba una fila, así que una sola petición podía insertar tantas
+    // como trajera el array. El `.max()` del esquema ya acotó el tamaño de la
+    // petición; aquí se aplica el límite de negocio, que sí depende de los datos.
+    //
+    // NO se topa por cupo del evento: la capacidad cuenta participantes, no
+    // invitados (`capacityService.ts:4`), así que hacerlo sería una regla nueva y
+    // cambiaría el significado de las plazas que la landing ya muestra. Queda
+    // registrado como SB-24.
+    //
+    // Saneo de la entrada del cálculo (R1-01). `Math.max(0, NaN)` es `NaN` y
+    // `createdGuests >= NaN` es SIEMPRE falso: un `allowedGuests` corrupto no relajaba
+    // el tope, lo hacía desaparecer. Negativos y decimales tampoco son topes.
+    const toCap = (v: unknown): number => {
+      const n = Number(v);
+      return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
+    };
+    // `registrationConfig.guests.max` solo manda cuando declara algo. Su esquema lo trae
+    // con `.default(0)` (`eventSchemas.ts:36`), así que TODO evento guardado desde la
+    // aplicación lo lleva a 0; con `??` ese 0 tapaba `maxGuestsPerParticipant` y el cupo
+    // real nunca se leía. Un 0 ahí significa «no configurado», no «cero invitados»:
+    // para cero invitados está `allowGuests = false`.
+    const eventGuestCap = toCap((event as any).registrationConfig?.guests?.max)
+      || toCap((event as any).maxGuestsPerParticipant);
+    const participantCap = toCap((participant as any).allowedGuests);
+    const effectiveGuestCap = (event as any).allowGuests === false
+      ? 0
+      : participantCap > 0
+        ? (eventGuestCap > 0 ? Math.min(participantCap, eventGuestCap) : participantCap)
+        : eventGuestCap;
+
+    // Los invitados que el propio asistente creó desde el landing cuentan contra el tope:
+    // sin esto, reenviar el formulario varias veces acumula sin límite.
+    //
+    // Las CARGAS PRECARGADAS por el organizador NO cuentan (D1.2): son presupuesto suyo,
+    // no del asistente. Contándolas, un precargado con 2 cargas y máximo 2 se quedaba sin
+    // poder traer acompañante, y las cargas que ni siquiera seleccionaba le comían el cupo.
+    // Se distinguen por `registrationSource`, columna añadida en esta corrección: `guestType`
+    // no vale, es una etiqueta libre que el administrador configura por evento.
+    const currentGuestCount = await Guest.count({
+      where: { participantId: participant.id, registrationSource: 'PUBLIC_FORM' },
+      transaction: t,
+    });
+    const remainingGuestSlots = Math.max(0, effectiveGuestCap - currentGuestCount);
+
+    let createdGuests = 0;
+    let skippedGuests = 0;
+
+    // ────────────────────────────────────────────────────────────────────────────
+    // R1-02 — LA INVARIANTE, en una línea: si el participante YA ESTÁ INSCRITO, no
+    // cambia ni una columna suya ni de sus invitados. Lo único que ocurre es el
+    // enlace a la fecha nueva, que ya se hizo en el paso 4.
+    //
+    // Antes, dos escrituras corrían fuera de esa guarda y las disparaba cualquiera
+    // que acertara un RUT, porque `lookup/route.ts` entrega sin autenticación el
+    // `participantId` y los `id` de todos los invitados:
+    //
+    //   a) el recorte de `guestCount`/`guestLoads` — ambos están en
+    //      `RUT_UPDATABLE_FIELDS`, es decir son campos personales según la propia
+    //      definición del código. Un `guestCount = 5` puesto a mano por el
+    //      organizador quedaba DESTRUIDO al inscribirse a una segunda fecha.
+    //   b) la rama `g.id`, que reasignaba `scheduleId` de TODAS las cargas de la
+    //      víctima a la fecha nueva. Acotada a `participantId`, así que no tocaba
+    //      cargas ajenas: solo destrozaba las de la persona a la que se decía proteger.
+    //
+    // Los invitados NUEVOS también quedan fuera (D2.1): crear filas en el registro de
+    // otra persona es escribir en sus datos aunque no sobrescriba ninguna columna, y
+    // el camino es el mismo — un RUT acertado. Coherente con la decisión que ya
+    // tomaba el código más arriba: quien ya está inscrito no se modifica solo,
+    // contacta con una persona.
+    // ────────────────────────────────────────────────────────────────────────────
+    if (existingScheduleIds.length === 0) {
+      // Los campos numéricos describen el mismo cupo y se recortan contra él. El cliente
+      // ya lo hace; el servidor no lo hacía.
+      if (effectiveGuestCap >= 0) {
+        const clamped: Record<string, unknown> = {};
+        const gc = Number((participant as any).guestCount ?? 0);
+        const gl = Number((participant as any).guestLoads ?? 0);
+        if (gc > effectiveGuestCap) clamped.guestCount = effectiveGuestCap;
+        if (gl > effectiveGuestCap) clamped.guestLoads = effectiveGuestCap;
+        if (Object.keys(clamped).length) await participant.update(clamped, { transaction: t });
       }
+
+      const guestCounts = await applyGuests(guestsInput, {
+        participant,
+        primaryScheduleId,
+        remainingGuestSlots,
+        transaction: t,
+      });
+      createdGuests = guestCounts.created;
+      skippedGuests = guestCounts.skipped;
+    } else {
+      // Ya inscrito: no se guarda ningún invitado de esta petición. Se declaran como
+      // no guardados para que la pantalla y el correo no los prometan (D1.3). Las
+      // cargas que ya existen siguen intactas, con la fecha que tuvieran.
+      skippedGuests = guestsInput.filter((g) => !g.id && g.firstName).length;
     }
 
     await t.commit();
     return NextResponse.json(
-      { message: 'Registration successful', participantId: participant.id },
+      {
+        message: 'Registration successful',
+        participantId: participant.id,
+        // Cuántos invitados NUEVOS se guardaron y cuántos no cupieron (D1.3). El cliente
+        // los necesita para no prometer en pantalla ni por correo lo que no existe.
+        guestsCreated: createdGuests,
+        guestsSkipped: skippedGuests,
+        guestCap: effectiveGuestCap,
+      },
       { status: 201 }
     );
   } catch (error: any) {
-    await t.rollback();
-    console.error('Error in public registration:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return handleRegistrationError(error, t);
   }
+}
+
+/**
+ * Guarda los invitados de una inscripción. Vive fuera del handler para que la guarda
+ * de «ya inscrito» sea una sola condición y no un `if` repetido por escritura: la
+ * forma anterior —el bucle suelto en medio del handler— es la que dejó dos escrituras
+ * fuera de la guarda sin que se notara.
+ */
+async function applyGuests(
+  guestsInput: PublicGuestInput[],
+  opts: {
+    participant: any;
+    primaryScheduleId: string;
+    remainingGuestSlots: number;
+    transaction: any;
+  }
+): Promise<{ created: number; skipped: number }> {
+  const { participant, primaryScheduleId, remainingGuestSlots, transaction: t } = opts;
+  let createdGuests = 0;
+  let skippedGuests = 0;
+  for (const g of guestsInput) {
+    if (g.id) {
+      // Carga precargada seleccionada → marcar confirmada para esta fecha.
+      // El `participantId` del `where` es lo que impide tocar cargas ajenas.
+      const guest = await Guest.findOne({
+        where: { id: g.id, participantId: participant.id },
+        transaction: t,
+      });
+      if (guest) {
+        await guest.update({ confirmed: true, scheduleId: primaryScheduleId }, { transaction: t });
+      }
+    } else if (g.firstName) {
+      // Invitado nuevo (ej. acompañante). Solo mientras queden plazas: agotado el
+      // cupo, los sobrantes NO se crean — el participante queda inscrito, que es lo
+      // que vino a hacer. Pero el descarte deja de ser silencioso: se cuenta y la
+      // respuesta lo dice (D1.3), porque un 201 mudo produjo el correo que listaba
+      // acompañantes que nunca se guardaron.
+      if (createdGuests >= remainingGuestSlots) { skippedGuests++; continue; }
+      createdGuests++;
+      await Guest.create(
+        {
+          participantId: participant.id,
+          firstName: g.firstName,
+          lastName: g.lastName ?? null,
+          documentNumber: g.documentNumber ?? null,
+          guestType: g.guestType ?? null,
+          dietaryPreference: g.dietaryPreference ?? null,
+          confirmed: true,
+          scheduleId: primaryScheduleId,
+          // Este sí consume el cupo del asistente: lo creó él, no el organizador.
+          registrationSource: 'PUBLIC_FORM',
+        },
+        { transaction: t }
+      );
+    }
+  }
+  return { created: createdGuests, skipped: skippedGuests };
+}
+
+/** Cierre común del handler: deshace la transacción y no filtra el error al público. */
+async function handleRegistrationError(error: any, t: any) {
+  await t.rollback();
+  console.error('Error in public registration:', error);
+  return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
 }

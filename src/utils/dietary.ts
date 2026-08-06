@@ -5,6 +5,22 @@
 
 export interface DietOption { value: string; label: string }
 
+/**
+ * Topes del texto libre de dieta en la interfaz (R1-03). Existen para que el freno se
+ * vea ANTES de enviar: el esquema es el respaldo, no el aviso.
+ *
+ * `DIET_COMMENTS_MAX` — detalle del PARTICIPANTE. Va tal cual a
+ * `participants.dietary_comments`, que es `VARCHAR(255)`: el tope es la columna.
+ *
+ * `GUEST_DIET_DETAIL_MAX` — detalle de un INVITADO. Más corto a propósito: el invitado
+ * **no tiene columna de comentarios**, así que el detalle se compone como
+ * `"<etiqueta>: <detalle>"` (`dietaryFull`) y viaja dentro de `dietary_preference`,
+ * también `VARCHAR(255)`. Los 55 caracteres de diferencia son el margen para la
+ * etiqueta, que cada evento configura y no tiene longitud predecible.
+ */
+export const DIET_COMMENTS_MAX = 255;
+export const GUEST_DIET_DETAIL_MAX = 200;
+
 // Lista por defecto (cuando el evento no configuró nada).
 const DEFAULT_DIET: DietOption[] = [
   { value: 'VEGETARIAN', label: 'Vegetariano' },

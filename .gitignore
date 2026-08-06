@@ -46,6 +46,10 @@ Thumbs.db
 # Jest
 jest-coverage/
 
+# Artefactos de las ejecuciones nocturnas de planes/: informes y logs. Se leen en disco;
+# versionarlos haria que cada tanda ensuciara el arbol y la siguiente no arrancara.
+planes/resultados/
+
 # Generated files
 *.generated.*
 
