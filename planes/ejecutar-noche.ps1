@@ -84,7 +84,7 @@ if ($problemas.Count -gt 0) {
     exit 1
 }
 
-Escribir "Rama: $(git rev-parse --abbrev-ref HEAD)  ·  commit: $(git rev-parse --short HEAD)" 'Gray'
+Escribir "Rama: $(git rev-parse --abbrev-ref HEAD)  | commit: $(git rev-parse --short HEAD)" 'Gray'
 
 # El contenedor se levanta una vez para toda la cadena; cada plan siembra lo que necesite.
 docker start $Contenedor 2>&1 | Out-Null
@@ -190,7 +190,7 @@ foreach ($p in $Planes) {
               elseif ([int]$commitsNuevos -eq 0) { 'terminado SIN COMMITS' }
               else { 'terminado' }
 
-    Escribir "Plan ${plan}: $estado · $commitsNuevos commits · $duracion min" `
+    Escribir "Plan ${plan}: $estado |$commitsNuevos commits |$duracion min" `
         $(if ($estado -eq 'terminado') { 'Green' } else { 'Yellow' })
 
     $resultados += [pscustomobject]@{

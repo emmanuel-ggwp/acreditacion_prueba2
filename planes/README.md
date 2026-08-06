@@ -103,13 +103,44 @@ habría cazado.
 
 ## Cómo se lanza
 
+**La forma normal — una noche entera en un comando:**
+
 ```bash
-# un plan concreto
-claude -p "Ejecuta el plan planes/01-regresiones-bloque-a.md siguiendo el método de planes/README.md"
+powershell -File planes/ejecutar-noche.ps1
 ```
 
-O con el script de orquestación, que ya encadena implementador y crítico por fase:
+Encadena los planes 01, 02 y 08 (los tres que bloquean el despliegue), comprueba las
+precondiciones antes de arrancar, y por la mañana deja
+[DECISIONES.md](DECISIONES.md) con lo que hay que verificar y un resumen en
+`planes/resultados/`. `-SoloPrecondiciones` comprueba y sale; `-TodoDirecto` evita los
+workflows para gastar menos.
+
+**Un plan suelto**, con la garantía del ciclo implementador→crítico:
 
 ```
 Workflow({ scriptPath: "planes/ejecutar-plan.workflow.js", args: { plan: "01-regresiones-bloque-a" } })
 ```
+
+**Un plan suelto, más barato** (el mismo modelo escribe y se revisa, con menos garantías):
+
+```bash
+claude -p "Ejecuta el plan planes/01-regresiones-bloque-a.md siguiendo el método de planes/README.md"
+```
+
+### Workflow o `claude` directo
+
+Con `claude -p` corre **una sola sesión**: el mismo modelo lee el plan, escribe el código y luego
+se revisa a sí mismo con todo su razonamiento previo en contexto. El ciclo implementador→crítico
+es una sugerencia que puede saltarse, y en una sesión larga el contexto se degrada.
+
+Con el Workflow el control de flujo está en JavaScript: por cada fase corren **exactamente dos
+agentes con contexto limpio**, el crítico recibe el diff pero **no el razonamiento** del
+implementador, la salida va forzada por esquema —así que las decisiones y sus alternativas
+descartadas no se pueden omitir— y un veredicto de `rehacer` detiene el plan.
+
+Esa independencia no es teórica: durante la remediación del Bloque A, las verificaciones propias
+dieron por buenos **dos fallos críticos** que sí detectaron revisores independientes arrancando
+limpios. El Workflow gasta más tokens, y eso es exactamente lo que compra.
+
+**En paralelo:** se puede, pero hay cuatro recursos compartidos que se pisan en silencio. Ver
+[PARALELO.md](PARALELO.md) antes de intentarlo.
