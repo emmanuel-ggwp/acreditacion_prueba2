@@ -222,10 +222,10 @@ Se registran en [DECISIONES.md](DECISIONES.md) y el crítico las evalúa.
 |---|---|---|---|
 | D7.1 | Gestor de procesos | **systemd, un solo proceso** | PM2 en cluster multiplica por N los contadores en memoria del limitador, no lee `EnvironmentFile`, convierte el `process.exit(1)` de la validación en tormenta de reinicios y no soporta `next start` como script de cluster |
 | D7.2 | ¿CDN o WAF delante? | **No al principio** | Un segundo proxy cambia por completo la lectura de `X-Forwarded-For` y con ella la corrección de A6. Añadirlo después es fácil **si se recuerda revisar el limitador**; el plan lo deja escrito |
-| D7.3 | PostgreSQL | **Local, solo en `127.0.0.1`** | Es lo ya decidido y lo que hace correcta A8. Externalizarlo obliga a `DB_SSL=true` y a instalar la CA |
+| D7.3 | Base de datos | ~~Local, solo en `127.0.0.1`~~ → **ADMINISTRADA de DigitalOcean** (decisión de Emmanuel, 2026-08-06, D0) | El servidor anterior se comprometió y hubo que destruirlo **sin snapshot**: con la base en la misma máquina, los datos mueren con ella. **Ya no es una decisión de este plan** — está tomada. Lo que sí decide el plan es cómo se conecta: `DB_SSL=true`, la CA del proveedor disponible, *trusted sources* en lugar del `127.0.0.1`, y el pool dimensionado al límite del plan contratado. Los datos concretos los produce la **fase 2** |
 | D7.4 | `output: 'standalone'` | **Decidir con la unidad systemd escrita delante** | Cambia el layout del árbol desplegado, así que decidirlo antes de tener la unidad es decidir a ciegas |
 | D7.5 | Node | **La LTS activa que cumpla `>=20.9.0`** de Next 16.2.12 | Fijada en `engines` y `.nvmrc`, iguales entre sí |
-| D7.6 | Copias de seguridad | **Diarias con restauración probada** antes de dar el droplet por terminado | Un backup que nunca se ha restaurado no es un backup. Es barato ahora y caro después |
+| D7.6 | Copias de seguridad | **Las de DigitalOcean**, y **probar una restauración** antes de dar el droplet por terminado | Con la base administrada, el proveedor las gestiona: se acabó montarlas a mano. Lo que **no** desaparece es probar que restauran — un backup que nunca se ha restaurado no es un backup, lo gestione quien lo gestione. La retención y el procedimiento los averigua la fase 2 (I6) |
 
 **No se decide solo — se propone y se espera:**
 
