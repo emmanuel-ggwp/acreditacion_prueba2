@@ -109,11 +109,28 @@ habría cazado.
 powershell -File planes/ejecutar-noche.ps1
 ```
 
-Encadena los planes 01, 02 y 08 (los tres que bloquean el despliegue), comprueba las
-precondiciones antes de arrancar, y por la mañana deja
-[DECISIONES.md](DECISIONES.md) con lo que hay que verificar y un resumen en
-`planes/resultados/`. `-SoloPrecondiciones` comprueba y sale; `-TodoDirecto` evita los
-workflows para gastar menos.
+Por defecto corre **los tres que bloquean el despliegue** (01, 02 y 08). Para los ocho:
+
+```bash
+powershell -File planes/ejecutar-noche.ps1 -Conjunto todos
+```
+
+El script conoce el catálogo completo y **respeta el orden de dependencias** aunque los pidas
+desordenados; si eliges un plan cuya dependencia no va en la tanda, avisa antes de arrancar.
+Comprueba las precondiciones —CLI, Docker, árbol limpio, `.env`— antes de lanzar nada, y por la
+mañana deja [DECISIONES.md](DECISIONES.md) con lo que hay que verificar y un resumen en
+`planes/resultados/`.
+
+Otras formas: `-SoloPrecondiciones` comprueba, lista y sale; `-TodoDirecto` evita los workflows
+para gastar menos; `-Conjunto personalizado -Planes 03-bloque-b-sesion,04-bloque-b-validacion`
+para elegir a mano.
+
+**Dos planes no corren enteros de noche, y el script lo sabe:**
+
+- El **07** para tras la fase 3. Su fase 4 exige un droplet real delante, y un script de
+  infraestructura sin ejecutar es una hipótesis con aspecto de certeza.
+- El **06** va el penúltimo porque al poner los tests en verde **cambia la línea base de W7** que
+  los demás usan como criterio de parada. El script le pide que actualice la regla si eso ocurre.
 
 **Un plan suelto**, con la garantía del ciclo implementador→crítico:
 
