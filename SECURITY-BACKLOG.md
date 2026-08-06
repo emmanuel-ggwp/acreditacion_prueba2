@@ -56,6 +56,8 @@ módulos que hoy sí existen). Mezclar deuda de seguridad con esa lista escondí
 | [SB-30](#sb-30--el-cliente-descarta-el-refresh-token-rotado-cierre-de-sesión-forzoso-en-el-segundo-refresh) | El cliente descarta el refresh token rotado: logout forzoso en el 2º refresh | — (surgido en R2-02) | ~30 min |
 | [SB-31](#sb-31--esquemas-de-login-duplicados-y-ya-divergentes-dos-loginschema-y-dos-registerschema) | Esquemas de login duplicados y ya divergentes entre validators | — (surgido en R2-03a) | ~30 min |
 | [SB-33](#sb-33--next-16-declara-obsoleta-la-convención-middleware-la-fuente-única-de-cors-vive-en-una-api-en-retirada) | La convención `middleware` está deprecada en Next 16 y ahora es la fuente única de CORS | — (surgido en P08-D1) | ~1 h |
+| [SB-35](#sb-35--crítica-de-handlebars-en-la-cadena-de-dev-fuera-del-gate-bloqueante-de-ci) | Crítica de `handlebars` en la cadena de dev, fuera del gate bloqueante de CI | — (surgido en P07-F1) | ~30 min |
+| [SB-36](#sb-36--el-ci-recién-creado-es-mínimo-sin-build-sin-tests-y-sin-vigilar-sus-propias-actions) | El CI recién creado es mínimo: sin build, sin tests y sin vigilar sus propias actions | — (surgido en P07-F1) | ~2 h |
 
 > ⏱ **SB-13 y SB-16 tienen ventana fija, no plazo abierto.** Deben resolverse **al terminar los
 > cambios de la auditoría y, en cualquier caso, ANTES de que la reconstrucción configure CI y
@@ -1039,3 +1041,45 @@ propio handler. Sin efecto en el despliegue actual (no se usa `output: standalon
 día se adopta standalone, ese trazado engordaría el artefacto. **Corrección propuesta**: acotar
 las operaciones fs de las rutas de uploads con `turbopackIgnore` (incluido el handler) o mover
 la resolución a un módulo de ruta estática, y comprobar que el warning desaparece (~30 min).
+
+---
+
+## SB-35 — Crítica de `handlebars` en la cadena de dev, fuera del gate bloqueante de CI
+
+- **Referencia**: visto de camino en **plan 07, fase 1** (montaje de `npm audit` en CI), 2026-08-06.
+- **Ficheros**: `package-lock.json` (`ts-jest@29.4.5` → `handlebars@4.7.8`);
+  `.github/workflows/ci.yml` (el gate que la excluye a propósito).
+- **Bloquea el despliegue**: no — es una cadena **solo de dev**, no llega al servidor.
+
+`npm audit` marca `handlebars` 4.0.0–4.7.8 con severidad **crítica** (inyección de JS vía
+confusión de tipos del AST, GHSA-3mfm-83xf-c92r entre otros). Entra únicamente por
+`ts-jest@29.4.5`. El gate bloqueante de CI corre con `--omit=dev` (decisión **P07-D7.7**), así
+que **esta crítica no rompe CI**: se ve solo en el paso informativo. Es la elección correcta
+para el umbral del runtime, pero deja una crítica de la cadena de build sin plazo. **Corrección
+propuesta**: `npm update handlebars` (npm audit dice que hay fix dentro del rango) o subir
+`ts-jest`, verificar `npx jest` (línea base 6/6/0) y, con el árbol completo limpio de críticas,
+valorar quitar `--omit=dev` del gate para que también la cadena de dev quede bajo umbral (~30 min).
+**Prohibido** cerrar esto con `npm audit fix --force` (ver SB-13).
+
+---
+
+## SB-36 — El CI recién creado es mínimo: sin build, sin tests y sin vigilar sus propias actions
+
+- **Referencia**: deuda declarada al crear `.github/workflows/ci.yml` y `.github/dependabot.yml`
+  en **plan 07, fase 1**, 2026-08-06.
+- **Ficheros**: `.github/workflows/ci.yml`, `.github/dependabot.yml`.
+- **Bloquea el despliegue**: no.
+
+El CI de la fase 1 cubre exactamente lo que el plan pedía (`npm ci` + `npm audit` bloqueante ante
+críticas), y nada más. Tres ampliaciones quedan pendientes, cada una con su prerequisito:
+
+1. **`npm run build` en CI.** Es la red que valida los PRs agrupados de Dependabot (el override
+   de `postcss` sobre la copia que Next fija es el ejemplo exacto de lo que un build debe
+   confirmar). Prerequisito: decidir qué variables de entorno necesita `next build` en un runner
+   limpio — hoy el build local lee el `.env` de desarrollo, que no existe ni debe existir en CI.
+2. **Tests en CI.** Sin sentido mientras la suite no arranque: depende de **SB-11** (línea base
+   6 suites fallidas / 0 tests).
+3. **Ecosistema `github-actions` en Dependabot.** El workflow usa `actions/checkout@v4` y
+   `actions/setup-node@v4` fijadas por tag mayor; añadir el ecosistema (4 líneas en
+   `dependabot.yml`) las mantiene actualizadas, y fijarlas por SHA endurecería la cadena de
+   suministro del propio CI. Se dejó fuera para no ensanchar la fase (W2).
