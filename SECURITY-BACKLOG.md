@@ -870,3 +870,29 @@ sin contrapartida.
 
 **Comentario de método**: esto lo encontró la verificación de otra cosa. El fichero está
 intacto desde `37f6060` y ningún test lo cubre — es exactamente el hueco que SB-11 deja abierto.
+
+---
+
+## SB-28 — El login distingue «cuenta deshabilitada» de «credenciales inválidas»: enumeración de estado de cuenta
+
+- **Referencia**: encontrado durante la implementación de **R2-01** (plan 02, fase 1), 2026-08-06.
+- **Ficheros**: `src/services/authService.ts:15-29`, `src/app/api/auth/login/route.ts` (rama del 401).
+- **Bloquea el despliegue**: **no** — requiere conocer email Y contraseña, y el limitador lo frena.
+
+`authService.login` lanza `Invalid credentials` cuando el email no existe o la contraseña no
+coincide —el comentario del código dice explícitamente que es «para prevenir enumeración»— pero
+lanza **`User account is disabled`** cuando la cuenta existe, la contraseña ES correcta y está
+desactivada. El handler devuelve ambos mensajes tal cual en el cuerpo del 401.
+
+Quien posea una credencial robada puede distinguir «contraseña incorrecta» de «contraseña
+correcta pero cuenta desactivada», es decir, **confirmar que una credencial filtrada era válida**
+aunque la cuenta ya esté suspendida. Es información útil para reutilizarla en otros servicios
+(password reuse), que es justo el escenario post-compromiso de esta auditoría.
+
+**Corrección propuesta**: devolver el mismo mensaje genérico en ambos casos y conservar la
+distinción solo en el registro de auditoría (que ya existe: `auditLogService.log` con
+`reason: 'User account is disabled'`). Encaja en el plan 04 (fugas de detalle en errores).
+
+**Nota de alcance (W2)**: se detectó al decidir qué caminos de fallo consumen cuota en R2-01
+(ambos consumen, así que el limitador sí lo frena); cambiar el mensaje era tocar contrato de
+respuesta fuera del alcance de la fase.

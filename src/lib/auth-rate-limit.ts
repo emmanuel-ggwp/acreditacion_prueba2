@@ -4,18 +4,30 @@ import { sequelize } from '@/lib/sequelize';
 import { clientIdentifier, tooManyRequests } from '@/lib/rate-limit';
 
 /**
- * Límites para las rutas de credenciales (F1-03).
+ * Límites para las rutas de credenciales (F1-03, rediseñado en R2-01).
  *
  * Son DOS cubos con propósitos distintos, y la separación no es cosmética: un solo
  * cubo por IP no puede proteger la contraseña sin castigar a usuarios legítimos.
  *
- * - **Por cuenta** (`account:<email>`): estricto. Es el que de verdad frena la
- *   adivinación de una contraseña, porque el atacante no puede cambiar de objetivo
- *   sin empezar de cero.
+ * - **Por credencial** (`account:<email>::<ip>`): estricto. Es el que de verdad
+ *   frena la adivinación de una contraseña. La clave INCLUYE LA IP porque una clave
+ *   que solo contiene el email es un valor que elige el atacante: once peticiones
+ *   con el email de la víctima bloqueaban su cuenta 15 minutos, renovables para
+ *   siempre — un DoS no autenticado contra personas concretas. Con `(email, ip)`
+ *   quien ataca se bloquea a sí mismo desde su origen, no a la víctima desde el
+ *   suyo. **Trade-off aceptado (D2.2):** un atacante con muchas IPs recupera
+ *   intentos por IP; es el compromiso estándar y exige una botnet, mientras que el
+ *   DoS de cuenta lo ejecutaba cualquiera con `curl`.
  * - **Por IP** (`auth:<ip>`): holgado. Frena el barrido de muchas cuentas desde un
  *   mismo origen. Es holgado a propósito: en un evento, todo el personal de
  *   acreditación comparte la IP pública de la sede, así que un umbral estrecho
  *   dejaría fuera a toda la puerta a la vez.
+ *
+ * Además, la cuota por credencial **solo se consume cuando el intento FALLA**
+ * (D2.3): se comprueba con `get()` antes de verificar la contraseña —para no gastar
+ * CPU en bcrypt cuando ya está agotada— y se consume después, únicamente en el
+ * camino de fallo. Quien acierta la contraseña entra aunque la cuota esté gastada,
+ * lo que elimina de raíz el bloqueo del usuario legítimo.
  *
  * El almacén es PostgreSQL: el contador sobrevive a un reinicio y se comparte entre
  * procesos. No hace falta infraestructura nueva —`RateLimiterPostgres` acepta la
@@ -24,7 +36,7 @@ import { clientIdentifier, tooManyRequests } from '@/lib/rate-limit';
  * compila el middleware al runtime Edge, donde no hay base de datos.
  */
 
-const ACCOUNT_POINTS = 10; // intentos contra UNA cuenta...
+const ACCOUNT_POINTS = 10; // intentos FALLIDOS contra una cuenta desde una IP...
 const ACCOUNT_DURATION = 900; // ...por cada 15 minutos
 const ACCOUNT_BLOCK = 900;
 
@@ -114,24 +126,67 @@ export async function authRateLimit(request: NextRequest) {
 }
 
 /**
- * Límite por cuenta. Se llama DESPUÉS de validar el cuerpo, cuando ya se conoce a
- * qué usuario se intenta acceder.
+ * Clave del cubo de credenciales: `(email, ip)`. El email se normaliza igual que
+ * siempre; la IP sale de `clientIdentifier`, que el cliente no controla (§7.4).
+ * `::` no puede aparecer en la parte de email de forma ambigua ni en una IP v4,
+ * y en una IPv6 la clave sigue siendo unívoca porque el email va primero.
+ *
+ * NOTA (fase 3a de este plan): `rate_limits.key` es varchar(255) y `loginSchema`
+ * aún no acota el email; añadir la IP alarga la clave. El tope de longitud y el
+ * fail-open que provoca se corrigen en esa fase, no aquí (W2).
  */
-export async function accountRateLimit(email: string) {
-  return consume(accountLimiter(), email.trim().toLowerCase());
+function accountKey(email: string, request: NextRequest): string {
+  return `${email.trim().toLowerCase()}::${clientIdentifier(request)}`;
 }
 
 /**
- * Devuelve la cuota de UNA CUENTA tras un login correcto: quien acierta no debe
- * gastar los intentos de su propia cuenta.
+ * Comprueba la cuota de credenciales SIN consumirla. Se llama después de validar
+ * el cuerpo y ANTES de verificar la contraseña: si la cuota está agotada se
+ * responde 429 sin gastar CPU en bcrypt, pero un intento correcto nunca queda
+ * fuera por cuota gastada — el consumo solo ocurre en `penalizeAccountRateLimit`.
+ *
+ * `get()` de rate-limiter-flexible devuelve `null` si la clave no existe y un
+ * `RateLimiterRes` (con `remainingPoints` y `msBeforeNext`) si existe; los fallos
+ * del almacén los absorbe el insuranceLimiter. Si aun así algo se colara, se
+ * responde 429: este límite falla CERRADO, igual que el resto del módulo.
+ */
+export async function checkAccountRateLimit(email: string, request: NextRequest) {
+  try {
+    const res = await accountLimiter().get(accountKey(email, request));
+    if (res !== null && res.remainingPoints <= 0) {
+      return tooManyRequests(res);
+    }
+    return null;
+  } catch (e) {
+    return tooManyRequests(e);
+  }
+}
+
+/**
+ * Consume UN punto de la cuota `(email, ip)`. Se llama solo cuando el intento de
+ * login FALLA (credenciales inválidas o cuenta deshabilitada). Si este fallo agota
+ * la cuota, el rechazo de `consume` se ignora a propósito: la petición actual ya
+ * lleva su 401 y el 429 lo dará la siguiente comprobación.
+ */
+export async function penalizeAccountRateLimit(email: string, request: NextRequest) {
+  try {
+    await accountLimiter().consume(accountKey(email, request));
+  } catch {
+    // Cuota agotada o fallo del almacén: nada que hacer aquí.
+  }
+}
+
+/**
+ * Devuelve la cuota de `(email, ip)` tras un login correcto: quien acierta a la
+ * cuarta no arrastra los tres fallos anteriores.
  *
  * Deliberadamente NO toca el cubo por IP. Borrarlo sería un agujero: bastaría con
  * poseer una credencial válida cualquiera para intercalar un acierto propio cada
  * pocos intentos y adivinar contra otras cuentas de forma indefinida.
  */
-export async function resetAccountRateLimit(email: string) {
+export async function resetAccountRateLimit(email: string, request: NextRequest) {
   try {
-    await accountLimiter().delete(email.trim().toLowerCase());
+    await accountLimiter().delete(accountKey(email, request));
   } catch {
     // Un fallo aquí solo significa que el usuario conserva el intento gastado.
   }
