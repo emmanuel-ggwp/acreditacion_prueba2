@@ -73,9 +73,13 @@ const envSchema = z.object({
 
 export function validateEnv(): void {
   // Todas las exigencias de arriba cuelgan de NODE_ENV, así que un NODE_ENV
-  // equivocado las desactiva TODAS en silencio — y `next start` respeta el valor
-  // que ya venga del entorno. Un despliegue que arrastre `NODE_ENV=development`
-  // en su EnvironmentFile creería estar protegido sin estarlo.
+  // equivocado las desactiva TODAS en silencio. Matiz medido en el build real
+  // (P08-D3): Turbopack INLINEA process.env.NODE_ENV al compilar, de modo que
+  // en el artefacto de `next build` este fichero queda congelado con el modo
+  // del build — un `NODE_ENV=development` en el EnvironmentFile ya no relaja
+  // la validación del artefacto compilado, pero sí afecta a todo lo que corre
+  // sin compilar (scripts tsx) y hace FALLAR el propio `next build` si se
+  // hereda al construir. La plantilla dice "production" por eso (D8.3).
   const nodeEnv = process.env.NODE_ENV;
   if (nodeEnv && !['production', 'development', 'test'].includes(nodeEnv)) {
     console.error(`\nNODE_ENV tiene un valor no reconocido. La aplicación no arranca.\n`);
