@@ -35,9 +35,11 @@ const envSchema = z.object({
   JWT_SECRET: signingSecret,
   JWT_REFRESH_SECRET: signingSecret,
 
-  // Sin ALLOWED_ORIGIN, tanto next.config.js:27 como middleware/security.ts:3 caen
-  // a "*" en silencio. Ese respaldo es F2-04 y se retira en el Bloque B; exigir la
-  // variable aquí lo vuelve inalcanzable en producción mientras tanto.
+  // Sin ALLOWED_ORIGIN, middleware/security.ts:3 cae a "*" en silencio. Ese
+  // respaldo es F2-04 y se retira en el Bloque B; exigir la variable aquí lo
+  // vuelve inalcanzable en producción mientras tanto. (next.config.js ya no
+  // participa: sus cabeceras CORS se retiraron en D8.2 porque se congelaban
+  // en el build — el middleware es la fuente única.)
   ALLOWED_ORIGIN: isProduction
     ? z
         .string({ error: 'obligatoria en producción: sin ella el CORS cae a "*"' })
