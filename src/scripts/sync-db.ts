@@ -15,6 +15,20 @@ const syncDatabase = async () => {
     await sequelize.sync({ force: true }); // or { force: true } if you want to recreate tables
     console.log('Database synchronized successfully.');
 
+    // `rate_limits` no es un modelo de Sequelize (la usa RateLimiterPostgres en
+    // src/lib/auth-rate-limit.ts), así que sync() no la crea. Se crea aquí para
+    // que el APROVISIONAMIENTO sea quien la garantice y la aplicación nunca
+    // necesite el permiso CREATE en el esquema — en la base administrada de
+    // DigitalOcean (PostgreSQL 15+) el usuario de aplicación no lo tiene por
+    // defecto y el CREATE en caliente degradaba el limitador a memoria
+    // (R2-03b; plan 08, D8.4). Mismo DDL que emite la librería.
+    await sequelize.query(`CREATE TABLE IF NOT EXISTS rate_limits (
+      key varchar(255) PRIMARY KEY,
+      points integer NOT NULL DEFAULT 0,
+      expire bigint
+    );`);
+    console.log('rate_limits table ensured.');
+
     // Show tables as seen by this connection
     try {
       const [rows] = await sequelize.query(
