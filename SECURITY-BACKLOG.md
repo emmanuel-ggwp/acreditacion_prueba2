@@ -58,6 +58,7 @@ módulos que hoy sí existen). Mezclar deuda de seguridad con esa lista escondí
 | [SB-33](#sb-33--next-16-declara-obsoleta-la-convención-middleware-la-fuente-única-de-cors-vive-en-una-api-en-retirada) | La convención `middleware` está deprecada en Next 16 y ahora es la fuente única de CORS | — (surgido en P08-D1) | ~1 h |
 | [SB-35](#sb-35--crítica-de-handlebars-en-la-cadena-de-dev-fuera-del-gate-bloqueante-de-ci) | Crítica de `handlebars` en la cadena de dev, fuera del gate bloqueante de CI | — (surgido en P07-F1) | ~30 min |
 | [SB-36](#sb-36--el-ci-recién-creado-es-mínimo-sin-build-sin-tests-y-sin-vigilar-sus-propias-actions) | El CI recién creado es mínimo: sin build, sin tests y sin vigilar sus propias actions | — (surgido en P07-F1) | ~2 h |
+| [SB-37](#sb-37--los-backups-administrados-mueren-con-el-cluster-sin-copia-lógica-externa-f6-01-puede-repetirse) | Los backups administrados mueren con el cluster: sin copia lógica externa, F6-01 puede repetirse | — (surgido en P07-F2, I6) | ~1 h |
 
 > ⏱ **SB-13 y SB-16 tienen ventana fija, no plazo abierto.** Deben resolverse **al terminar los
 > cambios de la auditoría y, en cualquier caso, ANTES de que la reconstrucción configure CI y
@@ -1083,3 +1084,30 @@ críticas), y nada más. Tres ampliaciones quedan pendientes, cada una con su pr
    `actions/setup-node@v4` fijadas por tag mayor; añadir el ecosistema (4 líneas en
    `dependabot.yml`) las mantiene actualizadas, y fijarlas por SHA endurecería la cadena de
    suministro del propio CI. Se dejó fuera para no ensanchar la fase (W2).
+
+---
+
+## SB-37 — Los backups administrados mueren con el cluster: sin copia lógica externa, F6-01 puede repetirse
+
+- **Referencia**: visto de camino en **plan 07, fase 2** (investigación de la base administrada,
+  pregunta I6), 2026-08-06. Resultado completo:
+  `planes/resultados/07-fase2-base-administrada-digitalocean-2026-08-06.md`.
+- **Ficheros**: ninguno todavía — es infraestructura/runbook (candidato: `infra/` del plan 07,
+  fase 3).
+- **Bloquea el despliegue**: no. Condiciona el runbook de la fase 3 del plan 07.
+
+La documentación oficial de DigitalOcean es explícita: **«Destroying a database cluster destroys
+the backups of that database»** ([How to Restore PostgreSQL Clusters from
+Backups](https://docs.digitalocean.com/products/databases/postgresql/how-to/restore-from-backups/)).
+Los backups administrados (diarios, retención 7 días, point-in-time recovery) protegen contra
+pérdida y corrupción de datos, **no contra el borrado del cluster** — accidental o malicioso, por
+cualquiera con acceso a la cuenta de DigitalOcean. Ese es el análogo exacto del modo de fallo
+F6-01 (el droplet anterior se destruyó **sin snapshot** y no quedó nada que restaurar), y D0
+existe precisamente para que los datos sobrevivan a la máquina: deben sobrevivir también al
+cluster.
+
+**Corrección propuesta** (decidir en la fase 3 del plan 07, no aquí): dump lógico periódico
+(`pg_dump`) desde el droplet a un almacenamiento independiente del cluster (Spaces u otro), con
+retención propia y una restauración de prueba en el calendario del runbook — la misma regla de
+D7.6: un backup que nunca se ha restaurado no es un backup. Coste estimado ~1 h de script + cron
+una vez exista el droplet.
