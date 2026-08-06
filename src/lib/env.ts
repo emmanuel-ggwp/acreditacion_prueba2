@@ -31,9 +31,28 @@ const signingSecret = isProduction
   : z.string({ error: 'obligatoria: sin ella nadie puede autenticarse' }).min(1);
 
 const envSchema = z.object({
+  // No basta con que exista: `DATABASE_URL=acreditacion` (olvidar el esquema)
+  // pasaba un min(1) y Sequelize reventaba con un TypeError en la PRIMERA
+  // PETICIÓN — systemd daba el servicio por activo y el primer usuario recibía
+  // un 500 que no nombraba la variable (D8, plan 08). Se valida aquí el formato
+  // para que el fallo sea un arranque abortado con la variable nombrada.
   DATABASE_URL: z
     .string({ error: 'obligatoria: sin ella la aplicación no puede consultar nada' })
-    .min(1, 'obligatoria: sin ella la aplicación no puede consultar nada'),
+    .min(1, 'obligatoria: sin ella la aplicación no puede consultar nada')
+    .refine(
+      (v) => {
+        try {
+          return ['postgres:', 'postgresql:'].includes(new URL(v).protocol);
+        } catch {
+          return false;
+        }
+      },
+      {
+        message:
+          'debe ser una URL con esquema postgres:// o postgresql:// ' +
+          '(y los caracteres especiales de la contraseña, percent-encoded)',
+      }
+    ),
   JWT_SECRET: signingSecret,
   JWT_REFRESH_SECRET: signingSecret,
 
