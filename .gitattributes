@@ -1,0 +1,3 @@
+# Los scripts de workflow deben quedarse en LF: el dialogo de aprobacion del
+# Workflow rechaza scripts con CRLF ("script contains control characters").
+*.workflow.js text eol=lf
