@@ -54,14 +54,32 @@ const envSchema = z.object({
         .refine((v) => v.startsWith('/'), { message: 'debe ser una ruta absoluta' })
     : z.string().optional(),
 
-  // Opcionales con respaldo en el código, declaradas para que un valor mal escrito
-  // se detecte aquí y no como un comportamiento raro más adelante.
-  DB_SSL: z.enum(['true', 'false']).optional(),
-  JWT_EXPIRES_IN: z.string().optional(),
-  JWT_REFRESH_EXPIRES_IN: z.string().optional(),
+  // La cadena vacía se acepta explícitamente: `DB_SSL=` en un fichero de entorno
+  // llega como '' y no como undefined, y es la forma natural de escribir "sin SSL"
+  // en un EnvironmentFile de systemd. Sin este `literal('')` el arranque abortaría
+  // por la configuración que la propia plantilla recomienda.
+  DB_SSL: z.union([z.enum(['true', 'false']), z.literal('')]).optional(),
+
+  // Obligatorias en producción pese a tener respaldo en `jwt.ts`: ese respaldo son
+  // 7 días de access token y 30 de refresco, y un access token de 7 días no se
+  // puede revocar. Es justo la degradación silenciosa que F6-05 existe para evitar.
+  JWT_EXPIRES_IN: isProduction ? z.string().min(1, 'obligatoria en producción') : z.string().optional(),
+  JWT_REFRESH_EXPIRES_IN: isProduction
+    ? z.string().min(1, 'obligatoria en producción')
+    : z.string().optional(),
 });
 
 export function validateEnv(): void {
+  // Todas las exigencias de arriba cuelgan de NODE_ENV, así que un NODE_ENV
+  // equivocado las desactiva TODAS en silencio — y `next start` respeta el valor
+  // que ya venga del entorno. Un despliegue que arrastre `NODE_ENV=development`
+  // en su EnvironmentFile creería estar protegido sin estarlo.
+  const nodeEnv = process.env.NODE_ENV;
+  if (nodeEnv && !['production', 'development', 'test'].includes(nodeEnv)) {
+    console.error(`\nNODE_ENV tiene un valor no reconocido. La aplicación no arranca.\n`);
+    process.exit(1);
+  }
+
   const result = envSchema.safeParse(process.env);
 
   if (result.success) return;
