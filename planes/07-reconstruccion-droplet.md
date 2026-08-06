@@ -31,6 +31,10 @@ el compromiso.
 
 1. **`engines.node`** en `package.json` y **`.nvmrc`** con la misma versión. Hoy no consta con qué
    Node corría el servidor comprometido. Elegir una LTS con soporte largo y **justificar cuál**.
+   **Dato verificado el 2026-08-06:** el Node instalado en la máquina de desarrollo es **v24**,
+   mientras que D7.5 («la LTS activa») apunta a **22**. Next 16.2.12 exige `>=20.9.0`, así que las
+   dos valen — pero fijar una versión distinta de la que se usa a diario es una decisión a tomar y
+   registrar, no a asumir.
 2. **`.github/dependabot.yml`** para npm, con agrupación de parches para que no genere ruido
    inmanejable.
 3. **`npm audit` en CI** como paso que falla ante vulnerabilidades críticas.
@@ -39,6 +43,11 @@ el compromiso.
 `legacy-peer-deps=true` global, Dependabot y `npm audit` se estrenan ciegos a los conflictos de
 peer dependencies — montar la contramedida principal con ese punto ciego incorporado desde el
 primer día repite el patrón que el informe existe para romper.
+
+**Estado verificado el 2026-08-06:** `.npmrc` sigue con `legacy-peer-deps=true` y **`.github/` no
+existe**, así que el requisito previo está **sin resolver** y la fase 1 arranca por ahí, no por
+`.nvmrc`. SB-13 también confirmado en el árbol real: `node_modules/postcss` está en 8.5.6 mientras
+`node_modules/next/node_modules/postcss` sigue en **8.4.31**.
 
 ### Verificación
 `node --version` coincide con `.nvmrc`; `npm ci` funciona en limpio; el fichero de Dependabot pasa

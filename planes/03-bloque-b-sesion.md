@@ -9,6 +9,8 @@ Bloque B porque **SB-17 se manifiesta justo en las pantallas de más tráfico**.
 
 ## Fase 1 — SB-17: la doble cabecera `Authorization` cierra sesiones sin motivo
 
+El fichero es **`src/utils/apiClient.ts`** (no `src/lib/`, como decía una referencia anterior).
+
 `apiClient.ts:25` construye las cabeceras y `:27` añade el token con **`append`**, no con `set`.
 Ante un 401, `:58` pone el token nuevo y `:60` reinyecta el mismo objeto en la llamada recursiva.
 En la segunda vuelta `:27` vuelve a hacer `append`:
@@ -26,6 +28,16 @@ bucle, justo en padrón y acreditación.
 
 **Qué hacer:** `set` en lugar de `append`, no reenviar la cabecera previa en el reintento, y acotar
 la profundidad de recursión.
+
+> **Dos fallos más en esas mismas líneas, dentro del alcance** (encontrados el 2026-08-06 y sin
+> verificar todavía): el reintento hace `{...config}` y **pierde `responseType`**, de modo que una
+> descarga que refresque a mitad se parsea como JSON; y el `try` es tan amplio que **cualquier error
+> posterior al refresco —un 404 legítimo— se convierte en cierre de sesión**. Los dos agravan
+> exactamente el síntoma que SB-17 describe.
+>
+> Hay una implementación de esta fase **escrita y sin verificar** en el árbol de trabajo
+> (`src/utils/apiClient.ts` modificado, sin commitear). **No darla por buena**: revisarla, verificarla
+> con W3 y commitearla o descartarla, pero no arrastrarla dentro de otro commit.
 
 **Verificación (W3):** forzar la caducidad (token de vida corta), usar la aplicación hasta que
 refresque y comprobar que la segunda petición lleva **una sola** cabecera `Authorization` y que la

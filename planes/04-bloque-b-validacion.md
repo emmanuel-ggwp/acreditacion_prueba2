@@ -10,8 +10,18 @@ introdujo el Bloque A; aquí se completa el resto del árbol de validadores.
 `grep -rn "\.max(" src/utils/validators/` da **una sola coincidencia** en los ocho ficheros, y es
 `overlayOpacity`. **Ningún campo de texto tiene tope** y ningún parámetro de paginación tampoco.
 
-Los campos que respaldan columnas TEXT (`dietaryComments`, `description`, `awardReason`) aceptan
-cadenas arbitrariamente grandes; el único freno es el límite de cuerpo de Next.
+Los campos de texto libre aceptan cadenas arbitrariamente grandes; el único freno es el límite de
+cuerpo de Next.
+
+> **Rectificación del 2026-08-06 — gana el código.** Este plan decía que `dietaryComments` y
+> `awardReason` respaldan columnas `TEXT`. **Es falso**: `Participant.ts:141-142` y `:201-202` son
+> `DataTypes.STRING`, es decir **`VARCHAR(255)`**. Columnas `TEXT` de verdad solo hay cuatro:
+> `Accreditation.notes`, `Award.description`, `Event.description` y `ParticipantAward.notes`.
+>
+> Eso **cambia D4.2**: para `dietaryComments` no es «ampliar la columna si hay migraciones», es que
+> hoy `rutRegistrationSchema` admite **1000 caracteres contra una columna de 255** — un 500 vivo,
+> no una mejora estética. Lo introdujo el Bloque A y lo arregla el plan 01 fase 3; aquí solo hay
+> que no repetir el error en los demás campos.
 
 **Qué hacer:** un `.max()` por campo, **derivado de la columna que lo respalda** en el modelo
 Sequelize, no de un número a ojo. Ese es el error que cometió el Bloque A y que el plan 01 tiene que

@@ -9,9 +9,18 @@
 **Estado:** 6 suites, 6 fallidas, **0 tests ejecutados**. Es la línea base de W7 desde el
 2026-07-27.
 
-**Causa única y conocida:** los modelos llaman a `Model.init()` al importarse, y bajo Jest no hay
-instancia de Sequelize, así que la importación revienta en `src/models/index.ts`. No es que los
-tests fallen: es que **no llegan a ejecutarse**.
+**Causa que se venía dando por buena:** los modelos llaman a `Model.init()` al importarse, y bajo
+Jest no hay instancia de Sequelize, así que la importación revienta en `src/models/index.ts`. No es
+que los tests fallen: es que **no llegan a ejecutarse**.
+
+> **Duda fundada del 2026-08-06 — el diagnóstico puede estar desactualizado.** `jest.setup.js` ya
+> mockea `@/lib/sequelize` **y los nueve modelos uno a uno** con `jest.mock('./src/models/X')`. Si
+> los modelos están mockeados, la ausencia de instancia **no puede ser** la causa: el fallo viene de
+> otro sitio, probablemente de `src/models/index.ts` o de las asociaciones, que no están mockeadas.
+>
+> **Consecuencia para D6.1:** montar un contenedor efímero podría estar resolviendo el síntoma
+> equivocado. **La fase 1 empieza ejecutando Jest una vez y leyendo el error real** — treinta
+> segundos que deciden el resto del plan. No se elige enfoque antes de tener ese error delante.
 
 ---
 

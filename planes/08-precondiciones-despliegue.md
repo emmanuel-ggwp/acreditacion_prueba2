@@ -150,8 +150,9 @@ público), y que el esquema venga de migraciones. Registrar como entrada nueva d
 
 ### D4 — `npm run db:sync` destruye la base de datos
 
-`package.json:13` → `sync({ force: true })`. No hay migraciones. Existe una variante no destructiva
-(`scripts/sync-db.ts`, con `alter: true`) que **no está enganchada a ningún script npm**: la
+`package.json:13` apunta a **`src/scripts/sync-db.ts`**, y es *ese* fichero el que tiene
+`sync({ force: true })` en su línea 15. No hay migraciones. La variante no destructiva
+(`alter: true`) está en **`scripts/sync-db.ts:29`** — otro fichero distinto, sin script npm: la
 peligrosa es la que tiene atajo y la segura la que no.
 
 En el droplet, un `npm run db:sync` por costumbre **borra los datos de producción**.

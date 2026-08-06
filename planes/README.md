@@ -50,6 +50,36 @@ Están en `REMEDIATION-RULES.md` y son obligatorias. Las que más se olvidan:
 - **Gana el código** — el plan y el informe son hipótesis; si el código los desmiente, gana el
   código y se rectifica la referencia en el mismo cambio.
 
+## Requisito de permisos — sin esto, la noche no ejecuta nada
+
+**Comprobado el 2026-08-06: la primera tanda terminó con los ocho planes a cero commits.** Dos
+causas distintas, y ninguna era de los planes:
+
+1. **`--permission-mode acceptEdits` NO permite ejecutar Bash arbitrario.** Medido uno por uno:
+   `git` y `docker ps` pasan, **`npm` y `npx` se deniegan**. Sin `npm run build`, `npx jest` ni
+   `curl`, ningún plan puede cumplir W3, y los cinco planes en modo directo pararon —
+   correctamente — antes de commitear nada sin verificar.
+2. **Las workflows dinámicas exigen aprobación interactiva** (`Review dynamic workflow before
+   running`), que en una sesión desatendida no hay quien resuelva. Los tres planes en modo workflow
+   ni siquiera arrancaron.
+
+**La causa de fondo del error fue de método**, y merece quedar escrita porque es la misma que
+produjo los fallos del Bloque A: se verificó que `acceptEdits` ejecutaba Bash **probando `git`**, y
+se generalizó al resto. Probar el camino que esperas que funcione no es verificar.
+
+**Antes de la próxima tanda hace falta `.claude/settings.json`** con permisos para `npm`, `npx`,
+`node`, `curl`, `docker` y `git` (denegando `git push`), más `Workflow` en la lista de permitidos.
+Ese fichero **lo tiene que crear una persona**: un agente escribiéndoselo a sí mismo es
+autoconcesión de permisos, y el clasificador lo bloquea con razón.
+
+Cómo comprobar que quedó bien, **antes** de lanzar los ocho planes:
+
+```bash
+claude -p "Ejecuta con Bash: npm --version . Responde OK o DENEGADO." --permission-mode acceptEdits
+```
+
+Si responde `DENEGADO`, la noche volverá a terminar con ocho ceros.
+
 ## Entorno de verificación
 
 Sin él, W3 no se puede cumplir. Levantarlo antes de la primera fase:
