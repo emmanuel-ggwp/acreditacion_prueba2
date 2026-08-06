@@ -6,9 +6,15 @@ import { ROLES } from '@/utils/constants';
 
 const participantService = new ParticipantService();
 
-// Mismos roles que PUT/DELETE del recurso ([participantId]/route.ts): la creación es
-// escritura y MANAGER hoy no alcanza el formulario (SB-18, no puede listar eventos).
-// Si SB-18 resuelve que MANAGER escribe, se amplían los cuatro verbos a la vez.
+// Mismos roles que PUT/DELETE del recurso ([participantId]/route.ts): crear es
+// escribir, y los tres verbos de escritura deben decir lo mismo.
+//
+// MANAGER queda fuera, y NO porque no pueda llegar: sí puede. `/events/[eventId]/
+// participants` no tiene RoleGuard y el GET de ese padrón sí lo admite, así que un
+// MANAGER con el eventId en la URL ve la lista y el botón «Nuevo participante», y
+// aquí recibe 403. Es el mismo rol incoherente de SB-18, ahora también en la UI.
+// Se mantiene la coherencia con PUT/DELETE; resolver SB-18 debe tocar los tres
+// verbos y las guardas de pantalla a la vez, no este endpoint suelto.
 export const POST = withAuth(async (request: AuthenticatedRequest) => {
   try {
     const body = await request.json();

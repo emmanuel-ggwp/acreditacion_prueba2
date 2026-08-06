@@ -604,6 +604,27 @@ inerte** — no se toca `/api/events` ni los `RoleGuard` antes de salir. No es g
 inertes no conceden acceso a nadie. La decisión de producto (rol vivo o retirado) queda abierta en
 esta entrada y se resuelve en el Bloque B.
 
+**Ampliación (2026-08-05, revisión adversarial de A2) — el rol no está tan muerto como parecía, y
+ahora hay un 403 alcanzable por navegación normal.** La afirmación «`MANAGER` no llega al
+formulario porque no puede listar eventos» es **falsa**, y conviene no repetirla:
+
+- `src/app/events/[eventId]/participants/page.tsx` **no tiene `RoleGuard` ni `ProtectedRoute`** —
+  solo necesita el `eventId` en la URL.
+- El `GET` de ese padrón (`events/[eventId]/participants/route.ts:45`) **sí admite `MANAGER`**,
+  porque A1 lo incluyó deliberadamente.
+- `ParticipantList.tsx:177-187` pinta el botón «Nuevo participante» **sin guarda de rol**.
+- Ese botón lleva a `POST /api/participants`, que tras A2 es `[ADMIN, OPERATOR]` ⇒ **403**.
+
+Es decir: un `MANAGER` puede ver el padrón de un evento, ver el botón, pulsarlo y recibir
+«Forbidden». Antes de A2 recibía 201 —porque el endpoint no pedía autenticación de ninguna clase—,
+así que **es una regresión funcional para ese rol**, no un fallo de seguridad. `ROLE_DESCRIPTIONS`
+(`constants.ts:21`) además le promete «Gestión completa: … Participantes …».
+
+Se mantiene `[ADMIN, OPERATOR]` por coherencia con `PUT`/`DELETE`, que ya excluían a `MANAGER`.
+**Resolver esta entrada debe tocar a la vez** los tres verbos de escritura, `/api/events`, las
+guardas de pantalla de **SB-19** y `ROLE_DESCRIPTIONS`; arreglar solo una parte deja el sistema
+afirmando dos cosas distintas, que es como llegó hasta aquí.
+
 **Consecuencia para A1**: los permisos de `MANAGER` que A1 concede son **hoy inertes**. Se
 incluyeron igualmente porque la elección es dominante —si el rol está muerto no conceden nada a
 nadie; si está vivo, omitirlos rompe su pantalla—, pero **la incoherencia real está en
