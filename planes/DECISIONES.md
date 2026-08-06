@@ -68,6 +68,26 @@ de manera que no se pueda deshacer. Eso se deja propuesto y **se espera**.
 >   reconstrucción del droplet multiplique los clones.
 > - Informe completo: [`resultados/08-precondiciones-despliegue-2026-08-06.md`](resultados/08-precondiciones-despliegue-2026-08-06.md).
 
+> **AVISO — revisión de la mañana (plan 07, ejecutado hasta la fase 3 el 2026-08-06).** Ejecución
+> PARCIAL a propósito (`hastaFase=3`): **las fases 4 (despliegue y vuelta atrás) y 5 (comprobación
+> post-despliegue, supervisada) quedaron SIN ejecutar.** Fase 1 cerrada **con reservas**; fases 2
+> y 3 cerradas. Las 9 decisiones (P07-D7.5, D7.7, D7.8 · D7.9, D7.10, D7.6 · D7.1, D7.4, D7.11)
+> están **ratificadas por el crítico tal como se registraron: ninguna corregida, ninguna quedó
+> «para Emmanuel»**. Mira primero:
+>
+> - **El crítico refutó tres afirmaciones del implementador** (detalladas en el informe): la
+>   cifra de vulnerabilidades de producción no se reproduce (decía 11/9 high; se miden 10/8 —
+>   las 0 críticas y el gate en verde SÍ están confirmados); `SECURITY-BACKLOG.md` sigue
+>   listando SB-13/SB-16 como ACTIVAS estando resueltas y verificadas (la razón del «con
+>   reservas»); y el conteo de commits sin pushear era falso (42, no 37).
+> - **Nada está pusheado** (42 commits por delante del remoto): el gate de CI y Dependabot son
+>   letra muerta hasta el push, que está encadenado a tu decisión n.º 1 de «Esperan tu
+>   respuesta» (reescritura de historia) — si se reescribe, mejor ANTES de multiplicar clones.
+> - **Una propuesta nueva te espera** en «Esperan tu respuesta» (n.º 3, SB-37: dump lógico fuera
+>   del cluster, porque destruir el cluster destruye sus backups), y las **preguntas E1–E6** de
+>   la fase 2 bloquean la ejecución contra el droplet real (fase 5), no el trabajo escrito.
+> - Informe completo: [`resultados/07-reconstruccion-droplet-2026-08-06.md`](resultados/07-reconstruccion-droplet-2026-08-06.md).
+
 | # | Plan · Fase | Decisión | Por qué | Alternativa descartada | Coste de cambiarla |
 |---|---|---|---|---|---|
 | **D0** | **Tomada por Emmanuel** · 2026-08-06 | **Base de datos administrada de DigitalOcean**, no PostgreSQL en el droplet | El servidor anterior se comprometió y hubo que destruirlo **sin snapshot**. Con la base en la misma máquina, los datos mueren con ella. Backups y parches gestionados, y sobrevive a un redespliegue del droplet | **PostgreSQL local con backups propios.** Descartada porque «como la vez anterior» significa que la vez anterior **no había backups**, y montarlos, probar que restauran y vigilarlos es trabajo recurrente que se abandona a los meses | **Alto una vez haya datos reales**: migrar una base en producción. Barato ahora, antes del primer evento |
