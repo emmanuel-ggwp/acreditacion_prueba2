@@ -282,7 +282,10 @@ foreach ($p in $seleccion) {
     # --permission-mode acceptEdits: sin nadie delante, un prompt de permiso cuelga la noche.
     # En PowerShell 5.1 cada linea de stderr llega como ErrorRecord; se desenvuelve a texto para
     # que el log no se llene de ruido de NativeCommandError.
-    & claude -p $prompt --permission-mode acceptEdits 2>&1 |
+    # `$null |` cierra stdin: sin eso, claude espera 3 s de entrada por cada plan y avisa por
+    # stderr. Trivial en una terminal, pero desatendido —Programador de tareas, sesion sin
+    # consola— stdin puede no dar EOF nunca y colgar la cadena entera.
+    $null | & claude -p $prompt --permission-mode acceptEdits 2>&1 |
         ForEach-Object { if ($_ -is [System.Management.Automation.ErrorRecord]) { $_.ToString() } else { $_ } } |
         Tee-Object -FilePath $logPlan
     $codigo = $LASTEXITCODE
