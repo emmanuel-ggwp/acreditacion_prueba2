@@ -72,7 +72,7 @@
     "papaparse": "^5.5.3",
     "pg": "^8.22.0",
     "pg-hstore": "^2.3.4",
-    "rate-limiter-flexible": "^9.0.0",
+    "rate-limiter-flexible": "^11.2.0",
     "react": "^19.2.0",
     "react-datepicker": "^8.10.0",
     "react-dom": "^19.2.0",
