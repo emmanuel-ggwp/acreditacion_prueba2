@@ -287,53 +287,57 @@ export async function POST(
     });
     const remainingGuestSlots = Math.max(0, effectiveGuestCap - currentGuestCount);
 
-    // Los campos numéricos describen el mismo cupo y se recortan contra él. El cliente
-    // ya lo hace; el servidor no lo hacía.
-    if (effectiveGuestCap >= 0) {
-      const clamped: Record<string, unknown> = {};
-      const gc = Number((participant as any).guestCount ?? 0);
-      const gl = Number((participant as any).guestLoads ?? 0);
-      if (gc > effectiveGuestCap) clamped.guestCount = effectiveGuestCap;
-      if (gl > effectiveGuestCap) clamped.guestLoads = effectiveGuestCap;
-      if (Object.keys(clamped).length) await participant.update(clamped, { transaction: t });
-    }
-
     let createdGuests = 0;
     let skippedGuests = 0;
-    for (const g of guestsInput) {
-      if (g.id) {
-        // Carga precargada seleccionada → marcar confirmada para esta fecha
-        const guest = await Guest.findOne({
-          where: { id: g.id, participantId: participant.id },
-          transaction: t,
-        });
-        if (guest) {
-          await guest.update({ confirmed: true, scheduleId: primaryScheduleId }, { transaction: t });
-        }
-      } else if (g.firstName) {
-        // Invitado nuevo (ej. acompañante). Solo mientras queden plazas: agotado el
-        // cupo, los sobrantes NO se crean — el participante queda inscrito, que es lo
-        // que vino a hacer. Pero el descarte deja de ser silencioso: se cuenta y la
-        // respuesta lo dice (D1.3), porque un 201 mudo produjo el correo que listaba
-        // acompañantes que nunca se guardaron.
-        if (createdGuests >= remainingGuestSlots) { skippedGuests++; continue; }
-        createdGuests++;
-        await Guest.create(
-          {
-            participantId: participant.id,
-            firstName: g.firstName,
-            lastName: g.lastName ?? null,
-            documentNumber: g.documentNumber ?? null,
-            guestType: g.guestType ?? null,
-            dietaryPreference: g.dietaryPreference ?? null,
-            confirmed: true,
-            scheduleId: primaryScheduleId,
-            // Este sí consume el cupo del asistente: lo creó él, no el organizador.
-            registrationSource: 'PUBLIC_FORM',
-          },
-          { transaction: t }
-        );
+
+    // ────────────────────────────────────────────────────────────────────────────
+    // R1-02 — LA INVARIANTE, en una línea: si el participante YA ESTÁ INSCRITO, no
+    // cambia ni una columna suya ni de sus invitados. Lo único que ocurre es el
+    // enlace a la fecha nueva, que ya se hizo en el paso 4.
+    //
+    // Antes, dos escrituras corrían fuera de esa guarda y las disparaba cualquiera
+    // que acertara un RUT, porque `lookup/route.ts` entrega sin autenticación el
+    // `participantId` y los `id` de todos los invitados:
+    //
+    //   a) el recorte de `guestCount`/`guestLoads` — ambos están en
+    //      `RUT_UPDATABLE_FIELDS`, es decir son campos personales según la propia
+    //      definición del código. Un `guestCount = 5` puesto a mano por el
+    //      organizador quedaba DESTRUIDO al inscribirse a una segunda fecha.
+    //   b) la rama `g.id`, que reasignaba `scheduleId` de TODAS las cargas de la
+    //      víctima a la fecha nueva. Acotada a `participantId`, así que no tocaba
+    //      cargas ajenas: solo destrozaba las de la persona a la que se decía proteger.
+    //
+    // Los invitados NUEVOS también quedan fuera (D2.1): crear filas en el registro de
+    // otra persona es escribir en sus datos aunque no sobrescriba ninguna columna, y
+    // el camino es el mismo — un RUT acertado. Coherente con la decisión que ya
+    // tomaba el código más arriba: quien ya está inscrito no se modifica solo,
+    // contacta con una persona.
+    // ────────────────────────────────────────────────────────────────────────────
+    if (existingScheduleIds.length === 0) {
+      // Los campos numéricos describen el mismo cupo y se recortan contra él. El cliente
+      // ya lo hace; el servidor no lo hacía.
+      if (effectiveGuestCap >= 0) {
+        const clamped: Record<string, unknown> = {};
+        const gc = Number((participant as any).guestCount ?? 0);
+        const gl = Number((participant as any).guestLoads ?? 0);
+        if (gc > effectiveGuestCap) clamped.guestCount = effectiveGuestCap;
+        if (gl > effectiveGuestCap) clamped.guestLoads = effectiveGuestCap;
+        if (Object.keys(clamped).length) await participant.update(clamped, { transaction: t });
       }
+
+      const guestCounts = await applyGuests(guestsInput, {
+        participant,
+        primaryScheduleId,
+        remainingGuestSlots,
+        transaction: t,
+      });
+      createdGuests = guestCounts.created;
+      skippedGuests = guestCounts.skipped;
+    } else {
+      // Ya inscrito: no se guarda ningún invitado de esta petición. Se declaran como
+      // no guardados para que la pantalla y el correo no los prometan (D1.3). Las
+      // cargas que ya existen siguen intactas, con la fecha que tuvieran.
+      skippedGuests = guestsInput.filter((g) => !g.id && g.firstName).length;
     }
 
     await t.commit();
@@ -350,8 +354,70 @@ export async function POST(
       { status: 201 }
     );
   } catch (error: any) {
-    await t.rollback();
-    console.error('Error in public registration:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return handleRegistrationError(error, t);
   }
+}
+
+/**
+ * Guarda los invitados de una inscripción. Vive fuera del handler para que la guarda
+ * de «ya inscrito» sea una sola condición y no un `if` repetido por escritura: la
+ * forma anterior —el bucle suelto en medio del handler— es la que dejó dos escrituras
+ * fuera de la guarda sin que se notara.
+ */
+async function applyGuests(
+  guestsInput: PublicGuestInput[],
+  opts: {
+    participant: any;
+    primaryScheduleId: string;
+    remainingGuestSlots: number;
+    transaction: any;
+  }
+): Promise<{ created: number; skipped: number }> {
+  const { participant, primaryScheduleId, remainingGuestSlots, transaction: t } = opts;
+  let createdGuests = 0;
+  let skippedGuests = 0;
+  for (const g of guestsInput) {
+    if (g.id) {
+      // Carga precargada seleccionada → marcar confirmada para esta fecha.
+      // El `participantId` del `where` es lo que impide tocar cargas ajenas.
+      const guest = await Guest.findOne({
+        where: { id: g.id, participantId: participant.id },
+        transaction: t,
+      });
+      if (guest) {
+        await guest.update({ confirmed: true, scheduleId: primaryScheduleId }, { transaction: t });
+      }
+    } else if (g.firstName) {
+      // Invitado nuevo (ej. acompañante). Solo mientras queden plazas: agotado el
+      // cupo, los sobrantes NO se crean — el participante queda inscrito, que es lo
+      // que vino a hacer. Pero el descarte deja de ser silencioso: se cuenta y la
+      // respuesta lo dice (D1.3), porque un 201 mudo produjo el correo que listaba
+      // acompañantes que nunca se guardaron.
+      if (createdGuests >= remainingGuestSlots) { skippedGuests++; continue; }
+      createdGuests++;
+      await Guest.create(
+        {
+          participantId: participant.id,
+          firstName: g.firstName,
+          lastName: g.lastName ?? null,
+          documentNumber: g.documentNumber ?? null,
+          guestType: g.guestType ?? null,
+          dietaryPreference: g.dietaryPreference ?? null,
+          confirmed: true,
+          scheduleId: primaryScheduleId,
+          // Este sí consume el cupo del asistente: lo creó él, no el organizador.
+          registrationSource: 'PUBLIC_FORM',
+        },
+        { transaction: t }
+      );
+    }
+  }
+  return { created: createdGuests, skipped: skippedGuests };
+}
+
+/** Cierre común del handler: deshace la transacción y no filtra el error al público. */
+async function handleRegistrationError(error: any, t: any) {
+  await t.rollback();
+  console.error('Error in public registration:', error);
+  return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
 }
