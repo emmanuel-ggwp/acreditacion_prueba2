@@ -49,6 +49,7 @@ módulos que hoy sí existen). Mezclar deuda de seguridad con esa lista escondí
 | [SB-22](#sb-22--el-limitador-comparte-el-pool-de-5-conexiones-de-la-aplicación) | El limitador comparte el pool de 5 conexiones de la aplicación | — (surgido en A6) | ~30 min |
 | [SB-23](#sb-23--endpoint-público-de-evento-roto-desde-siempre-y-sin-consumidores) | Endpoint público de evento roto desde siempre y sin consumidores | — (surgido en A3) | ~30 min |
 | [SB-24](#sb-24--la-capacidad-del-evento-no-cuenta-invitados) | La capacidad del evento no cuenta invitados | — (surgido en A4) | decisión de producto |
+| [SB-25](#sb-25--un-volcado-con-datos-reales-está-versionado) | ⚠ Un volcado con datos reales está versionado | — (revisión de despliegue) | ~1 h + decisión |
 
 > ⏱ **SB-13 y SB-16 tienen ventana fija, no plazo abierto.** Deben resolverse **al terminar los
 > cambios de la auditoría y, en cualquier caso, ANTES de que la reconstrucción configure CI y
@@ -762,3 +763,56 @@ semántica de `spotsLeft` que la landing ya muestra al público.
 **Decisión pendiente**: ¿la capacidad de una fecha debe contar las plazas físicas (participantes
 + invitados) o solo los inscritos? Si es lo primero, hay que revisar `capacityService` **y** el
 mensaje de la landing a la vez.
+
+---
+
+## SB-25 — Un volcado con datos reales está versionado
+
+- **Referencia**: surgido en la **revisión de despliegue** del **2026-08-05**. **La auditoría no lo
+  detectó**: la Fase 2 buscó `.env` y patrones de secreto en el historial, y este fichero no es
+  ninguna de las dos cosas.
+- **Fichero**: `acreditacion_dump.sql`, **rastreado por git** en un repositorio público.
+- **Bloquea el redespliegue**: **no técnicamente**, pero debe resolverse **antes** de clonar el
+  repositorio en el droplet nuevo.
+
+**Contenido, contado sin imprimirlo** (R2): **6 usuarios con sus hashes de contraseña**, **110
+refresh tokens**, **360 registros de auditoría** y **3 empleados con RUT**.
+
+**Por qué importa más de lo que parece.** La reconstrucción empieza por `git clone`, así que estos
+datos aterrizan en el droplet nuevo y en cada máquina de desarrollo que toque el proyecto. Y el
+fichero es una tentación evidente como bootstrap del esquema —no hay migraciones (**SB-26**)—, lo
+que **repoblaría `refresh_tokens`**: si alguien reutilizara `JWT_REFRESH_SECRET`, esos 110 tokens
+volverían a ser válidos. La plantilla de entorno ya avisa contra reutilizar secretos, pero el aviso
+no sirve de nada si el vector no se conoce.
+
+**Corrección**: `git rm --cached acreditacion_dump.sql`, añadirlo a `.gitignore`, y **decidir** si
+se reescribe la historia. Los hashes son bcrypt con coste 12, así que no son de crackeo inmediato,
+pero los RUT y los correos son datos personales y ya están publicados. El esquema debe venir de
+migraciones, no de un volcado.
+
+**Decisión que corresponde a Emmanuel**: reescribir la historia de un repositorio público invalida
+los clones existentes y no borra lo que ya se haya copiado. Es defendible dejar la historia como
+está y limitarse a dejar de rastrearlo — pero es una decisión que hay que tomar a sabiendas.
+
+---
+
+## SB-26 — No hay migraciones: el único camino de esquema borra los datos
+
+- **Referencia**: surgido en la **revisión de despliegue** del **2026-08-05**.
+- **Ficheros**: `package.json:13` → `src/scripts/sync-db.ts:15`, frente a `scripts/sync-db.ts:29`.
+- **Bloquea el redespliegue**: **no**, pero es una mina en el droplet nuevo.
+
+`npm run db:sync` ejecuta `sequelize.sync({ force: true })`: **borra y recrea las 16 tablas**.
+Existe una variante no destructiva con `{ alter: true }` en `scripts/sync-db.ts` que **no está
+enganchada a ningún script npm**. Es decir: la peligrosa tiene atajo y la segura no.
+
+En producción, un `npm run db:sync` tecleado por costumbre borra los datos reales. Y sin
+migraciones no hay forma de evolucionar el esquema sin recrearlo.
+
+**Corrección**: que `db:sync` apunte a la variante `alter` o exija una confirmación explícita
+(`--force` propio), e introducir migraciones (`umzug` o las de `sequelize-cli`) antes de la
+reconstrucción.
+
+**Nota comprobada, para que nadie la reabra**: `force: true` **no** borra la tabla `rate_limits` del
+limitador — `sync` solo opera sobre los 16 modelos registrados en `src/models/index.ts`, y esa
+tabla no es un modelo.
