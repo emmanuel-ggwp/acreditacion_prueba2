@@ -79,7 +79,16 @@ $seleccion = switch ($Conjunto) {
     'todos'         { $CATALOGO }
     'personalizado' {
         if ($Planes.Count -eq 0) { Write-Host 'Con -Conjunto personalizado hay que pasar -Planes' -ForegroundColor Red; exit 1 }
-        $CATALOGO | Where-Object { $Planes -contains $_.nombre }
+        # Invocado con -File, PowerShell entrega "a,b" como UN solo string en vez de un array.
+        # Se normalizan las dos formas para que funcione igual desde .ps1 y desde una sesion.
+        $pedidos = $Planes | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { $_ }
+        $desconocidos = $pedidos | Where-Object { $n = $_; -not ($CATALOGO | Where-Object { $_.nombre -eq $n }) }
+        if ($desconocidos) {
+            Write-Host "Planes desconocidos: $($desconocidos -join ', ')" -ForegroundColor Red
+            Write-Host "Disponibles: $(($CATALOGO | ForEach-Object { $_.nombre }) -join ', ')" -ForegroundColor Gray
+            exit 1
+        }
+        $CATALOGO | Where-Object { $pedidos -contains $_.nombre }
     }
     default         { $CATALOGO | Where-Object { $BLOQUEANTES -contains $_.nombre } }
 }
