@@ -1,7 +1,7 @@
 import { Sequelize } from 'sequelize';
-import * as dotenv from 'dotenv';
 
-dotenv.config();
+// Sin dotenv aquí (F6-06): Next carga .env* por sí mismo y en producción el entorno
+// lo inyecta el gestor de procesos. Los scripts tsx cargan dotenv/config ellos mismos.
 
 console.log('Initializing Sequelize instance...');
 

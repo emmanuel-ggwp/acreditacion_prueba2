@@ -1,10 +1,12 @@
+import 'dotenv/config';
 import { sequelize } from '../lib/sequelize';
 import '../models';
 
 const syncDatabase = async () => {
   try {
     console.log('sync-db: NODE_ENV =', process.env.NODE_ENV);
-    console.log('sync-db: DATABASE_URL =', process.env.DATABASE_URL);
+    // R2: nunca imprimir el valor de un secreto — solo si está presente.
+    console.log('sync-db: DATABASE_URL', process.env.DATABASE_URL ? 'presente' : 'AUSENTE');
 
     console.log('Starting database connection check...');
     await sequelize.authenticate();

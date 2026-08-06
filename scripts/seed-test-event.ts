@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { sequelize } from '../src/lib/sequelize';
 import { User, Event, EventSchedule, Participant, ParticipantSchedule } from '../src/models';
 
