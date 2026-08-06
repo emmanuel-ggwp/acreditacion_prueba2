@@ -74,14 +74,34 @@ export const updateGuestSchema = createGuestSchema.partial();
  */
 export const MAX_GUESTS_PER_REQUEST = 20;
 
+/**
+ * Tope de los campos de texto libre que van a una columna `VARCHAR(255)`.
+ *
+ * R1-03 / D1.5: **cada `.max()` sale de la columna que respalda el campo**, no de un
+ * número elegido a ojo. Las tres columnas implicadas —`guests.dietary_preference`,
+ * `participants.dietary_preference` y `participants.dietary_comments`— son
+ * `VARCHAR(255)`, comprobado contra la base, no contra el modelo.
+ *
+ * Un tope MENOR que la columna rechaza datos legítimos con 400; uno MAYOR deja que la
+ * fila llegue a PostgreSQL y reviente con 500. Los dos errores estaban presentes a la
+ * vez, en campos contiguos del mismo esquema.
+ */
+export const TEXT_COLUMN_MAX = 255;
+
 export const publicGuestSchema = z.object({
   // Las cargas precargadas se seleccionan por id; los acompañantes nuevos no lo traen.
   id: z.string().uuid().optional(),
   firstName: z.string().trim().max(120).optional().nullable(),
   lastName: z.string().trim().max(120).optional().nullable(),
   documentNumber: z.string().trim().max(40).optional().nullable(),
-  guestType: z.string().trim().max(60).optional().nullable(),
-  dietaryPreference: z.string().trim().max(60).optional().nullable(),
+  // Etiqueta configurable por evento: la elige el administrador, así que su longitud
+  // no es predecible. El límite es la columna.
+  guestType: z.string().trim().max(TEXT_COLUMN_MAX).optional().nullable(),
+  // NO es el código de dieta: el cliente manda el texto compuesto por `dietary.ts:74-80`
+  // —`"<etiqueta>: <texto libre>"`— porque el invitado no tiene columna de comentarios.
+  // Con el tope en 60, «Alergia: » (9 caracteres) dejaba 51 para el detalle y cualquier
+  // alergia algo descrita reventaba la petición ENTERA con «Validation error».
+  dietaryPreference: z.string().trim().max(TEXT_COLUMN_MAX).optional().nullable(),
 });
 
 export const publicRegistrationSchema = participantSchema.omit({
@@ -98,6 +118,13 @@ export const publicRegistrationSchema = participantSchema.omit({
   phone: z.string().optional().nullable(),
   documentNumber: z.string().trim().min(1, 'El RUT es obligatorio'),
   numeroSap: z.string().optional().nullable(),
+  // `participantSchema` no acota estos dos, así que en modo ABIERTO un comentario de
+  // 300 caracteres llegaba entero a una columna `VARCHAR(255)` y devolvía 500. Es el
+  // mismo defecto que el modo `rut` tenía al revés (tope por encima de la columna), y
+  // se corrige aquí para que las dos ramas del registro público respondan igual.
+  // Los topes que faltan en los caminos de ADMINISTRACIÓN son F4-03 → plan 04.
+  dietaryPreference: z.string().trim().max(TEXT_COLUMN_MAX).optional(),
+  dietaryComments: z.string().trim().max(TEXT_COLUMN_MAX).optional().nullable(),
   // Invitados que el asistente agrega desde el landing (hasta el máximo del evento).
   // El `.max()` es un tope duro de esquema: corta el array antes de tocar la base de
   // datos. El límite real por participante (allowedGuests, máximo del evento) se
@@ -152,8 +179,18 @@ export const rutRegistrationSchema = z.object({
   company: z.string().trim().max(150).optional().nullable(),
   position: z.string().trim().max(150).optional().nullable(),
   numeroSap: z.string().trim().max(60).optional().nullable(),
-  dietaryPreference: z.string().trim().max(60).optional().nullable(),
-  dietaryComments: z.string().trim().max(1000).optional().nullable(),
+  // Los dos van a `VARCHAR(255)`, y los dos estaban mal en sentidos OPUESTOS:
+  //
+  //   `dietaryPreference` con tope 60 · el valor que el cliente reenvía es el que trajo
+  //   el lookup, y las opciones de dieta personalizadas por evento son su propia
+  //   etiqueta. Un precargado cuya preferencia guardada pasara de 60 caracteres quedaba
+  //   BLOQUEADO de forma permanente: no podía inscribirse ni corrigiendo nada, porque
+  //   el dato que lo rechazaba era el suyo ya almacenado.
+  //
+  //   `dietaryComments` con tope 1000 · cuatro veces la columna. 300 caracteres pasaban
+  //   la validación y morían en PostgreSQL: 500, no 400.
+  dietaryPreference: z.string().trim().max(TEXT_COLUMN_MAX).optional().nullable(),
+  dietaryComments: z.string().trim().max(TEXT_COLUMN_MAX).optional().nullable(),
 
   guestCount: z.number().int().min(0).max(50).optional().nullable(),
   guestCompanion: z.boolean().optional().nullable(),

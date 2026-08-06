@@ -6,7 +6,7 @@ import { isValidRut } from '@/utils/validators/rut';
 import { sendConfirmationEmail } from '@/lib/emailjs';
 import { buildGuestSummary } from '@/utils/guests';
 import { getFormFields, guestDietaryEnabled, getGuestMode } from '@/utils/formFields';
-import { getDietaryOptions, isFreeTextDiet, dietaryFull, dietaryLabel, ensureDietOption } from '@/utils/dietary';
+import { getDietaryOptions, isFreeTextDiet, dietaryFull, dietaryLabel, ensureDietOption, DIET_COMMENTS_MAX, GUEST_DIET_DETAIL_MAX } from '@/utils/dietary';
 import { hexToRgba } from '@/utils/color';
 import { CONTACT_EMAIL } from '@/utils/contact';
 import { getTitleFont, googleFontHref } from '@/utils/fonts';
@@ -586,7 +586,7 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
                       {ensureDietOption(dietOpts, form.dietaryPreference).map((o) => <option key={o.value} value={o.value} style={{ color: '#111' }}>{o.label}</option>)}
                     </select>
                     {isFreeTextDiet(form.dietaryPreference) && (
-                      <input className={`${inputClass} mt-2`} style={inputStyle} placeholder={String(form.dietaryPreference).toUpperCase().includes('ALERG') ? 'Especifica tu alergia' : 'Especifica tu requerimiento'} value={form.dietaryComments} onChange={(e) => setField('dietaryComments', e.target.value)} />
+                      <input className={`${inputClass} mt-2`} style={inputStyle} maxLength={DIET_COMMENTS_MAX} placeholder={String(form.dietaryPreference).toUpperCase().includes('ALERG') ? 'Especifica tu alergia' : 'Especifica tu requerimiento'} value={form.dietaryComments} onChange={(e) => setField('dietaryComments', e.target.value)} />
                     )}
                   </div>
                 )}
@@ -659,6 +659,7 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
                       <input
                         className={`${inputClass} mt-2`}
                         style={inputStyle}
+                        maxLength={DIET_COMMENTS_MAX}
                         placeholder={String(form.dietaryPreference).toUpperCase().includes('ALERG') ? 'Especifica tu alergia' : 'Especifica tu requerimiento'}
                         value={form.dietaryComments}
                         onChange={(e) => setField('dietaryComments', e.target.value)}
@@ -687,6 +688,9 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
                         <input
                           className={`${inputClass} mt-2`}
                           style={inputStyle}
+                          // Más corto: este detalle viaja compuesto dentro de
+                          // `dietaryPreference`, no en columna propia. Ver `dietary.ts`.
+                          maxLength={GUEST_DIET_DETAIL_MAX}
                           placeholder={String(g.dietaryPreference).toUpperCase().includes('ALERG') ? 'Especifica la alergia' : 'Especifica el requerimiento'}
                           value={g.dietaryComments || ''}
                           onChange={(e) => updateOpenGuest(i, 'dietaryComments', e.target.value)}

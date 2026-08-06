@@ -6,7 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { publicRegistrationSchema } from '@/utils/validators/participantSchemas';
 import { getFormFields, guestDietaryEnabled, getGuestMode } from '@/utils/formFields';
-import { getDietaryOptions, isFreeTextDiet, dietaryFull, ensureDietOption } from '@/utils/dietary';
+import { getDietaryOptions, isFreeTextDiet, dietaryFull, ensureDietOption, DIET_COMMENTS_MAX, GUEST_DIET_DETAIL_MAX } from '@/utils/dietary';
 import { sendConfirmationEmail } from '@/lib/emailjs';
 import { buildGuestSummary } from '@/utils/guests';
 import DateSelectModal from '@/components/public/DateSelectModal';
@@ -558,6 +558,9 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
               <textarea
                 id="dietaryComments"
                 rows={3}
+                // El freno se ve ANTES de enviar: sin él, el texto de más se descubría
+                // como «Validation error» después de rellenar todo el formulario.
+                maxLength={DIET_COMMENTS_MAX}
                 {...register('dietaryComments')}
                 className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
               />
@@ -592,6 +595,11 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
                   <input
                     value={g.dietaryComments || ''}
                     onChange={(e) => updateGuest(i, 'dietaryComments', e.target.value)}
+                    // Más corto que el del participante a propósito: este detalle NO va
+                    // a una columna propia, se compone como «<etiqueta>: <detalle>» y
+                    // viaja dentro de `dietaryPreference`. El margen es para la etiqueta,
+                    // que cada evento configura y puede ser larga.
+                    maxLength={GUEST_DIET_DETAIL_MAX}
                     placeholder={String(g.dietaryPreference).toUpperCase().includes('ALERG') ? 'Especifica la alergia' : 'Especifica el requerimiento'}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
                   />
