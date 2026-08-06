@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Event, Participant, EventSchedule, Guest } from '@/models/index';
-import { publicRegistrationSchema } from '@/utils/validators/participantSchemas';
+import {
+  publicRegistrationSchema,
+  rutRegistrationSchema,
+  RUT_UPDATABLE_FIELDS,
+  type PublicGuestInput,
+} from '@/utils/validators/participantSchemas';
+import { CONTACT_EMAIL } from '@/utils/contact';
 import { sequelize } from '@/lib/sequelize';
 import { Op, fn, col, where as sqlWhere } from 'sequelize';
 import { getScheduleParticipantCount, getEventParticipantCount } from '@/services/capacityService';
@@ -51,7 +57,10 @@ export async function POST(
     }
     const primaryScheduleId = scheduleIds[0];
 
-    const guestsInput: any[] = Array.isArray(body.guests) ? body.guests : [];
+    // Se rellena dentro de cada rama a partir del resultado VALIDADO. Antes salía de
+    // `body.guests` —el cuerpo crudo—, con lo que el esquema de invitados, que existe,
+    // resultaba decorativo en los dos modos (F4-02).
+    let guestsInput: PublicGuestInput[] = [];
 
     // 3. Obtener/crear el participante según el modo
     let participant: any;
@@ -59,41 +68,49 @@ export async function POST(
 
     if (mode === 'rut') {
       // Confirmar un participante precargado identificado por RUT (lookup previo).
-      if (!body.participantId) {
+      // El body se valida ANTES de tocar nada: la rama `rut` escribía 12 campos
+      // tomados del cuerpo crudo, sin comprobar tipo, formato ni longitud (F4-01).
+      const validation = rutRegistrationSchema.safeParse(body);
+      if (!validation.success) {
         await t.rollback();
         return NextResponse.json(
-          { error: 'Debes identificarte con tu RUT para inscribirte en este evento.' },
+          { error: 'Validation error', details: validation.error.format() },
           { status: 400 }
         );
       }
+      const data = validation.data;
+      guestsInput = data.guests ?? [];
+
       participant = await Participant.findOne({
-        where: { id: body.participantId, eventId: event.id },
+        where: { id: data.participantId, eventId: event.id },
         transaction: t,
       });
       if (!participant) {
         await t.rollback();
         return NextResponse.json({ error: 'Participante no encontrado.' }, { status: 404 });
       }
-      // Completar/actualizar los datos que el asistente rellenó o confirmó en el formulario
-      // (en precargas suele venir solo el RUT; aquí se guardan nombre, correo, dieta, etc.).
-      const upd: any = {};
-      const setIf = (k: string, v: any) => { if (v !== undefined && v !== null && String(v).trim() !== '') upd[k] = v; };
-      setIf('firstName', body.firstName);
-      setIf('lastName', body.lastName);
-      setIf('email', body.email);
-      setIf('phone', body.phone);
-      setIf('company', body.company);
-      setIf('position', body.position);
-      setIf('numeroSap', body.numeroSap);
-      setIf('dietaryPreference', body.dietaryPreference);
-      if (body.dietaryComments !== undefined) upd.dietaryComments = body.dietaryComments;
-      if (body.guestCount !== undefined) upd.guestCount = body.guestCount;
-      if (body.guestCompanion !== undefined) upd.guestCompanion = body.guestCompanion;
-      if (body.guestLoads !== undefined) upd.guestLoads = body.guestLoads;
-      if (Object.keys(upd).length) await participant.update(upd, { transaction: t });
 
+      // Los horarios ya inscritos se leen ANTES de cualquier escritura. Antes se leían
+      // después del update, y solo el rollback de más abajo salvaba el caso: cuando el
+      // evento permite varias fechas, la transacción llegaba a commit y los campos
+      // quedaban sobrescritos.
       const existing = await (participant as any).getSchedules({ transaction: t });
       existingScheduleIds = existing.map((s: any) => s.id);
+
+      // Decisión de producto: un participante ya inscrito NO se modifica solo; contacta
+      // con una persona. Por eso el camino de escritura se cierra, no se asegura.
+      // La inscripción a una fecha adicional sigue permitida cuando el evento lo admite
+      // —es funcionalidad viva—, pero sin tocar ni un campo personal.
+      if (existingScheduleIds.length === 0) {
+        const upd: Record<string, unknown> = {};
+        for (const field of RUT_UPDATABLE_FIELDS) {
+          const value = (data as Record<string, unknown>)[field];
+          if (value === undefined || value === null) continue;
+          if (typeof value === 'string' && value.trim() === '') continue;
+          upd[field] = value;
+        }
+        if (Object.keys(upd).length) await participant.update(upd, { transaction: t });
+      }
     } else {
       // Modo abierto: validar; reutilizar participante por correo o crear uno nuevo.
       const validation = publicRegistrationSchema.safeParse(body);
@@ -105,6 +122,7 @@ export async function POST(
         );
       }
       const data = validation.data;
+      guestsInput = data.guests ?? [];
 
       // Reutilizar participante SOLO por RUT (normalizado: sin puntos, guión ni espacios),
       // así la misma persona no se duplica aunque use otro correo. El RUT es obligatorio.
@@ -164,7 +182,14 @@ export async function POST(
       if (!effectiveMulti) {
         await t.rollback();
         return NextResponse.json(
-          { error: 'Ya estás inscrito en este evento.', code: 'ALREADY_REGISTERED', registeredScheduleIds: existingScheduleIds },
+          {
+            error: 'Ya estás inscrito en este evento.',
+            code: 'ALREADY_REGISTERED',
+            registeredScheduleIds: existingScheduleIds,
+            // Quien ya está inscrito no puede modificar sus datos por su cuenta:
+            // el camino es escribir a esta dirección.
+            contactEmail: CONTACT_EMAIL,
+          },
           { status: 409 }
         );
       }
@@ -172,7 +197,12 @@ export async function POST(
       if (dup) {
         await t.rollback();
         return NextResponse.json(
-          { error: 'Ya estás inscrito para esa fecha. Elige otra.', code: 'ALREADY_REGISTERED_DATE', registeredScheduleIds: existingScheduleIds },
+          {
+            error: 'Ya estás inscrito para esa fecha. Elige otra.',
+            code: 'ALREADY_REGISTERED_DATE',
+            registeredScheduleIds: existingScheduleIds,
+            contactEmail: CONTACT_EMAIL,
+          },
           { status: 409 }
         );
       }
@@ -210,7 +240,47 @@ export async function POST(
 
     await (participant as any).addSchedules(schedulesToAdd, { transaction: t });
 
-    // 5. Invitados (cargas/acompañante): individuales, nunca concatenados
+    // 5. Invitados (cargas/acompañante): individuales, nunca concatenados.
+    //
+    // Tope efectivo (F4-02). El bucle no tenía ningún freno: cada elemento con
+    // `firstName` creaba una fila, así que una sola petición podía insertar tantas
+    // como trajera el array. El `.max()` del esquema ya acotó el tamaño de la
+    // petición; aquí se aplica el límite de negocio, que sí depende de los datos.
+    //
+    // NO se topa por cupo del evento: la capacidad cuenta participantes, no
+    // invitados (`capacityService.ts:4`), así que hacerlo sería una regla nueva y
+    // cambiaría el significado de las plazas que la landing ya muestra. Queda
+    // registrado como SB-24.
+    const eventGuestCap = Number(
+      (event as any).registrationConfig?.guests?.max ?? (event as any).maxGuestsPerParticipant ?? 0
+    );
+    const participantCap = Number((participant as any).allowedGuests ?? 0);
+    const effectiveGuestCap = (event as any).allowGuests === false
+      ? 0
+      : participantCap > 0
+        ? (eventGuestCap > 0 ? Math.min(participantCap, eventGuestCap) : participantCap)
+        : eventGuestCap;
+
+    // Los invitados que ya tiene cuentan contra el mismo tope: sin esto, reenviar el
+    // formulario varias veces acumula sin límite.
+    const currentGuestCount = await Guest.count({
+      where: { participantId: participant.id },
+      transaction: t,
+    });
+    const remainingGuestSlots = Math.max(0, effectiveGuestCap - currentGuestCount);
+
+    // Los campos numéricos describen el mismo cupo y se recortan contra él. El cliente
+    // ya lo hace; el servidor no lo hacía.
+    if (effectiveGuestCap >= 0) {
+      const clamped: Record<string, unknown> = {};
+      const gc = Number((participant as any).guestCount ?? 0);
+      const gl = Number((participant as any).guestLoads ?? 0);
+      if (gc > effectiveGuestCap) clamped.guestCount = effectiveGuestCap;
+      if (gl > effectiveGuestCap) clamped.guestLoads = effectiveGuestCap;
+      if (Object.keys(clamped).length) await participant.update(clamped, { transaction: t });
+    }
+
+    let createdGuests = 0;
     for (const g of guestsInput) {
       if (g.id) {
         // Carga precargada seleccionada → marcar confirmada para esta fecha
@@ -222,7 +292,11 @@ export async function POST(
           await guest.update({ confirmed: true, scheduleId: primaryScheduleId }, { transaction: t });
         }
       } else if (g.firstName) {
-        // Invitado nuevo (ej. acompañante)
+        // Invitado nuevo (ej. acompañante). Solo mientras queden plazas: agotado el
+        // cupo, los sobrantes se ignoran en silencio en lugar de rechazar toda la
+        // inscripción — el participante queda inscrito, que es lo que vino a hacer.
+        if (createdGuests >= remainingGuestSlots) continue;
+        createdGuests++;
         await Guest.create(
           {
             participantId: participant.id,

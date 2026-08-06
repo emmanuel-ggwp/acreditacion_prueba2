@@ -66,6 +66,24 @@ export const guestSchema = z.object({
 export const createGuestSchema = guestSchema.omit({ id: true, isAccredited: true });
 export const updateGuestSchema = createGuestSchema.partial();
 
+/**
+ * Tope duro del número de invitados que puede traer UNA petición. No es el límite
+ * de negocio —ese sale de `allowedGuests` y del máximo del evento, y se comprueba
+ * en el handler—, sino el freno que evita que un array de 100.000 elementos llegue
+ * siquiera a recorrerse (F4-02).
+ */
+export const MAX_GUESTS_PER_REQUEST = 20;
+
+export const publicGuestSchema = z.object({
+  // Las cargas precargadas se seleccionan por id; los acompañantes nuevos no lo traen.
+  id: z.string().uuid().optional(),
+  firstName: z.string().trim().max(120).optional().nullable(),
+  lastName: z.string().trim().max(120).optional().nullable(),
+  documentNumber: z.string().trim().max(40).optional().nullable(),
+  guestType: z.string().trim().max(60).optional().nullable(),
+  dietaryPreference: z.string().trim().max(60).optional().nullable(),
+});
+
 export const publicRegistrationSchema = participantSchema.omit({
   id: true,
   createdBy: true,
@@ -81,12 +99,66 @@ export const publicRegistrationSchema = participantSchema.omit({
   documentNumber: z.string().trim().min(1, 'El RUT es obligatorio'),
   numeroSap: z.string().optional().nullable(),
   // Invitados que el asistente agrega desde el landing (hasta el máximo del evento).
-  guests: z.array(z.object({
-    firstName: z.string().min(1),
-    lastName: z.string().optional().nullable(),
-    documentNumber: z.string().optional().nullable(),
-    guestType: z.string().optional().nullable(),
-    dietaryPreference: z.string().optional().nullable(),
-  })).optional(),
+  // El `.max()` es un tope duro de esquema: corta el array antes de tocar la base de
+  // datos. El límite real por participante (allowedGuests, máximo del evento) se
+  // comprueba en el handler, que es donde se conocen. Ver F4-02.
+  guests: z.array(publicGuestSchema).max(MAX_GUESTS_PER_REQUEST).optional(),
+});
+
+export type PublicGuestInput = z.infer<typeof publicGuestSchema>;
+
+/**
+ * Registro público en modo `rut`: el participante ya existe precargado y se
+ * identifica con el `participantId` que devolvió el `lookup`.
+ *
+ * Esquema propio y NO derivado de `publicRegistrationSchema` por dos motivos
+ * verificados en el código (F4-01):
+ *
+ * 1. `publicRegistrationSchema` exige `documentNumber`, y el payload de modo `rut`
+ *    de `GalaTemplate.tsx:170-178` no lo envía. Reutilizarlo rompería esa plantilla.
+ * 2. `publicRegistrationSchema` deriva de `participantSchema.omit(...)` y sigue
+ *    admitiendo `eventId`, `isAwarded`, `awardReason`, `allowMultipleSchedules`,
+ *    `customData`... Usar su salida para un `update` sería PEOR que el código que
+ *    sustituye: abriría campos que hoy no son alcanzables.
+ *
+ * Aquí solo entran los campos que el formulario público rellena de verdad.
+ * `documentNumber` queda deliberadamente FUERA: es la identidad del precargado y el
+ * formulario lo muestra como solo lectura; aceptarlo permitiría reescribir el RUT
+ * de otra persona.
+ */
+export const RUT_UPDATABLE_FIELDS = [
+  'firstName',
+  'lastName',
+  'email',
+  'phone',
+  'company',
+  'position',
+  'numeroSap',
+  'dietaryPreference',
+  'dietaryComments',
+  'guestCount',
+  'guestCompanion',
+  'guestLoads',
+] as const;
+
+export const rutRegistrationSchema = z.object({
+  participantId: z.string().uuid('Identificador de participante inválido'),
+  scheduleIds: z.array(z.string().uuid()).min(1, 'Se requiere al menos un horario'),
+
+  firstName: z.string().trim().max(120).optional().nullable(),
+  lastName: z.string().trim().max(120).optional().nullable(),
+  email: z.string().email('Correo electrónico inválido').max(200).optional().nullable(),
+  phone: z.string().trim().max(40).optional().nullable(),
+  company: z.string().trim().max(150).optional().nullable(),
+  position: z.string().trim().max(150).optional().nullable(),
+  numeroSap: z.string().trim().max(60).optional().nullable(),
+  dietaryPreference: z.string().trim().max(60).optional().nullable(),
+  dietaryComments: z.string().trim().max(1000).optional().nullable(),
+
+  guestCount: z.number().int().min(0).max(50).optional().nullable(),
+  guestCompanion: z.boolean().optional().nullable(),
+  guestLoads: z.number().int().min(0).max(50).optional().nullable(),
+
+  guests: z.array(publicGuestSchema).max(MAX_GUESTS_PER_REQUEST).optional(),
 });
 
