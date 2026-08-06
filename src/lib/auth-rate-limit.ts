@@ -1,4 +1,5 @@
 import { RateLimiterPostgres, RateLimiterMemory, RateLimiterAbstract } from 'rate-limiter-flexible';
+import { createHash } from 'crypto';
 import { NextRequest } from 'next/server';
 import { sequelize } from '@/lib/sequelize';
 import { clientIdentifier, tooManyRequests } from '@/lib/rate-limit';
@@ -129,17 +130,36 @@ export async function authRateLimit(request: NextRequest) {
 }
 
 /**
+ * La tabla de `RateLimiterPostgres` declara `key varchar(255)` y la librería
+ * antepone `account:` a lo que devuelva `accountKey`. Una clave más larga hacía
+ * que el limitador fallara ABIERTO (R2-03a): el `SELECT` de `get()` no falla con
+ * un parámetro largo (devuelve null, «sin cuota gastada»), pero el `INSERT` de
+ * `consume()` respondía `22001 value too long`, el insuranceLimiter lo absorbía
+ * y la penalización quedaba en una memoria que la comprobación nunca leía — el
+ * 429 no llegaba jamás, y cada clave sobredimensionada quedaba además retenida
+ * en `MemoryStorage`, que no tiene tope ni LRU.
+ */
+const PG_KEY_MAX = 255;
+const ACCOUNT_RAW_MAX = PG_KEY_MAX - 'account:'.length;
+
+/**
  * Clave del cubo de credenciales: `(email, ip)`. El email se normaliza igual que
  * siempre; la IP sale de `clientIdentifier`, que el cliente no controla (§7.4).
  * `::` no puede aparecer en la parte de email de forma ambigua ni en una IP v4,
  * y en una IPv6 la clave sigue siendo unívoca porque el email va primero.
  *
- * NOTA (fase 3a de este plan): `rate_limits.key` es varchar(255) y `loginSchema`
- * aún no acota el email; añadir la IP alarga la clave. El tope de longitud y el
- * fail-open que provoca se corrigen en esa fase, no aquí (W2).
+ * Si la clave no cabe en `rate_limits.key` (varchar(255), descontando el
+ * prefijo `account:`), se sustituye por su SHA-256 en hex: 64 caracteres, cabe
+ * siempre y no puede chocar con una clave en claro — toda clave en claro
+ * contiene `@` y `::`, que no son hex. `loginSchema` ya corta los emails de más
+ * de 254, así que esta rama solo se alcanza con una IPv6 larga detrás de un
+ * email casi al límite, o si algún día la validación se relaja: es defensa en
+ * profundidad, no el freno principal (R2-03a).
  */
 function accountKey(email: string, request: NextRequest): string {
-  return `${email.trim().toLowerCase()}::${clientIdentifier(request)}`;
+  const raw = `${email.trim().toLowerCase()}::${clientIdentifier(request)}`;
+  if (raw.length <= ACCOUNT_RAW_MAX) return raw;
+  return createHash('sha256').update(raw).digest('hex');
 }
 
 /**

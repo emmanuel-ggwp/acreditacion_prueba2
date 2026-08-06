@@ -3,7 +3,12 @@ import { z } from 'zod';
 import { ROLES } from '@/utils/constants';
 
 export const loginSchema = z.object({
-  email: z.string().email({ message: 'Correo electrónico inválido' }),
+  // El tope de 254 es el máximo de RFC 5321 y, sobre todo, acota la clave del
+  // limitador de credenciales: sin él, un email arbitrariamente largo producía
+  // una clave que desbordaba `rate_limits.key varchar(255)` y el limitador
+  // fallaba ABIERTO (R2-03a). La clave además se acota por su lado en
+  // `auth-rate-limit.ts` — defensa en profundidad, no redundancia.
+  email: z.string().max(254, { message: 'Correo electrónico demasiado largo' }).email({ message: 'Correo electrónico inválido' }),
   password: z.string().min(1, { message: 'La contraseña es obligatoria' }),
 });
 

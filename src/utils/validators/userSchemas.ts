@@ -11,7 +11,9 @@ export const customValidators = {
 };
 
 export const loginSchema = z.object({
-  email: z.string().email('Correo electrónico inválido'),
+  // Mismo tope que el loginSchema del servidor (authSchemas.ts, R2-03a):
+  // 254 es el máximo de RFC 5321. Este esquema lo usa el formulario de login.
+  email: z.string().max(254, 'Correo electrónico demasiado largo').email('Correo electrónico inválido'),
   password: z.string().min(1, 'La contraseña es obligatoria'),
 });
 
