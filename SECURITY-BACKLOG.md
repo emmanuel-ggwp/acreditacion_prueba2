@@ -41,6 +41,14 @@ módulos que hoy sí existen). Mezclar deuda de seguridad con esa lista escondí
 | [SB-14](#sb-14--params-tratado-como-objeto-sincrono-en-awardspagetsx) | `params` tratado como objeto síncrono en `awards/page.tsx` | — (surgido en A7) | ~15 min |
 | [SB-15](#sb-15--el-script-lint-no-existe-desde-nextjs-16) | El script `lint` no existe desde Next.js 16 | — (surgido en A7) | ~15 min |
 | [SB-16](#sb-16--sustituir-legacy-peer-deps-por-un-overrides-acotado) | ⏱ Sustituir `legacy-peer-deps` por un `overrides` acotado | — (surgido en A7) | ~1 h |
+| [SB-17](#sb-17--doble-cabecera-authorization-en-el-reintento-tras-un-401) | Doble cabecera `Authorization` en el reintento tras un 401 | — (surgido en A1) | ~1 h |
+| [SB-18](#sb-18--manager-no-puede-listar-eventos-el-rol-está-roto-de-facto) | `MANAGER` no puede listar eventos: el rol está roto de facto | — (surgido en A1) | ~1 h |
+| [SB-19](#sb-19--tres-páginas-que-muestran-pii-sin-guarda-de-rol) | Tres páginas que muestran PII sin guarda de rol | — (surgido en A1) | ~1 h |
+| [SB-20](#sb-20--el-cliente-no-distingue-un-403-y-la-búsqueda-se-traga-el-error) | El cliente no distingue un 403, y la búsqueda se traga el error | — (surgido en A1) | ~2 h |
+| [SB-21](#sb-21--get-apiparticipantsidguests-es-un-endpoint-huérfano) | `GET /api/participants/[id]/guests` es un endpoint huérfano | — (surgido en A1) | ~30 min |
+| [SB-22](#sb-22--el-limitador-comparte-el-pool-de-5-conexiones-de-la-aplicación) | El limitador comparte el pool de 5 conexiones de la aplicación | — (surgido en A6) | ~30 min |
+| [SB-23](#sb-23--endpoint-público-de-evento-roto-desde-siempre-y-sin-consumidores) | Endpoint público de evento roto desde siempre y sin consumidores | — (surgido en A3) | ~30 min |
+| [SB-24](#sb-24--la-capacidad-del-evento-no-cuenta-invitados) | La capacidad del evento no cuenta invitados | — (surgido en A4) | decisión de producto |
 
 > ⏱ **SB-13 y SB-16 tienen ventana fija, no plazo abierto.** Deben resolverse **al terminar los
 > cambios de la auditoría y, en cualquier caso, ANTES de que la reconstrucción configure CI y
@@ -665,3 +673,71 @@ mismos roles que la ficha de la que es subconjunto—, que es lo correcto mientr
 `includeAwards` e `includeSchedules` como query params, pero
 `participants/[participantId]/route.ts` llama a `getParticipant(participantId, true, true)` con
 booleanos fijos y **los ignora**. Contrato cliente-servidor desalineado; sin impacto de seguridad.
+
+---
+
+## SB-22 — El limitador comparte el pool de 5 conexiones de la aplicación
+
+- **Referencia**: surgido en **A6** el **2026-08-05**. Quedó **fuera del alcance** de A6 (W2).
+- **Ficheros**: `src/lib/auth-rate-limit.ts:52-54`, `src/lib/sequelize.ts:16-21`.
+- **Bloquea el redespliegue**: **No.**
+
+`RateLimiterPostgres` recibe la instancia de Sequelize de la aplicación, así que cada `consume()`
+toma prestada una conexión del **mismo pool de 5** que sirve las consultas normales
+(`sequelize.ts:17`, `pool.max: 5`). Justo bajo el flood que el limitador existe para frenar, el
+limitador **compite por conexiones con la aplicación**.
+
+No es un fallo de seguridad y el coste por petición es una consulta trivial sobre una tabla de
+tres columnas con clave primaria, pero bajo carga sostenida es la clase de acoplamiento que
+convierte un ataque de fuerza bruta en una degradación general.
+
+**Corrección**: `pg` ya es dependencia directa, así que basta un `new Pool(...)` dedicado de 2
+conexiones y pasarlo con `storeType: 'pool'`. Media hora, sin dependencias nuevas.
+
+---
+
+## SB-23 — Endpoint público de evento roto desde siempre y sin consumidores
+
+- **Referencia**: surgido al preparar **A3** el **2026-08-05**. Es el 500 que quedó pendiente de
+  diagnóstico al cerrar A1.
+- **Ficheros**: `src/app/api/public/events/[slug]/route.ts:17-24`.
+- **Bloquea el redespliegue**: **No.**
+
+`GET /api/public/events/{slug}` devuelve **500 en toda petición, siempre**, con independencia del
+slug y del estado de la base de datos. La causa es determinista: el `include` declara
+`{ model: EventSchedule }` **sin `as`**, y la asociación está definida con alias obligatorio en
+`EventSchedule.ts:110` (`as: 'schedules'`). Sequelize lanza `EagerLoadingError`, que cae en el
+`catch` genérico y sale como 500. El comentario del propio fichero delata que quien lo escribió
+estaba adivinando el alias. Todos los demás sitios del proyecto lo hacen bien.
+
+**No es una regresión**: nunca funcionó. Y **no tiene ningún consumidor** — la landing
+(`public/events/[slug]/page.tsx:11-43`) consulta la base de datos en servidor por su cuenta, y los
+únicos `fetch` del cliente van a `/lookup` y `/register`. Es código muerto.
+
+**Precisión para quien lo arregle**: añadir el `as` **no basta**. La lista `attributes` de `:25`
+omite `maxGuestsPerParticipant`, `maxCapacity`, `publicTemplate` y `emailTemplateId`; un cliente
+que lo consumiera vería `maxGuests = 0` y **la sección de invitados desaparecería**.
+
+**Corrección**: decidir entre **borrarlo** (es lo que corresponde a código muerto que nunca
+funcionó, y reduce superficie) o arreglar `as` **y** `attributes` a la vez.
+
+---
+
+## SB-24 — La capacidad del evento no cuenta invitados
+
+- **Referencia**: surgido al preparar **A4** el **2026-08-05**.
+- **Ficheros**: `src/services/capacityService.ts:4, 9-15, 21-28, 36-66`.
+- **Bloquea el redespliegue**: **No.** Es una **decisión de producto**, no un fallo.
+
+El plan de A4 hablaba de topar los invitados "por cupo del evento". Al verificarlo contra el
+código resulta que **la capacidad no cuenta invitados en ninguna parte**: `capacityService` solo
+consulta `participant_schedules`, y así está documentado en su propio comentario. Un evento con
+`maxCapacity: 100` admite 100 participantes **más** sus acompañantes.
+
+Por eso A4 topa los invitados **por participante** (`allowedGuests` y el máximo del evento), que
+es una regla existente, y **no** por cupo del evento, que sería una regla nueva: cambiaría la
+semántica de `spotsLeft` que la landing ya muestra al público.
+
+**Decisión pendiente**: ¿la capacidad de una fecha debe contar las plazas físicas (participantes
++ invitados) o solo los inscritos? Si es lo primero, hay que revisar `capacityService` **y** el
+mensaje de la landing a la vez.

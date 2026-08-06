@@ -2473,3 +2473,64 @@ F3-01 no llegaron a explotarse).
 
 **Auditoría completa.** Siguiente paso: **remediación en sesión aparte** (Bloque A), y después la
 reconstrucción del droplet con la especificación de §7.4.
+
+---
+
+## Estado del Bloque A — cerrado el 2026-08-05
+
+**Las 11 correcciones están aplicadas y verificadas.** Rama `remediacion/bloque-a`.
+
+| # | ID | Commit | Verificación |
+|---|---|---|---|
+| A7 | — | `505db01` | Next.js 16.0.6 → 16.2.12; cierra el CVE del vector probable |
+| A1 | F3-01 | `94555bd` | Cadena de exfiltración de PII: 401 sin token, 403 por rol |
+| A5 | F1-02 | `e3197e9` | `stats`: 401 sin token, 200 con los cuatro roles |
+| A2 | F1-01 | `f6d0959` | `created_by` sale del token; el `userId` del body se descarta |
+| A8 | F6-04 | `9700a6c` | Conecta con `NODE_ENV=production` sin SSL; `DB_SSL=true` lo exige |
+| A11 | F6-06 | `ac3607b` | `.env` destrackeado; los tres scripts de BD siguen funcionando |
+| A9 | F1-07 | `ebd8911` | 18 vulnerabilidades (4 críticas) → 11 (0 críticas) |
+| A10 | F6-05 / F2-07 | `41eb4da` | El arranque aborta si falta una variable crítica, sin esperar petición |
+| A6 | F1-03 | `efa61a2` | 429 desde el intento 11; rotar `x-forwarded-for` ya no evade |
+| A3 + A4 | F4-01 / F4-02 | `03a2ad1` | Inscrito → 409 sin escribir; invitados topados por cupo |
+
+**Lo que cambió respecto al plan de §7.3, con su motivo:**
+
+1. **A2 usa `[ADMIN, OPERATOR]`, no la lista de A1.** Es el verbo de escritura y sus hermanos
+   `PUT`/`DELETE` ya son esos dos. `MANAGER` queda fuera por coherencia con **SB-18**.
+2. **A6 no lleva el almacén compartido al middleware.** `middleware.ts` compila al runtime
+   **Edge** —verificado en el manifiesto del build, no supuesto—, donde no hay base de datos. El
+   limitador estricto vive en los handlers de `/api/auth/*`, que sí corren en Node, con
+   `RateLimiterPostgres` sobre la instancia de Sequelize existente: **sin infraestructura nueva**,
+   ni Redis ni servicios añadidos.
+3. **A6 identifica al cliente por el ÚLTIMO salto de `x-forwarded-for`**, no el primero. El
+   primero es justo el que el atacante controla. **Requisito de despliegue asociado:** la
+   aplicación debe escuchar solo en `127.0.0.1` con Nginx delante (§7.4); expuesta directamente,
+   la rotación de cabecera sigue evadiendo el límite.
+4. **A3 estrena esquema propio** (`rutRegistrationSchema`) en vez de reutilizar
+   `publicRegistrationSchema`, que exige `documentNumber` —el payload `rut` de GalaTemplate no lo
+   envía— y **sigue admitiendo** `eventId`, `isAwarded`, `allowMultipleSchedules`… Validar con él
+   habría sido **peor** que el código que sustituye. Validar no es restringir.
+5. **A3 conserva la inscripción a fecha adicional.** La decisión de producto es «un inscrito no se
+   modifica solo», no «un inscrito no puede añadir fecha»: `allowMultipleSchedules` es
+   funcionalidad viva. Ya inscrito ⇒ **cero escrituras de campos personales**, pero la fecha nueva
+   se enlaza.
+6. **A4 no topa por cupo del evento.** La capacidad **no cuenta invitados** en ninguna parte
+   (`capacityService.ts:4`); hacerlo sería una regla nueva. Registrado como **SB-24**.
+7. **F6-10 queda cerrado de camino**: `NEXT_PUBLIC_MODIFY_CONTACT_EMAIL` pasa a leerse en
+   `utils/contact.ts`, donde el correo estaba escrito a fuego.
+
+**Deuda nueva registrada**: SB-17 a SB-24 en `SECURITY-BACKLOG.md`.
+
+**Decisiones tomadas el 2026-08-05 con criterio de mínimo tiempo hasta producción** (SB-17 al
+Bloque B, `MANAGER` inerte, el 500 público a backlog como SB-23): ver §7.0 y las fichas.
+
+### Antes de redesplegar — dos condiciones que este bloque deja abiertas
+
+1. **SB-16 y SB-13 tienen ventana fija**: se resuelven **antes** de que la reconstrucción
+   configure CI y Dependabot, porque `legacy-peer-deps` los dejaría ciegos a los conflictos de
+   peers. Es la contramedida de mayor impacto de todo el informe.
+2. **A6 asume la topología de §7.4.** Sin Nginx delante reescribiendo `X-Forwarded-For` y con el
+   puerto expuesto, el limitador es evadible. La configuración de Nginx **debe** quedar versionada.
+
+**Siguiente paso:** reconstrucción del droplet con §7.4, y después el Bloque B — que ahora
+empieza por **SB-17**.
