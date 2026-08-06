@@ -122,6 +122,15 @@ Corregir acotando la clave (truncar o hashear) **y** poniendo `.max()` en el ema
 antes que PostgreSQL: el limitador se queda en memoria para toda la vida del proceso, y con ello
 deja de ser compartido y de sobrevivir a reinicios — justo lo que el módulo dice garantizar.
 
+> **Sube de probabilidad con el cambio del 2026-08-06.** La base pasa a ser la **administrada de
+> DigitalOcean**: el usuario de aplicación puede no tener `CREATE` (PostgreSQL 15+ no lo concede
+> por defecto en `public`), y la conexión ahora atraviesa la red, así que un fallo transitorio en
+> el arranque deja de ser hipotético. Lo que era «raro» pasa a «esperable», y el resultado es que
+> **la protección contra fuerza bruta queda decorativa sin que nadie se entere**. El arreglo es el
+> mismo —permitir el reintento— más crear la tabla en el aprovisionamiento (plan 08, D8.4) para
+> que la aplicación nunca necesite `CREATE`. La degradación no puede seguir siendo un
+> `console.error` que nadie lee.
+
 Permitir el reintento, o crear la tabla en `sync-db.ts` y pasar `tableCreated: true`.
 
 ### c) Normalización de email inconsistente

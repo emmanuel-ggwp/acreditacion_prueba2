@@ -664,12 +664,24 @@ interpola en los mensajes —, pero facilita el reconocimiento previo a una inye
 servidor + 26 no lo tocan.**
 **Corrección:** respuesta genérica al cliente + detalle al log del servidor.
 
-#### F2-06 — ~~MEDIO~~ → **BAJO / higiene** (revisado 2026-07-26) — TLS de base de datos sin validar el certificado
-> **Reclasificado.** La reconstrucción usará **PostgreSQL self-hosted en el mismo droplet**,
-> con conexión por localhost o socket unix. Sin intermediario de red posible,
-> `rejectUnauthorized: false` deja de ser explotable en la arquitectura de destino.
-> **No es bloqueante del redespliegue**; se mantiene como corrección de higiene por si la BD
-> se externaliza en el futuro.
+#### F2-06 — ~~MEDIO~~ → ~~BAJO / higiene~~ → **BLOQUEANTE** (2026-08-06) — TLS de base de datos sin validar el certificado
+> **Reclasificado dos veces. Vale la segunda.**
+>
+> ~~2026-07-26: la reconstrucción usará **PostgreSQL self-hosted en el mismo droplet**, con
+> conexión por localhost o socket unix. Sin intermediario de red posible,
+> `rejectUnauthorized: false` deja de ser explotable en la arquitectura de destino. No es
+> bloqueante del redespliegue; se mantiene como higiene **por si la BD se externaliza en el
+> futuro**.~~
+>
+> **2026-08-06 — el futuro llegó.** Se usará la base **administrada de DigitalOcean**, así que
+> vuelve a haber red intermedia y la reclasificación a «higiene» decae: **es bloqueante**. Ver
+> **SB-09**, que pasa de deuda a requisito, y el aviso de cambio de decisión al final de este
+> informe. La corrección de A8 ya dejó `rejectUnauthorized: true`; lo que falta es aportar la CA
+> de DigitalOcean, **sin la cual la aplicación no conecta**.
+>
+> Se deja la reclasificación anterior tachada y no borrada a propósito: muestra que una
+> mitigación que depende de la arquitectura **caduca cuando la arquitectura cambia**, y ese es un
+> patrón que conviene reconocer en el resto del informe.
 `src/lib/sequelize.ts:27`
 `dialectOptions: { ssl: { require: true, rejectUnauthorized: false } }`. Se exige TLS pero
 **no se valida la cadena del certificado**, lo que anula la protección frente a un
@@ -2183,7 +2195,7 @@ nuevos y el despliegue nuevo genera secretos nuevos por construcción.
 | **F3-02** | El `lookup` público es un oráculo de enumeración por RUT | `api/public/events/[slug]/lookup/route.ts:26-31` | El espacio de RUT chileno es enumerable; alimenta F4-01 |
 | **F3-03** | `bcrypt.compareSync` bloquea el bucle de eventos en el login | `services/authService.ts:15` | Con coste 12, unas pocas peticiones de login **congelan el servidor entero** |
 | **F6-01** | Cero configuración de despliegue versionada | 0 de 11 artefactos | Habilitó el retraso de 7 meses; hace el despliegue irreproducible |
-| **F6-04** | `DB_SSL` no se puede desactivar en producción; certificado sin validar | `lib/sequelize.ts:10, 27` | **Impide arrancar** contra el PostgreSQL local de la reconstrucción |
+| **F6-04** | `DB_SSL` no se puede desactivar en producción; certificado sin validar | `lib/sequelize.ts:10, 27` | **Impide arrancar** contra el PostgreSQL local de la reconstrucción. **2026-08-06: la base pasa a la administrada de DigitalOcean — A8 sigue siendo correcta, pero ahora `DB_SSL=true` y falta la CA (SB-09)** |
 
 ### Medios (17)
 
@@ -2340,6 +2352,9 @@ significa hacerlas sobre un sistema ya en producción.
    habría quedado mal.
 5. **A8 bloquea el arranque**, no solo la seguridad: sin ella la aplicación no conecta con el
    PostgreSQL local de la reconstrucción.
+   > **2026-08-06:** con la base **administrada de DigitalOcean**, A8 sigue siendo correcta —
+   > `DB_SSL` como única fuente— pero el valor pasa a `true`, y entonces **el arranque lo bloquea
+   > otra cosa**: falta la CA del proveedor. Ver SB-09.
 
 ## 7.4 Especificación para la reconstrucción
 
@@ -2431,9 +2446,17 @@ porque **nadie se enteró de que había un parche**.
 
 ### Fuera del repositorio — va al runbook, no al árbol de fuentes
 
-Doble cortafuegos (Cloud Firewall + UFW), PostgreSQL escuchando solo en localhost o socket Unix
-con usuario **sin `SUPERUSER`**, Certbot, backups cifrados fuera de la máquina con restic,
-auditd/AIDE, y checklist de verificación posterior a la instalación.
+Doble cortafuegos (Cloud Firewall + UFW), Certbot, auditd/AIDE, y checklist de verificación
+posterior a la instalación.
+
+> **Rectificado el 2026-08-06 — la base de datos ya no se instala aquí.** Esta línea decía
+> «PostgreSQL escuchando solo en localhost o socket Unix con usuario sin `SUPERUSER`», y con la
+> base **administrada de DigitalOcean** eso se sustituye por: **trusted sources** en DigitalOcean
+> para que solo el droplet la alcance —es lo que reemplaza al `127.0.0.1`—, usuario de aplicación
+> acotado, y la **CA del proveedor** disponible para el proceso. Los backups los gestiona
+> DigitalOcean, así que restic deja de ser necesario para la base **pero sigue haciendo falta
+> probar una restauración**: un backup que nunca se ha restaurado no es un backup, lo gestione
+> quien lo gestione. Detalles concretos: fase 2 del plan 07.
 
 **Se mantiene la recomendación de no usar Docker:** publica puertos **saltándose UFW**, que es
 exactamente el modo de fallo que esta reconstrucción debe evitar.
