@@ -11,7 +11,14 @@ export const meta = {
 }
 
 // args: { plan: "01-regresiones-bloque-a" }  (nombre del fichero sin .md)
-const planName = (args && args.plan) || '01-regresiones-bloque-a'
+// Tolerar args que llegan como texto JSON: el 2026-08-06 un lanzamiento con
+// {plan: "02-..."} llego como string, args.plan salio undefined y el script cayo
+// EN SILENCIO al plan 01. Sin plan explicito ahora se para, no se adivina.
+const argsObj = typeof args === 'string' ? JSON.parse(args) : args
+const planName = argsObj && argsObj.plan
+if (!planName) {
+  return { error: 'Falta args.plan (nombre del fichero de planes/ sin .md). No se asume ningun plan por defecto.' }
+}
 const planPath = `planes/${planName}.md`
 
 const REGLAS = `
@@ -147,6 +154,17 @@ if (!plan || !plan.fases || plan.fases.length === 0) {
   return { error: `No se pudieron extraer fases de ${planPath}` }
 }
 
+// args.hastaFase: ultima fase a ejecutar (inclusive). Para los planes que no corren
+// enteros desatendidos — el 07 para tras la fase 3 porque la 4 exige un droplet real.
+const hastaFase = argsObj && argsObj.hastaFase
+const fasesOmitidas = hastaFase ? plan.fases.filter((f) => f.numero > hastaFase) : []
+if (hastaFase) {
+  plan.fases = plan.fases.filter((f) => f.numero <= hastaFase)
+  if (fasesOmitidas.length) {
+    log(`Limite hastaFase=${hastaFase}: se omiten ${fasesOmitidas.map((f) => f.numero).join(', ')}`)
+  }
+}
+
 log(`${plan.fases.length} fases`)
 
 const resultados = []
@@ -159,7 +177,7 @@ for (const fase of plan.fases) {
 
   const impl = await agent(
     `Eres el IMPLEMENTADOR de una fase de remediacion de seguridad.
-     Repositorio: C:\\Users\\Joseph\\Documents\\acreditacion_prueba2, rama remediacion/bloque-a.
+     Repositorio: el directorio de trabajo actual, rama remediacion/bloque-a.
 
      PLAN COMPLETO: lee ${planPath} entero antes de tocar nada. Tu fase es la ${fase.numero}
      ("${fase.titulo}").
@@ -192,7 +210,7 @@ for (const fase of plan.fases) {
 
   const critica = await agent(
     `Eres el CRITICO de una fase de remediacion. Tu trabajo NO es aprobar: es comprobar.
-     Repositorio: C:\\Users\\Joseph\\Documents\\acreditacion_prueba2, rama remediacion/bloque-a.
+     Repositorio: el directorio de trabajo actual, rama remediacion/bloque-a.
 
      El implementador dice haber cerrado la fase ${fase.numero} ("${fase.titulo}") del plan
      ${planPath}. Su informe:
@@ -270,6 +288,8 @@ phase('Cerrar')
 const cierre = await agent(
   `Cierras la ejecucion nocturna del plan ${planPath}. Dos entregables, y el segundo es el que
    Emmanuel pidio expresamente.
+
+   ${fasesOmitidas.length ? `FASES NO EJECUTADAS a proposito (limite hastaFase=${hastaFase}; el informe debe decirlo y explicar que quedan pendientes): ${fasesOmitidas.map((f) => `${f.numero} (${f.titulo})`).join('; ')}` : ''}
 
    Resultado por fases:
    ${JSON.stringify(resultados.map((r) => ({

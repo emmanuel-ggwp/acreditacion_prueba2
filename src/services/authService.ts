@@ -6,12 +6,15 @@ import bcrypt from 'bcryptjs';
 import { addDays } from 'date-fns';
 
 import { auditLogService } from './auditLogService';
+import { normalizeEmail } from '@/utils/email';
 
 export class AuthService {
   async login(credentials: z.infer<typeof loginSchema>) {
     const validatedCredentials = loginSchema.parse(credentials);
 
-    const user = await User.findOne({ where: { email: validatedCredentials.email } });
+    // La columna guarda la forma canónica (hook del modelo, R2-03c): buscar
+    // sin normalizar dejaría fuera a quien teclee su email con mayúsculas.
+    const user = await User.findOne({ where: { email: normalizeEmail(validatedCredentials.email) } });
     if (!user || !bcrypt.compareSync(validatedCredentials.password, user.password)) {
       // Generic error message to prevent user enumeration
       throw new Error('Invalid credentials');
@@ -66,7 +69,10 @@ export class AuthService {
     }
     const validatedData = registerSchema.parse(userData);
 
-    const existingUser = await User.findOne({ where: { email: validatedData.email } });
+    // La comprobación de duplicado compara contra la forma canónica, que es la
+    // que guarda el hook del modelo (R2-03c); sin esto, `Admin@X.com` pasaba el
+    // control y luego chocaba (o no) con la unicidad según la grafía guardada.
+    const existingUser = await User.findOne({ where: { email: normalizeEmail(validatedData.email) } });
     if (existingUser) {
       throw new Error('Email already in use');
     }

@@ -1,0 +1,96 @@
+# infra/nginx/tuacreditacion.conf.template — PLANTILLA; la instancia real la
+# renderiza infra/provision.sh sustituyendo @DOMAIN@, @APP_PORT@, @UPLOADS_DIR@
+# y @MAX_BODY@.
+#
+# La configuración del servidor VIVE EN EL REPOSITORIO (F6-01): Nginx es la
+# capa donde probablemente se materializó la redirección del ataque, y su
+# configuración versionada es la mitad del valor del plan 07. Un cambio no
+# autorizado en el droplet es un `git diff` contra este fichero.
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name @DOMAIN@;
+
+    # Renovación ACME (certbot webroot).
+    location ^~ /.well-known/acme-challenge/ {
+        root /var/www/letsencrypt;
+    }
+
+    location / {
+        return 301 https://@DOMAIN@$request_uri;
+    }
+}
+
+server {
+    # `http2` como parámetro de listen y no como directiva `http2 on;`: el
+    # nginx de Ubuntu 24.04 es 1.24.0 y la directiva llegó en 1.25.1
+    # (verificado con nginx -t en contenedor: "unknown directive http2").
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+
+    # server_name EXPLÍCITO: los hosts desconocidos los corta el default_server
+    # (infra/nginx/default-server.conf), no este bloque.
+    server_name @DOMAIN@;
+
+    # Certificado emitido y renovado por certbot (certbot.timer); tras cada
+    # renovación, el hook de despliegue recarga Nginx (lo instala provision.sh).
+    ssl_certificate     /etc/letsencrypt/live/@DOMAIN@/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/@DOMAIN@/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers off;
+    ssl_session_cache shared:tuacreditacion_ssl:10m;
+    ssl_session_timeout 1d;
+
+    server_tokens off;
+
+    # Coherente con el límite de la aplicación (8 MB por fichero en
+    # src/app/api/uploads/route.ts): 9m deja sitio al overhead multipart, de
+    # modo que un fichero de justo 8 MB reciba el 400 explicativo de la
+    # aplicación y no un 413 opaco de Nginx; todo lo claramente mayor lo corta
+    # Nginx sin gastar Node. [P07-D7.11]
+    client_max_body_size @MAX_BODY@;
+
+    # ---- Ficheros subidos: los sirve NGINX desde la ruta persistente, Node no
+    # (plan 07 / §7.4). Lista blanca de extensiones = EXT_MIME de
+    # src/utils/uploadsStorage.ts. Cubre las dos formas de URL que existen:
+    # /api/uploads/<f> (la que emite la aplicación al subir) y /uploads/<f>
+    # (URLs antiguas guardadas en la BD, que next.config.js reescribía).
+    # La clase de caracteres no admite "/": sin traversal posible.
+    location ~* "^/(?:api/)?uploads/([A-Za-z0-9._-]+\.(?:jpg|jpeg|png|webp))$" {
+        alias @UPLOADS_DIR@/$1;
+        # nosniff en lo servido desde disco: aunque solo hay imágenes en la
+        # lista blanca, el navegador no debe adivinar tipos jamás.
+        add_header X-Content-Type-Options nosniff always;
+    }
+
+    # Todo lo demás bajo esos prefijos NO EXISTE: ni .php, ni .html, ni listado
+    # de directorio. (Ubicaciones de prefijo: la regex de arriba gana cuando
+    # coincide. El POST de subida va a /api/uploads EXACTO —sin barra final—,
+    # no entra en el prefijo con barra y llega a la aplicación por location /.)
+    location /uploads/ {
+        return 404;
+    }
+    location /api/uploads/ {
+        return 404;
+    }
+
+    location / {
+        # La aplicación escucha SOLO en 127.0.0.1 (unidad systemd, -H
+        # explícito): Nginx es el único camino de entrada.
+        proxy_pass http://127.0.0.1:@APP_PORT@;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+
+        # REESCRIBE la cabecera, no la anexa (nada de $proxy_add_x_forwarded_for):
+        # el limitador (A6) toma el ÚLTIMO valor de x-forwarded-for, y ese valor
+        # debe ser siempre la IP que Nginx vio en el socket, nunca una que
+        # trajera el cliente. De esta línea depende que el límite por IP no sea
+        # evadible rotando la cabecera.
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header Connection "";
+    }
+}

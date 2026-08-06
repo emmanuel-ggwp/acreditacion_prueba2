@@ -53,10 +53,11 @@ export const POST = withAuth(async (req: AuthenticatedRequest) => {
     // public/, porque Next no sirve archivos escritos después del build.
     return NextResponse.json({ url: `/api/uploads/${filename}` }, { status: 201 });
   } catch (error: any) {
+    // El detalle queda en el log del servidor. `error.message` NO viaja al
+    // cliente: aquí contenía la ruta absoluta del sistema de ficheros cuando
+    // el mkdir fallaba (D6, plan 08) — y ese fallo ahora aborta el ARRANQUE
+    // (validateEnv comprueba la escritura), no la petición.
     console.error('Error uploading file:', error);
-    return NextResponse.json(
-      { message: 'Error al subir el archivo', error: error.message },
-      { status: 500 }
-    );
+    return NextResponse.json({ message: 'Error al subir el archivo' }, { status: 500 });
   }
 }, [ADMIN, OPERATOR]);

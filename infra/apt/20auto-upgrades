@@ -1,0 +1,9 @@
+// infra/apt/20auto-upgrades — actualizaciones de seguridad automáticas
+// (plan 07, fase 1/3). Es la medida que habría avisado del salto 16.0.6 ->
+// 16.0.7 y cerrado la ventana de siete meses del compromiso.
+//
+// unattended-upgrades usa la configuración por defecto de Ubuntu
+// (50unattended-upgrades: origen "-security" habilitado); este fichero
+// enciende la ejecución periódica. Se instala en /etc/apt/apt.conf.d/.
+APT::Periodic::Update-Package-Lists "1";
+APT::Periodic::Unattended-Upgrade "1";

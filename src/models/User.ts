@@ -17,6 +17,7 @@ import {
 } from 'sequelize';
 import * as bcrypt from 'bcryptjs';
 import { sequelize } from '../lib/sequelize'; // Asumimos que la conexión está en /lib/sequelize
+import { normalizeEmail } from '../utils/email';
 import type Event from './Event';
 import type Accreditation from './Accreditation';
 
@@ -140,6 +141,19 @@ User.init(
     ],
   }
 );
+
+// El email se normaliza EN ESCRITURA (R2-03c): este hook es el punto único por
+// el que pasan todas las altas y ediciones (userService, authService.register,
+// seeds). Antes ninguna ruta normalizaba y el login buscaba con igualdad exacta,
+// así que la grafía tecleada en el alta era la única llave de entrada, mientras
+// el limitador de credenciales agrupaba por la forma normalizada.
+// `beforeValidate` corre antes que el validador `isEmail`, así que lo que se
+// valida es ya la forma canónica.
+User.addHook('beforeValidate', (user: User) => {
+  if (typeof user.email === 'string') {
+    user.email = normalizeEmail(user.email);
+  }
+});
 
 // Hooks to hash password
 User.addHook('beforeSave', async (user: User) => {

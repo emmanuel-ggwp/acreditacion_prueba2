@@ -1,0 +1,55 @@
+# CI de vigilancia de dependencias (plan 07, fase 1 — AUDIT-FINDINGS.md §7.4).
+#
+# Dos vigilantes:
+#   1. `npm ci` con la resolucion de peers ACTIVA (SB-16 resuelta): un PR
+#      —de Dependabot o humano— que traiga un conflicto de peers falla
+#      aqui en vez de entrar en silencio.
+#   2. `npm audit` sobre las dependencias de PRODUCCION, fallando ante
+#      vulnerabilidades CRITICAS (P07-D7.7). El arbol completo (dev
+#      incluido) se publica como informe no bloqueante en el log.
+#
+# PROHIBIDO en este repositorio: `npm audit fix --force` (SB-13). Para
+# satisfacer el rango de metavulnerabilidad de postcss el resolutor puede
+# DEGRADAR next hasta la rama 9 y reabrir CVE-2025-55182 y los ~35
+# advisories que cerro A7. Este workflow solo INFORMA y BLOQUEA: jamas
+# corrige solo.
+name: CI
+
+on:
+  push:
+    branches: ["main", "remediacion/**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  dependencias:
+    name: npm ci + npm audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Node segun .nvmrc
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: ".nvmrc"
+          cache: "npm"
+
+      # Instalacion reproducible desde el lockfile. Sin flags: si un peer
+      # no resuelve, ESTO DEBE FALLAR (es la razon de ser de SB-16).
+      - name: npm ci
+        run: npm ci
+
+      # Paso BLOQUEANTE (P07-D7.7): vulnerabilidades criticas en las
+      # dependencias que corren en el servidor. --omit=dev porque el
+      # umbral protege el runtime de produccion; las cadenas de dev se
+      # ven en el informe del paso siguiente y en Dependabot.
+      - name: npm audit (produccion, falla ante criticas)
+        run: npm audit --omit=dev --audit-level=critical
+
+      # Informe completo (dev incluido), NO bloqueante: visibilidad sin
+      # convertir cada advisory transitoria de jest/ts-jest en un CI rojo.
+      - name: npm audit (arbol completo, informativo)
+        run: npm audit || true

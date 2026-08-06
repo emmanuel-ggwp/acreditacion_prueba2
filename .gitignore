@@ -58,3 +58,12 @@ planes/resultados/
 !/public/uploads/.gitkeep
 # Directorio de subidas en tiempo de ejecución (UPLOADS_DIR por defecto)
 /uploads/
+
+# Volcados de base de datos — NUNCA se versionan (SB-25 / plan 08, D12).
+# acreditacion_dump.sql llevaba datos reales (usuarios con hashes, refresh tokens,
+# RUT) y se dejó de rastrear el 2026-08-06; sigue en la HISTORIA del repositorio
+# (reescritura propuesta en SB-25, decisión de Emmanuel). El esquema viene de
+# migraciones (npm run db:migrate), no de volcados. Si algún día hace falta
+# versionar un .sql legítimo, se añade aquí su excepción explícita (!fichero.sql).
+*.sql
+*.dump

@@ -1,6 +1,7 @@
 import { Op } from 'sequelize';
 import { User } from '@/models/index';
 import { auditLogService } from './auditLogService';
+import { normalizeEmail } from '@/utils/email';
 
 const PUBLIC_ATTRS = ['id', 'username', 'email', 'firstName', 'lastName', 'role', 'isActive', 'lastLogin', 'createdAt'];
 const VALID_ROLES = ['ADMIN', 'MANAGER', 'OPERATOR', 'GUARDIA'];
@@ -24,12 +25,16 @@ export class UserService {
     if (String(password).length < 6) throw new Error('La contraseña debe tener al menos 6 caracteres.');
     if (role && !VALID_ROLES.includes(role)) throw new Error('Rol inválido.');
 
-    const exists = await User.findOne({ where: { [Op.or]: [{ email }, { username }] }, paranoid: false });
+    // El modelo guarda la forma canónica (hook, R2-03c): el control de
+    // duplicado tiene que comparar contra esa misma forma o deja pasar
+    // variantes de mayúsculas que luego chocan con la unicidad.
+    const canonicalEmail = normalizeEmail(String(email));
+    const exists = await User.findOne({ where: { [Op.or]: [{ email: canonicalEmail }, { username }] }, paranoid: false });
     if (exists) throw new Error('Ya existe un usuario con ese correo o nombre de usuario.');
 
     const user = await User.create({
       username: username.trim(),
-      email: email.trim(),
+      email: canonicalEmail,
       password,
       firstName: firstName || null,
       lastName: lastName || null,
@@ -55,10 +60,12 @@ export class UserService {
 
     const before: any = { email: (user as any).email, firstName: (user as any).firstName, lastName: (user as any).lastName, role: (user as any).role, isActive: (user as any).isActive };
     const patch: any = {};
-    if (data.email && data.email.trim() && data.email.trim() !== (user as any).email) {
-      const dup = await User.findOne({ where: { email: data.email.trim() }, paranoid: false });
+    // Comparación y guardado sobre la forma canónica (hook del modelo, R2-03c).
+    if (data.email && data.email.trim() && normalizeEmail(String(data.email)) !== (user as any).email) {
+      const canonicalEmail = normalizeEmail(String(data.email));
+      const dup = await User.findOne({ where: { email: canonicalEmail }, paranoid: false });
       if (dup && (dup as any).id !== id) throw new Error('Ya existe un usuario con ese correo.');
-      patch.email = data.email.trim();
+      patch.email = canonicalEmail;
     }
     if (data.firstName !== undefined) patch.firstName = data.firstName;
     if (data.lastName !== undefined) patch.lastName = data.lastName;

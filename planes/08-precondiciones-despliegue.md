@@ -54,6 +54,19 @@ deja de exigir `ALLOWED_ORIGIN`, `UPLOADS_DIR`, la longitud de los secretos y lo
 expiración — y `sequelize.ts:17` enciende el **log de SQL**, que manda credenciales y PII a
 journald.
 
+> **Rectificación (2026-08-06, medida sobre el build real — P08-D3).** El mecanismo del párrafo
+> anterior **no es el que ocurre** con el artefacto compilado: Turbopack **inlinea**
+> `process.env.NODE_ENV` durante `next build`, así que en un build de producción la validación de
+> `env.ts` queda congelada en modo estricto y el `logging` de Sequelize compilado como `!1` —
+> comprobado con `next start` bajo `NODE_ENV=development` (siguió exigiendo las variables «en
+> producción») y con grep de los chunks (`logging:!1`, cero lecturas de `process.env.NODE_ENV`).
+> El peligro real del valor en la plantilla es otro y sigue justificando el cambio: (1) un
+> `next build` con `development` heredado — el camino natural `set -a; . /etc/tuacreditacion.env`
+> — **falla hoy con error de prerender** (React en modo dev), y si no fallara produciría un build
+> de desarrollo servido como producción; (2) los scripts `tsx` (db:sync, seeds) y todo lo que
+> corre sin compilar sí leen el `NODE_ENV` real del entorno. El log de SQL de `sequelize.ts` sí
+> se enciende en cualquier proceso NO compilado que arranque con `development`.
+
 El commit anterior añadió una advertencia en comentario pero **dejó puesto el valor peligroso**. Y
 la forma natural de preparar el build es `set -a; . /etc/tuacreditacion.env`, con lo que el propio
 `next build` se ejecutaría en modo desarrollo.

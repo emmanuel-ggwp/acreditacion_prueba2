@@ -37,10 +37,8 @@ módulos que hoy sí existen). Mezclar deuda de seguridad con esa lista escondí
 | [SB-10](#sb-10--poweredbyheader-false) | `poweredByHeader: false` | F6-07 | ~5 min |
 | [SB-11](#sb-11--la-suite-de-tests-no-arranca-ninguna-de-las-6-suites-ejecuta) | La suite de tests no arranca: ninguna de las 6 suites ejecuta | — (línea base de remediación) | ~4 h |
 | [SB-12](#sb-12--react-table-sin-mantenimiento-obliga-a-legacy-peer-deps) | `react-table` sin mantenimiento obliga a `legacy-peer-deps` | — (surgido en A7) | ~3 h |
-| [SB-13](#sb-13--postcss-sin-parchear-y-la-trampa-de-npm-audit-fix---force) | ⏱ `postcss` sin parchear, y la trampa de `npm audit fix --force` | — (surgido en A7) | ~1 h |
 | [SB-14](#sb-14--params-tratado-como-objeto-sincrono-en-awardspagetsx) | `params` tratado como objeto síncrono en `awards/page.tsx` | — (surgido en A7) | ~15 min |
 | [SB-15](#sb-15--el-script-lint-no-existe-desde-nextjs-16) | El script `lint` no existe desde Next.js 16 | — (surgido en A7) | ~15 min |
-| [SB-16](#sb-16--sustituir-legacy-peer-deps-por-un-overrides-acotado) | ⏱ Sustituir `legacy-peer-deps` por un `overrides` acotado | — (surgido en A7) | ~1 h |
 | [SB-17](#sb-17--doble-cabecera-authorization-en-el-reintento-tras-un-401) | Doble cabecera `Authorization` en el reintento tras un 401 | — (surgido en A1) | ~1 h |
 | [SB-18](#sb-18--manager-no-puede-listar-eventos-el-rol-está-roto-de-facto) | `MANAGER` no puede listar eventos: el rol está roto de facto | — (surgido en A1) | ~1 h |
 | [SB-19](#sb-19--tres-páginas-que-muestran-pii-sin-guarda-de-rol) | Tres páginas que muestran PII sin guarda de rol | — (surgido en A1) | ~1 h |
@@ -49,40 +47,38 @@ módulos que hoy sí existen). Mezclar deuda de seguridad con esa lista escondí
 | [SB-22](#sb-22--el-limitador-comparte-el-pool-de-5-conexiones-de-la-aplicación) | El limitador comparte el pool de 5 conexiones de la aplicación | — (surgido en A6) | ~30 min |
 | [SB-23](#sb-23--endpoint-público-de-evento-roto-desde-siempre-y-sin-consumidores) | Endpoint público de evento roto desde siempre y sin consumidores | — (surgido en A3) | ~30 min |
 | [SB-24](#sb-24--la-capacidad-del-evento-no-cuenta-invitados) | La capacidad del evento no cuenta invitados | — (surgido en A4) | decisión de producto |
-| [SB-25](#sb-25--un-volcado-con-datos-reales-está-versionado) | ⚠ Un volcado con datos reales está versionado | — (revisión de despliegue) | ~1 h + decisión |
-
-> ⏱ **SB-13 y SB-16 tienen ventana fija, no plazo abierto.** Deben resolverse **al terminar los
-> cambios de la auditoría y, en cualquier caso, ANTES de que la reconstrucción configure CI y
-> Dependabot**. No son deuda diferible: ver [Entradas con ventana fija](#entradas-con-ventana-fija).
+| [SB-25](#sb-25--un-volcado-con-datos-reales-está-versionado) | ⚠ Un volcado con datos reales está versionado *(parcial: quedan 2 decisiones de Emmanuel)* | — (revisión de despliegue) | decisión |
+| [SB-27](#sb-27--get-apipubliceventsslug-devuelve-500-siempre-include-sin-alias) | `GET /api/public/events/[slug]` devuelve 500 siempre | — (surgido en R1-01) | ~30 min |
+| [SB-28](#sb-28--el-login-distingue-cuenta-deshabilitada-de-credenciales-inválidas-enumeración-de-estado-de-cuenta) | El login distingue «cuenta deshabilitada» de «credenciales inválidas» | — (surgido en R2-01) | ~30 min |
+| [SB-29](#sb-29--dos-logins-o-refresh-del-mismo-usuario-en-el-mismo-segundo--500-por-token-idéntico) | Dos logins del mismo usuario en el mismo segundo → 500 por token idéntico | — (surgido en R2-02) | ~1 h |
+| [SB-30](#sb-30--el-cliente-descarta-el-refresh-token-rotado-cierre-de-sesión-forzoso-en-el-segundo-refresh) | El cliente descarta el refresh token rotado: logout forzoso en el 2º refresh | — (surgido en R2-02) | ~30 min |
+| [SB-31](#sb-31--esquemas-de-login-duplicados-y-ya-divergentes-dos-loginschema-y-dos-registerschema) | Esquemas de login duplicados y ya divergentes entre validators | — (surgido en R2-03a) | ~30 min |
+| [SB-33](#sb-33--next-16-declara-obsoleta-la-convención-middleware-la-fuente-única-de-cors-vive-en-una-api-en-retirada) | La convención `middleware` está deprecada en Next 16 y ahora es la fuente única de CORS | — (surgido en P08-D1) | ~1 h |
+| [SB-35](#sb-35--crítica-de-handlebars-en-la-cadena-de-dev-fuera-del-gate-bloqueante-de-ci) | Crítica de `handlebars` en la cadena de dev, fuera del gate bloqueante de CI | — (surgido en P07-F1) | ~30 min |
+| [SB-36](#sb-36--el-ci-recién-creado-es-mínimo-sin-build-sin-tests-y-sin-vigilar-sus-propias-actions) | El CI recién creado es mínimo: sin build, sin tests y sin vigilar sus propias actions | — (surgido en P07-F1) | ~2 h |
+| [SB-37](#sb-37--los-backups-administrados-mueren-con-el-cluster-sin-copia-lógica-externa-f6-01-puede-repetirse) | Los backups administrados mueren con el cluster: sin copia lógica externa, F6-01 puede repetirse | — (surgido en P07-F2, I6) | ~1 h |
 
 **Cerradas:** [SB-01](#sb-01--cerrada--prueba-de-identidad-en-el-registro-público-por-rut),
 [SB-05](#sb-05--cerrada--implementar-o-retirar-next_public_modify_contact_email),
-[SB-08](#sb-08--cerrada--validar-los-bytes-del-fichero-subido-promovida-al-bloque-b).
+[SB-08](#sb-08--cerrada--validar-los-bytes-del-fichero-subido-promovida-al-bloque-b),
+[SB-13](#sb-13--cerrada--postcss-sin-parchear-y-la-trampa-de-npm-audit-fix---force),
+[SB-16](#sb-16--cerrada--sustituir-legacy-peer-deps-por-un-overrides-acotado),
+[SB-26](#sb-26--cerrada--no-hay-migraciones-el-único-camino-de-esquema-borra-los-datos),
+[SB-32](#sb-32--cerrada--npm-run-dbsync-ejecuta-sequelizesync-force-true).
 
 ---
 
 ## Entradas con ventana fija
 
-La mayoría de este fichero es deuda diferible: se resuelve cuando haya hueco. **Dos entradas no
-lo son**, y se separan aquí para que no se pierdan en la lista general.
+**Sin entradas activas con ventana fija a 2026-08-06.** Las dos que había —**SB-13** y
+**SB-16**, que debían resolverse ANTES de que la reconstrucción configurara CI y Dependabot— se
+cumplieron dentro de su ventana: el plan 07, fase 1, las resolvió (commits `e73325f` y
+`f20c5a5`) **antes** de crear `.github/workflows/ci.yml` y `.github/dependabot.yml` en esa misma
+fase. Ver sus cierres en [Entradas cerradas](#entradas-cerradas).
 
-| ID | Debe estar resuelta antes de… |
-|---|---|
-| **SB-16** | que la reconstrucción configure **CI y Dependabot** |
-| **SB-13** | lo mismo — se prueba junto con SB-16, comparten mecanismo (`overrides`) |
-
-**Por qué esa frontera y no otra.** `AUDIT-FINDINGS.md` §7.4 sitúa Dependabot y `npm audit` en CI
-como **la medida de mayor impacto de todo el informe**: es lo que habría avisado del salto
-16.0.6 → 16.0.7 y habría cerrado la ventana de siete meses que acabó en el compromiso.
-
-Con `legacy-peer-deps=true` activo de forma global, esos controles **se estrenan ciegos a los
-conflictos de peer dependencies** — exactamente el tipo de problema que acaba de aparecer en A7 y
-que estuvo oculto precisamente porque nadie lo había registrado. Montar la contramedida principal
-de la auditoría con ese punto ciego incorporado desde el primer día es repetir el patrón que el
-informe entero existe para romper.
-
-De ahí que el momento sea **al terminar los cambios de la auditoría y antes de tocar CI**, no
-«cuando se pueda».
+La sección se conserva porque el mecanismo sigue vigente: si una entrada futura deja de ser
+diferible, se separa aquí para que no se pierda en la lista general, con la frontera concreta
+antes de la cual debe estar resuelta.
 
 ---
 
@@ -325,80 +321,6 @@ para eso y no los da por supuestos.
 
 ---
 
-## SB-13 — `postcss` sin parchear, y la trampa de `npm audit fix --force`
-
-- **Referencia**: surgido al verificar **A7** el **2026-07-27**. Guarda relación con **F1-07**
-  (dependencias vulnerables), pero es un elemento nuevo: no existía en el informe.
-- **Ficheros**: `package.json` (`postcss@^8.5.6` en devDependencies), `package-lock.json`.
-- **Bloquea el redespliegue**: **No.** Es la superficie que queda **después** de A7, no un
-  agujero abierto por ella.
-
-- **Estado verificado tras subir a Next 16.2.12**:
-
-  | Copia | Versión instalada |
-  |---|---|
-  | `node_modules/postcss` (top-level) | **8.5.6** |
-  | `node_modules/next/node_modules/postcss` (fijada por Next) | **8.4.31** |
-
-  Tras A7, `npm audit --omit=dev` ya **no** marca `next` por advisories propios: lo marca
-  `via: postcss, sharp`. Es decir, **la superficie que queda de `next` es prestada**.
-
-- **Advisories que cubren ambas copias**: `GHSA-r28c-9q8g-f849` (alta, parcheado en 8.5.18),
-  `CVE-2026-45623` (alta, parcheado en 8.5.12) y `CVE-2026-41305` (media, parcheado en 8.5.10).
-  **Ninguna versión publicada de Next.js cierra la copia anidada**, porque Next la fija con
-  versión exacta. Ni siquiera la rama 16.3 en preview: lleva 8.5.10, todavía por debajo de 8.5.18.
-
-- **Lo que sí se puede hacer hoy**: la copia **top-level** está en 8.5.6 pese a que
-  `package.json` declara `^8.5.6`, rango que ya admitiría 8.5.18. Un `npm update postcss` sanea
-  esa mitad sin tocar nada más. La copia anidada bajo `next` **no tiene solución** hasta que
-  Vercel suba su pin; toca vigilar releases.
-
-- **La trampa, y es la razón principal de escribir esta entrada**: la salida de `npm audit`
-  sugiere `npm audit fix --force`. **No se debe ejecutar en este repositorio.** Para satisfacer
-  el límite inferior del rango de metavulnerabilidad de `postcss`, el resolutor puede **degradar
-  `next` hasta una versión de la rama 9**, lo que **reintroduciría CVE-2025-55182 y los ~35
-  advisories que A7 acaba de cerrar**. Un comando que el propio `npm` recomienda desharía, en
-  segundos, la corrección más importante de todo el Bloque A.
-
-  > El número exacto de versión a la que degradaría procede de una fuente que no pudo
-  > verificarse de forma independiente, así que se registra como **plausible, no confirmado**.
-  > La precaución no depende de esa cifra: la dirección del cambio —degradar `next`— sí está
-  > establecida, y la prohibición cuesta cero.
-
-- **La vía que no se había evaluado: `overrides`.** La afirmación de arriba —«la copia anidada no
-  tiene solución hasta que Vercel suba su pin»— es cierta *si uno se limita a actualizar*. No lo
-  es si se fuerza la resolución desde `package.json`:
-
-  ```json
-  "overrides": { "postcss": "^8.5.18" }
-  ```
-
-  Esto alcanza **también la copia anidada bajo `next`**, que es justamente la que hoy queda
-  abierta por diseño. Si funciona, **cierra los tres advisories** en lugar de la mitad.
-
-  **Riesgo acotado, pero no nulo.** El salto 8.4.31 → 8.5.18 es menor dentro de la misma major y
-  `postcss` es estable en semver, así que lo esperable es que no rompa nada. Pero **Next empaqueta
-  `postcss`** y lo fija con versión exacta por alguna razón: hay que **verificar que el build sigue
-  pasando**, no darlo por hecho.
-
-  **Los dos desenlaces son buenos.** Si funciona, se cierran tres advisories. Si rompe el build, la
-  entrada vuelve al backlog **con la prueba concreta de por qué no era viable** — que es mejor
-  registro que el actual, donde la vía ni siquiera figuraba como evaluada.
-
-- **Acción**, por orden:
-  1. Probar `overrides` de `postcss` **junto con el de SB-16** — comparten mecanismo, así que se
-     prueban y se verifica el build **una sola vez**.
-  2. Si `overrides` no prospera: `npm update postcss` sanea al menos la copia top-level, y la
-     anidada queda a la espera del pin de Next.
-  3. En cualquier caso, dejar constancia en el runbook de reconstrucción de que
-     `npm audit fix --force` está **prohibido** en este proyecto. Si se añade `npm audit` a CI
-     (§7.4), configurarlo en modo informe, **nunca** con corrección automática.
-
-- **Plazo**: ⏱ **ventana fija.** Antes de configurar CI y Dependabot. Ver
-  [Entradas con ventana fija](#entradas-con-ventana-fija) y **SB-16**.
-
----
-
 ## SB-14 — `params` tratado como objeto síncrono en `awards/page.tsx`
 
 - **Referencia**: detectado al verificar **A7** el **2026-07-27**. **No lo causa A7** — ya estaba
@@ -448,62 +370,6 @@ para eso y no los da por supuestos.
 
 - **Acción**: migrar a ESLint directo (`eslint .`) siguiendo la guía de Next, o retirar el
   script si no se va a usar. Decidirlo antes de montar CI, no después.
-
----
-
-## SB-16 — Sustituir `legacy-peer-deps` por un `overrides` acotado
-
-- **Referencia**: surgido en **A7** el **2026-07-27**, al versionar `.npmrc`. Es el seguimiento
-  directo de esa decisión: **SB-12** trata la causa (`react-table`), esta trata el **instrumento**
-  con el que se ha tapado mientras tanto.
-- **Ficheros**: `.npmrc` (a eliminar), `package.json` (a añadir el bloque `overrides`).
-- **Bloquea el redespliegue**: **No.**
-- **Plazo**: ⏱ **ventana fija** — ver abajo. **No es deuda de plazo indefinido.**
-
-- **El problema con la solución actual.** `legacy-peer-deps=true` **desactiva la comprobación de
-  peer dependencies para todo el árbol y de forma permanente**. El conflicto real es **uno solo**:
-  `react-table@7.8.0` con tope en React 18 frente a React 19.2.0. Se ha respondido a un conflicto
-  concreto con un interruptor general. A partir de ahora, **cualquier incompatibilidad futura de
-  cualquier paquete entra en silencio** — sin error, sin aviso, sin rastro.
-
-- **Por qué `overrides` es mejor**:
-
-  ```json
-  "overrides": {
-    "react-table": {
-      "react": "$react"
-    }
-  }
-  ```
-
-  1. Waivea **únicamente** la restricción de `react-table`.
-  2. Deja la resolución de peers **activa para el resto del árbol**.
-  3. Queda **visible en `package.json`**, no escondida tras un flag global en un fichero que
-     casi nadie abre.
-
-  La sintaxis `"$react"` remite a la versión de `react` que ya declara el proyecto, de modo que no
-  hay un número que se quede obsoleto cuando React suba.
-
-- **Reserva honesta, y hay que decirla antes de intentarlo**: el comportamiento de `overrides`
-  frente a **peer** dependencies tiene matices según la versión de npm — `overrides` gobierna con
-  claridad las dependencias resueltas, y su efecto sobre la *comprobación* de peers no es
-  uniforme entre versiones. **Hay que probarlo.** Si no resuelve el conflicto, `legacy-peer-deps`
-  es el **plan B legítimo** y esta entrada se cierra **documentando por qué**, no en silencio.
-
-- **Lo que ninguna de las dos opciones hace.** Ni `overrides` ni `legacy-peer-deps` **validan que
-  `react-table` funcione realmente con React 19**. Ambas se limitan a silenciar la objeción del
-  resolutor. Lo único que cierra esa pregunta es **SB-12**: retirar `react-table` y sustituirlo.
-  Conviene tenerlo presente para no confundir «el install ya no falla» con «esto es compatible».
-
-- **CUÁNDO — condición dura, no preferencia.** Debe resolverse **al terminar los cambios de la
-  auditoría y, en cualquier caso, ANTES de que la reconstrucción configure CI y Dependabot**. El
-  razonamiento completo está en [Entradas con ventana fija](#entradas-con-ventana-fija); en corto:
-  la recomendación central de §7.4 son precisamente Dependabot y `npm audit` en CI, ambos ejecutan
-  instalaciones, y con `legacy-peer-deps` activo **dejan de ver los conflictos de peers**.
-  Estrenarlos así es estrenarlos ciegos al tipo exacto de problema que acabamos de encontrar.
-
-- **Se prueba junto con SB-13**: comparten mecanismo (`overrides`), así que se aplican y se
-  verifica el build **una sola vez**.
 
 ---
 
@@ -569,6 +435,90 @@ aplica en el mismo cambio que cierra F4-01, **no es deuda diferida**: forma part
 **Requisito que viaja con ella:** la variable debe quedar documentada en `.example.env`, que hoy
 la declara vacía, junto con las otras dos que faltan (`ALLOWED_ORIGIN` y `DB_SSL`) — elemento
 **A10**.
+
+### SB-26 — CERRADA — No hay migraciones: el único camino de esquema borra los datos
+
+**Motivo del cierre: resuelta y verificada en el plan 08, fase 3 (2026-08-06).**
+
+Decía: `npm run db:sync` ejecutaba `sequelize.sync({ force: true })` (borra y recrea las 16
+tablas), la variante `alter` vivía en un huérfano sin script npm, y sin migraciones no había
+forma de evolucionar el esquema sin recrearlo.
+
+**Lo hecho**: (1) `db:sync` pasa a `alter: true` por defecto y el DROP exige `FORCE_SYNC=yes`
+(ver SB-32); (2) **migraciones con umzug 3** — `npm run db:migrate` / `db:migrate:status`,
+runner en `scripts/migrate.ts`, registro en `sequelize_meta`, línea base idempotente y no
+destructiva en `migrations/0001-baseline.ts` (los 16 modelos + `rate_limits`). Verificado: sobre
+base poblada no toca datos (4 usuarios antes y después); sobre base vacía (`DROP SCHEMA CASCADE`)
+crea las 18 tablas y los seeds corren encima; reejecutar es no-op; `down` de la baseline se niega.
+
+**Trade-off registrado (P08-D4.1 en DECISIONES.md)**: la baseline usa `sync()` create-only sobre
+los modelos actuales, no DDL congelado a mano. Todo cambio de esquema posterior va en migración
+nueva con DDL explícito — modificar los modelos sin su migración es reabrir esta entrada.
+
+**Nota comprobada, para que nadie la reabra**: `force: true` **no** borra la tabla `rate_limits`
+del limitador — `sync` solo opera sobre los 16 modelos registrados en `src/models/index.ts`, y
+esa tabla no es un modelo (por eso el DDL vive aparte en `db:sync` y en la baseline).
+
+### SB-32 — CERRADA — `npm run db:sync` ejecuta `sequelize.sync({ force: true })`
+
+**Motivo del cierre: resuelta y verificada en el plan 08, fase 3 (2026-08-06), junto a SB-26.**
+
+Decía: el camino documentado de arranque (`db:sync`) hacía `DROP TABLE` de todo sin preguntar, y
+había dos `sync-db.ts` divergentes (`force` en `src/scripts/`, `alter` huérfano en `scripts/`).
+
+**Lo hecho, exactamente lo que la entrada proponía**: el huérfano `scripts/sync-db.ts` está
+**borrado**; `src/scripts/sync-db.ts` (el de npm) hace `alter` por defecto y `force` solo con
+`FORCE_SYNC=yes` exacto — cualquier otro valor, o `--force` sin la variable, **aborta con exit 1
+sin tocar nada** (degradar en silencio a `alter` sería otro fallo silencioso). Verificado en los
+dos sentidos contra la base con datos: `db:sync` → datos intactos; `FORCE_SYNC=1` y `--force` →
+exit 1 y datos intactos; `FORCE_SYNC=yes` → aviso «PÉRDIDA TOTAL» y recreación. La parte de
+runbook («el aprovisionamiento de producción usa `db:migrate`, nunca `db:sync`») queda escrita en
+el propio script y es insumo de la fase 1-2 del plan 07.
+
+### SB-16 — CERRADA — Sustituir `legacy-peer-deps` por un `overrides` acotado
+
+**Motivo del cierre: resuelta y verificada en el plan 07, fase 1 (2026-08-06), commit `e73325f`
+— DENTRO de su ventana fija: antes de crear CI y Dependabot (que llegaron en la misma fase,
+commits posteriores).**
+
+Decía: `legacy-peer-deps=true` en `.npmrc` desactivaba la comprobación de peer dependencies para
+todo el árbol y para siempre, cuando el conflicto real era uno solo (`react-table@7.8.0` con tope
+en React 18 frente a React 19). La reserva honesta de la entrada («el efecto de `overrides` sobre
+la comprobación de peers no es uniforme entre versiones de npm — hay que probarlo») se resolvió
+probando: funcionó.
+
+**Lo hecho, exactamente lo que la entrada proponía**: `.npmrc` **eliminado** y, en
+`package.json`, `"overrides": { "react-table": { "react": "$react" } }`. La resolución de peers
+queda **activa para todo el árbol** y el waiver es visible, acotado a `react-table` y sin número
+de versión que caducar (`$react` remite a la versión que el proyecto declara). Verificado en la
+fase 1: `npm ci` en limpio → exit 0 sin `legacy-peer-deps`.
+
+**Lo que esta entrada ya advertía y sigue vigente**: ni `overrides` ni `legacy-peer-deps` validan
+que `react-table` FUNCIONE con React 19 — solo silencian la objeción del resolutor. Eso lo cierra
+**SB-12** (sustituir `react-table`), que sigue activa; al cerrarla, el waiver desaparece con ella.
+
+### SB-13 — CERRADA — `postcss` sin parchear, y la trampa de `npm audit fix --force`
+
+**Motivo del cierre: resuelta y verificada en el plan 07, fase 1 (2026-08-06), commit `f20c5a5`,
+junto a SB-16 (compartían mecanismo y se verificaron con un solo build) — dentro de la misma
+ventana fija.**
+
+Decía: los advisories de `postcss` (dos altas y una media, parcheadas en 8.5.x) cubrían las DOS
+copias del árbol — la top-level (8.5.6) y la que Next fija con versión exacta
+(`node_modules/next/node_modules/postcss@8.4.31`), que «no tenía solución hasta que Vercel
+subiera su pin»… salvo por la vía `overrides` que la propia entrada dejó evaluada.
+
+**Lo hecho, la vía `overrides` que la entrada proponía probar**: `"overrides": { "postcss":
+"$postcss" }` en `package.json` (con `postcss` declarado en devDependencies; **ojo**: si se toca
+ese devDependency, ambos specs deben casar o npm da `EOVERRIDE`). Resultado verificado en el
+árbol actual: **la copia anidada bajo `next` ya no existe** — npm dedupea todo a una única copia
+top-level en **8.5.26**, por encima de los tres parches. Los dos desenlaces que la entrada
+anticipaba se resolvieron por el bueno: el build pasó y los advisories quedaron cerrados.
+
+**Lo que sigue vigente de esta entrada**: la prohibición de `npm audit fix --force` (degradaría
+`next` y reintroduciría lo que A7 cerró). Quedó escrita donde la entrada pedía: en
+`.github/workflows/ci.yml`, que además ejecuta `npm audit` en modo gate sin corrección
+automática (P07-D7.7). SB-35 la reitera para quien toque la crítica de `handlebars`.
 
 ---
 
@@ -810,32 +760,22 @@ se reescribe la historia. Los hashes son bcrypt con coste 12, así que no son de
 pero los RUT y los correos son datos personales y ya están publicados. El esquema debe venir de
 migraciones, no de un volcado.
 
-**Decisión que corresponde a Emmanuel**: reescribir la historia de un repositorio público invalida
-los clones existentes y no borra lo que ya se haya copiado. Es defendible dejar la historia como
-está y limitarse a dejar de rastrearlo — pero es una decisión que hay que tomar a sabiendas.
+**Estado (2026-08-06, plan 08 fase 3 — P08-D12): parcialmente resuelta.** Hecho: el fichero ya
+**no está rastreado** (`git rm --cached`, conserva la copia de trabajo local), `.gitignore` ignora
+`*.sql` y `*.dump` con la excepción explícita como único camino de vuelta, y el esquema ya viene
+de migraciones (`npm run db:migrate`, ver SB-26). Un `git clone` nuevo **ya no recibe el volcado
+en el árbol de trabajo** — pero **sigue completo en la historia** (`git show` de cualquier commit
+anterior lo recupera). La entrada queda **abierta** solo por lo que no se decide sin Emmanuel:
 
----
+1. **Reescribir la historia** (`git filter-repo` o equivalente) para eliminarlo de todos los
+   commits: invalida los clones existentes y no borra lo ya copiado del repositorio público.
+2. **Rotar las contraseñas de los 6 usuarios del volcado**: sus hashes están publicados (bcrypt
+   coste 12, no urgente, pero afecta a personas).
 
-## SB-26 — No hay migraciones: el único camino de esquema borra los datos
-
-- **Referencia**: surgido en la **revisión de despliegue** del **2026-08-05**.
-- **Ficheros**: `package.json:13` → `src/scripts/sync-db.ts:15`, frente a `scripts/sync-db.ts:29`.
-- **Bloquea el redespliegue**: **no**, pero es una mina en el droplet nuevo.
-
-`npm run db:sync` ejecuta `sequelize.sync({ force: true })`: **borra y recrea las 16 tablas**.
-Existe una variante no destructiva con `{ alter: true }` en `scripts/sync-db.ts` que **no está
-enganchada a ningún script npm**. Es decir: la peligrosa tiene atajo y la segura no.
-
-En producción, un `npm run db:sync` tecleado por costumbre borra los datos reales. Y sin
-migraciones no hay forma de evolucionar el esquema sin recrearlo.
-
-**Corrección**: que `db:sync` apunte a la variante `alter` o exija una confirmación explícita
-(`--force` propio), e introducir migraciones (`umzug` o las de `sequelize-cli`) antes de la
-reconstrucción.
-
-**Nota comprobada, para que nadie la reabra**: `force: true` **no** borra la tabla `rate_limits` del
-limitador — `sync` solo opera sobre los 16 modelos registrados en `src/models/index.ts`, y esa
-tabla no es un modelo.
+**Nota de discrepancia con la auditoría**: `AUDIT-FINDINGS.md` §Fase 2 dio el fichero por «solo
+datos de prueba» por confirmación del usuario; la revisión de despliegue contó dentro 6 usuarios
+con hashes, 110 refresh tokens, 360 registros de auditoría y 3 empleados con RUT. Esta entrada
+—no aquella línea— es la que refleja el estado real.
 
 ---
 
@@ -870,3 +810,204 @@ sin contrapartida.
 
 **Comentario de método**: esto lo encontró la verificación de otra cosa. El fichero está
 intacto desde `37f6060` y ningún test lo cubre — es exactamente el hueco que SB-11 deja abierto.
+
+---
+
+## SB-28 — El login distingue «cuenta deshabilitada» de «credenciales inválidas»: enumeración de estado de cuenta
+
+- **Referencia**: encontrado durante la implementación de **R2-01** (plan 02, fase 1), 2026-08-06.
+- **Ficheros**: `src/services/authService.ts:15-29`, `src/app/api/auth/login/route.ts` (rama del 401).
+- **Bloquea el despliegue**: **no** — requiere conocer email Y contraseña, y el limitador lo frena.
+
+`authService.login` lanza `Invalid credentials` cuando el email no existe o la contraseña no
+coincide —el comentario del código dice explícitamente que es «para prevenir enumeración»— pero
+lanza **`User account is disabled`** cuando la cuenta existe, la contraseña ES correcta y está
+desactivada. El handler devuelve ambos mensajes tal cual en el cuerpo del 401.
+
+Quien posea una credencial robada puede distinguir «contraseña incorrecta» de «contraseña
+correcta pero cuenta desactivada», es decir, **confirmar que una credencial filtrada era válida**
+aunque la cuenta ya esté suspendida. Es información útil para reutilizarla en otros servicios
+(password reuse), que es justo el escenario post-compromiso de esta auditoría.
+
+**Corrección propuesta**: devolver el mismo mensaje genérico en ambos casos y conservar la
+distinción solo en el registro de auditoría (que ya existe: `auditLogService.log` con
+`reason: 'User account is disabled'`). Encaja en el plan 04 (fugas de detalle en errores).
+
+**Nota de alcance (W2)**: se detectó al decidir qué caminos de fallo consumen cuota en R2-01
+(ambos consumen, así que el limitador sí lo frena); cambiar el mensaje era tocar contrato de
+respuesta fuera del alcance de la fase.
+
+---
+
+## SB-29 — Dos logins (o refresh) del mismo usuario en el mismo segundo → 500 por token idéntico
+
+- **Referencia**: encontrado durante la verificación W3 de **R2-02** (plan 02, fase 2), 2026-08-06.
+- **Ficheros**: `src/lib/jwt.ts:16-20` (`generateTokens`), `src/services/authService.ts`
+  (`login` y `refreshAccessToken`, ambos hacen `RefreshToken.create`), modelo `RefreshToken`
+  (unique sobre `token`).
+- **Bloquea el despliegue**: **no** — requiere coincidencia al segundo del MISMO usuario, pero es
+  alcanzable con uso normal (dos pestañas, doble clic en «Entrar», dos puestos con cuenta
+  compartida).
+
+El payload del JWT solo contiene `id, role, email, username` más `iat`/`exp`, y `iat` tiene
+resolución de **1 segundo**: dos `jwt.sign` del mismo usuario dentro del mismo segundo producen
+**bytes idénticos**. El segundo `RefreshToken.create` choca con la unique
+`refresh_tokens_token_key` y el error sale como **500** en `/api/auth/login` (observado con dos
+logins consecutivos del usuario `acreditador` a <1 s) o como **401** en `/api/auth/refresh` (el
+`catch` genérico lo convierte en 401 con el mensaje de Sequelize en el cuerpo — que además filtra
+el token en el `detail` del error al log).
+
+**Corrección propuesta**: añadir un claim `jti` (UUID) al refresh token en `generateTokens`, que
+además es lo que la rotación necesita para ser robusta. Alternativa mínima: capturar la violación
+de unique y reutilizar la fila existente (mismo token = misma sesión lógica).
+
+---
+
+## SB-30 — El cliente descarta el refresh token rotado: cierre de sesión forzoso en el segundo refresh
+
+- **Referencia**: encontrado durante la verificación W3 de **R2-02** (plan 02, fase 2), 2026-08-06.
+- **Ficheros**: `src/store/authStore.ts:78-91` (`refreshAuthToken`, solo guarda `accessToken`),
+  frente a `src/services/authService.ts:107-125` (rota: revoca el usado y devuelve
+  `refreshToken` nuevo).
+- **Bloquea el despliegue**: **no**, pero es una regresión funcional visible: con `JWT_EXPIRES_IN`
+  corto, el usuario acaba expulsado en el **segundo** ciclo de refresh.
+
+El servidor rota el refresh token (revoca el usado, devuelve uno nuevo en `data.refreshToken`),
+pero `refreshAuthToken` solo hace `set({ accessToken })`: el cliente conserva el token **ya
+revocado**. El primer refresh funciona; el segundo devuelve 401 (`Invalid or revoked refresh
+token`) y el `catch` ejecuta `logout()`. Verificado en W3 de R2-02: reutilizar el token tras un
+refresh → 401; adoptando el rotado → 200 siempre.
+
+Hoy se disimula porque el valor por defecto de `JWT_EXPIRES_IN` son **7 días** (`jwt.ts:5`) y
+nadie aguanta la pestaña abierta tanto tiempo — pero **SB-07 propone acortar la vida del access
+token apoyándose en «la rotación de refresh que ya funciona correctamente»**: funciona en el
+servidor, no en el cliente. Acortar el token sin arreglar esto convierte cada expiración par en
+un logout.
+
+**Corrección propuesta**: `set({ accessToken, refreshToken: response.data.refreshToken })` en
+`refreshAuthToken` (el dato ya viaja en la respuesta). Un cambio de una línea, pero toca el flujo
+de sesión: probar el ciclo doble de refresh al hacerlo.
+
+---
+
+## SB-31 — Esquemas de login duplicados y ya divergentes: dos `loginSchema` y dos `registerSchema`
+
+- **Referencia**: encontrado durante la implementación de **R2-03a** (plan 02, fase 3), 2026-08-06.
+- **Ficheros**: `src/utils/validators/authSchemas.ts` (lo usan el servidor: `login/route.ts`,
+  `authService`, `authStore`) y `src/utils/validators/userSchemas.ts` (lo usa el formulario:
+  `LoginForm.tsx`).
+- **Bloquea el despliegue**: no.
+
+Hay dos `loginSchema` y dos `registerSchema` con el mismo nombre en ficheros distintos, y ya han
+divergido: el `registerSchema` de `authSchemas` exige 8 caracteres y 4 clases; el de `userSchemas`
+solo 8 caracteres. R2-03a tuvo que añadir el `.max(254)` del email **en los dos** `loginSchema`
+para que el formulario y el servidor contaran lo mismo — ese parcheo por duplicado es exactamente
+el modo de fallo que la duplicación garantiza a futuro: quien toque uno no sabrá que existe el
+otro. **Corrección propuesta**: un único módulo de esquemas de auth importado por ambas capas
+(~30 min; revisar también la relación con D2.6, la política de contraseñas partida).
+
+---
+
+## SB-33 — Next 16 declara obsoleta la convención `middleware`: la fuente única de CORS vive en una API en retirada
+
+- **Referencia**: encontrado durante la implementación de **P08-D1** (plan 08, fase 1), 2026-08-06.
+- **Ficheros**: `src/middleware.ts` (convención `middleware`, matcher `/api/:path*`) y
+  `src/middleware/security.ts`.
+- **Bloquea el despliegue**: no.
+
+Cada `next build` avisa: *«The "middleware" file convention is deprecated. Please use "proxy"
+instead»*. Tras P08-D1/D8.2, ese fichero es la **fuente única** de CORS (y de las cabeceras de
+seguridad de `/api`): el día que una versión de Next retire la convención, el build seguirá
+compilando la aplicación pero **sin CORS ni límites de tasa**, que es exactamente la degradación
+silenciosa que esta remediación combate. **Corrección propuesta**: migrar a la convención `proxy`
+siguiendo la guía oficial y re-ejecutar la batería W3 de CORS y rate-limit (~1 h). Conviene
+hacerlo antes de la siguiente subida de versión de Next.
+
+---
+
+## SB-34 — El build avisa «Encountered unexpected file in NFT list» por la ruta de subidas
+
+- **Referencia**: visto de camino en **P08-D6** (plan 08, fase 2), 2026-08-06.
+- **Ficheros**: `src/app/api/uploads/route.ts` (traza del aviso) y
+  `src/utils/uploadsStorage.ts`; lo emite `next build` (Turbopack).
+- **Bloquea el despliegue**: no.
+
+Cada `next build` emite un warning NFT — *«A file was traced that indicates that the whole
+project was traced unintentionally»* — con traza a `api/uploads/route.ts`: el trazador de
+ficheros ve operaciones `path.join`/fs sobre rutas que solo se conocen en ejecución
+(`UPLOADS_DIR` sale del entorno; ese diseño es correcto y es D6). Se probó el remedio que
+sugiere el propio warning (`/*turbopackIgnore: true*/` en los `path.join` de
+`uploadsStorage.ts`) y **no lo silencia** — el disparador parece estar en las llamadas fs del
+propio handler. Sin efecto en el despliegue actual (no se usa `output: standalone`); si algún
+día se adopta standalone, ese trazado engordaría el artefacto. **Corrección propuesta**: acotar
+las operaciones fs de las rutas de uploads con `turbopackIgnore` (incluido el handler) o mover
+la resolución a un módulo de ruta estática, y comprobar que el warning desaparece (~30 min).
+
+---
+
+## SB-35 — Crítica de `handlebars` en la cadena de dev, fuera del gate bloqueante de CI
+
+- **Referencia**: visto de camino en **plan 07, fase 1** (montaje de `npm audit` en CI), 2026-08-06.
+- **Ficheros**: `package-lock.json` (`ts-jest@29.4.5` → `handlebars@4.7.8`);
+  `.github/workflows/ci.yml` (el gate que la excluye a propósito).
+- **Bloquea el despliegue**: no — es una cadena **solo de dev**, no llega al servidor.
+
+`npm audit` marca `handlebars` 4.0.0–4.7.8 con severidad **crítica** (inyección de JS vía
+confusión de tipos del AST, GHSA-3mfm-83xf-c92r entre otros). Entra únicamente por
+`ts-jest@29.4.5`. El gate bloqueante de CI corre con `--omit=dev` (decisión **P07-D7.7**), así
+que **esta crítica no rompe CI**: se ve solo en el paso informativo. Es la elección correcta
+para el umbral del runtime, pero deja una crítica de la cadena de build sin plazo. **Corrección
+propuesta**: `npm update handlebars` (npm audit dice que hay fix dentro del rango) o subir
+`ts-jest`, verificar `npx jest` (línea base 6/6/0) y, con el árbol completo limpio de críticas,
+valorar quitar `--omit=dev` del gate para que también la cadena de dev quede bajo umbral (~30 min).
+**Prohibido** cerrar esto con `npm audit fix --force` (ver SB-13).
+
+---
+
+## SB-36 — El CI recién creado es mínimo: sin build, sin tests y sin vigilar sus propias actions
+
+- **Referencia**: deuda declarada al crear `.github/workflows/ci.yml` y `.github/dependabot.yml`
+  en **plan 07, fase 1**, 2026-08-06.
+- **Ficheros**: `.github/workflows/ci.yml`, `.github/dependabot.yml`.
+- **Bloquea el despliegue**: no.
+
+El CI de la fase 1 cubre exactamente lo que el plan pedía (`npm ci` + `npm audit` bloqueante ante
+críticas), y nada más. Tres ampliaciones quedan pendientes, cada una con su prerequisito:
+
+1. **`npm run build` en CI.** Es la red que valida los PRs agrupados de Dependabot (el override
+   de `postcss` sobre la copia que Next fija es el ejemplo exacto de lo que un build debe
+   confirmar). Prerequisito: decidir qué variables de entorno necesita `next build` en un runner
+   limpio — hoy el build local lee el `.env` de desarrollo, que no existe ni debe existir en CI.
+2. **Tests en CI.** Sin sentido mientras la suite no arranque: depende de **SB-11** (línea base
+   6 suites fallidas / 0 tests).
+3. **Ecosistema `github-actions` en Dependabot.** El workflow usa `actions/checkout@v4` y
+   `actions/setup-node@v4` fijadas por tag mayor; añadir el ecosistema (4 líneas en
+   `dependabot.yml`) las mantiene actualizadas, y fijarlas por SHA endurecería la cadena de
+   suministro del propio CI. Se dejó fuera para no ensanchar la fase (W2).
+
+---
+
+## SB-37 — Los backups administrados mueren con el cluster: sin copia lógica externa, F6-01 puede repetirse
+
+- **Referencia**: visto de camino en **plan 07, fase 2** (investigación de la base administrada,
+  pregunta I6), 2026-08-06. Resultado completo:
+  `planes/resultados/07-fase2-base-administrada-digitalocean-2026-08-06.md`.
+- **Ficheros**: ninguno todavía — es infraestructura/runbook (candidato: `infra/` del plan 07,
+  fase 3).
+- **Bloquea el despliegue**: no. Condiciona el runbook de la fase 3 del plan 07.
+
+La documentación oficial de DigitalOcean es explícita: **«Destroying a database cluster destroys
+the backups of that database»** ([How to Restore PostgreSQL Clusters from
+Backups](https://docs.digitalocean.com/products/databases/postgresql/how-to/restore-from-backups/)).
+Los backups administrados (diarios, retención 7 días, point-in-time recovery) protegen contra
+pérdida y corrupción de datos, **no contra el borrado del cluster** — accidental o malicioso, por
+cualquiera con acceso a la cuenta de DigitalOcean. Ese es el análogo exacto del modo de fallo
+F6-01 (el droplet anterior se destruyó **sin snapshot** y no quedó nada que restaurar), y D0
+existe precisamente para que los datos sobrevivan a la máquina: deben sobrevivir también al
+cluster.
+
+**Corrección propuesta** (decidir en la fase 3 del plan 07, no aquí): dump lógico periódico
+(`pg_dump`) desde el droplet a un almacenamiento independiente del cluster (Spaces u otro), con
+retención propia y una restauración de prueba en el calendario del runbook — la misma regla de
+D7.6: un backup que nunca se ha restaurado no es un backup. Coste estimado ~1 h de script + cron
+una vez exista el droplet.

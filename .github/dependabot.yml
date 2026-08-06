@@ -1,0 +1,27 @@
+# Vigilancia de dependencias (plan 07, fase 1 — AUDIT-FINDINGS.md §7.4).
+#
+# Es la medida que habria avisado del salto de Next 16.0.6 -> 16.0.7 y
+# habria cerrado la ventana de siete meses que acabo en el compromiso
+# de julio de 2026. Requisito previo cumplido: SB-16 y SB-13 estan
+# resueltas (ya no hay legacy-peer-deps global; la resolucion de peers
+# esta activa, asi que los PRs de Dependabot fallan ruidosamente ante
+# un conflicto de peers en vez de taparlo).
+#
+# Agrupacion (P07-D7.8): parches y menores de version-updates van en UN
+# solo PR semanal para que el ruido sea manejable; las MAYORES y los
+# avisos de SEGURIDAD llegan cada uno en su propio PR, porque son los
+# que exigen mirada humana individual.
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 10
+    groups:
+      parches-y-menores:
+        applies-to: version-updates
+        update-types:
+          - "patch"
+          - "minor"
