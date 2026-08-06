@@ -22,7 +22,10 @@
 # esos cuatro recursos se pisan y producen fallos que PARECEN bugs del codigo. De noche el
 # tiempo de reloj no es el recurso escaso. Ver planes/PARALELO.md si aun asi hace falta.
 
-[CmdletBinding()]
+# PositionalBinding=$false a proposito: sin el, `-Planes a,b` enlaza el segundo elemento al
+# siguiente parametro posicional ($Contenedor) y el script intenta arrancar un contenedor que se
+# llama como un plan. Obligar a nombrar todos los parametros lo hace imposible.
+[CmdletBinding(PositionalBinding = $false)]
 param(
     # Que conjunto se ejecuta:
     #   bloqueantes -> 01, 02, 08. Los tres que impiden desplegar. Es el defecto.
