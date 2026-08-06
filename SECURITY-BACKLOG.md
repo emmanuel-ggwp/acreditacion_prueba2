@@ -55,6 +55,8 @@ módulos que hoy sí existen). Mezclar deuda de seguridad con esa lista escondí
 | [SB-28](#sb-28--el-login-distingue-cuenta-deshabilitada-de-credenciales-inválidas-enumeración-de-estado-de-cuenta) | El login distingue «cuenta deshabilitada» de «credenciales inválidas» | — (surgido en R2-01) | ~30 min |
 | [SB-29](#sb-29--dos-logins-o-refresh-del-mismo-usuario-en-el-mismo-segundo--500-por-token-idéntico) | Dos logins del mismo usuario en el mismo segundo → 500 por token idéntico | — (surgido en R2-02) | ~1 h |
 | [SB-30](#sb-30--el-cliente-descarta-el-refresh-token-rotado-cierre-de-sesión-forzoso-en-el-segundo-refresh) | El cliente descarta el refresh token rotado: logout forzoso en el 2º refresh | — (surgido en R2-02) | ~30 min |
+| [SB-31](#sb-31--esquemas-de-login-duplicados-y-ya-divergentes-dos-loginschema-y-dos-registerschema) | Esquemas de login duplicados y ya divergentes entre validators | — (surgido en R2-03a) | ~30 min |
+| [SB-32](#sb-32--npm-run-dbsync-ejecuta-sequelizesync-force-true--borra-todos-los-datos-y-hay-dos-sync-dbts-divergentes) | ⚠ `db:sync` hace `force: true` (borra todo) y hay dos `sync-db.ts` divergentes | — (surgido en R2-03b) | ~1 h |
 
 > ⏱ **SB-13 y SB-16 tienen ventana fija, no plazo abierto.** Deben resolverse **al terminar los
 > cambios de la auditoría y, en cualquier caso, ANTES de que la reconstrucción configure CI y
@@ -952,3 +954,41 @@ un logout.
 **Corrección propuesta**: `set({ accessToken, refreshToken: response.data.refreshToken })` en
 `refreshAuthToken` (el dato ya viaja en la respuesta). Un cambio de una línea, pero toca el flujo
 de sesión: probar el ciclo doble de refresh al hacerlo.
+
+---
+
+## SB-31 — Esquemas de login duplicados y ya divergentes: dos `loginSchema` y dos `registerSchema`
+
+- **Referencia**: encontrado durante la implementación de **R2-03a** (plan 02, fase 3), 2026-08-06.
+- **Ficheros**: `src/utils/validators/authSchemas.ts` (lo usan el servidor: `login/route.ts`,
+  `authService`, `authStore`) y `src/utils/validators/userSchemas.ts` (lo usa el formulario:
+  `LoginForm.tsx`).
+- **Bloquea el despliegue**: no.
+
+Hay dos `loginSchema` y dos `registerSchema` con el mismo nombre en ficheros distintos, y ya han
+divergido: el `registerSchema` de `authSchemas` exige 8 caracteres y 4 clases; el de `userSchemas`
+solo 8 caracteres. R2-03a tuvo que añadir el `.max(254)` del email **en los dos** `loginSchema`
+para que el formulario y el servidor contaran lo mismo — ese parcheo por duplicado es exactamente
+el modo de fallo que la duplicación garantiza a futuro: quien toque uno no sabrá que existe el
+otro. **Corrección propuesta**: un único módulo de esquemas de auth importado por ambas capas
+(~30 min; revisar también la relación con D2.6, la política de contraseñas partida).
+
+---
+
+## SB-32 — `npm run db:sync` ejecuta `sequelize.sync({ force: true })`: borra TODOS los datos, y hay dos `sync-db.ts` divergentes
+
+- **Referencia**: encontrado durante la implementación de **R2-03b** (plan 02, fase 3), 2026-08-06.
+- **Ficheros**: `src/scripts/sync-db.ts:15` (el que ejecuta `npm run db:sync`, con `force: true`)
+  y `scripts/sync-db.ts` (huérfano: ningún script npm lo referencia, usa `alter: true`).
+- **Bloquea el despliegue**: **sí como esté en el runbook de producción** — relacionado con SB-26
+  (no hay migraciones), pero es un peligro distinto: SB-26 es la ausencia de camino seguro; esto
+  es que el camino documentado (`db:sync` aparece en las instrucciones de arranque del entorno)
+  **destruye datos sin preguntar**.
+
+`sequelize.sync({ force: true })` hace `DROP TABLE` de todos los modelos antes de recrearlos. En
+desarrollo es cómodo; ejecutado por costumbre contra la base administrada de DigitalOcean con
+datos reales, es la pérdida total sin confirmación ni backup. Además hay dos `sync-db.ts` con
+comportamientos opuestos (`force` vs `alter`), y cuál corre depende de si se invoca por npm o por
+ruta — R2-03b tuvo que averiguarlo para saber dónde crear `rate_limits`. **Corrección propuesta**:
+borrar el huérfano, exigir confirmación explícita (variable `FORCE_SYNC=yes`) para `force: true`,
+y que el aprovisionamiento de producción use el camino del plan 08/D8.4, nunca `db:sync` (~1 h).
