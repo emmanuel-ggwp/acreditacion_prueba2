@@ -154,6 +154,17 @@ if (!plan || !plan.fases || plan.fases.length === 0) {
   return { error: `No se pudieron extraer fases de ${planPath}` }
 }
 
+// args.hastaFase: ultima fase a ejecutar (inclusive). Para los planes que no corren
+// enteros desatendidos — el 07 para tras la fase 3 porque la 4 exige un droplet real.
+const hastaFase = argsObj && argsObj.hastaFase
+const fasesOmitidas = hastaFase ? plan.fases.filter((f) => f.numero > hastaFase) : []
+if (hastaFase) {
+  plan.fases = plan.fases.filter((f) => f.numero <= hastaFase)
+  if (fasesOmitidas.length) {
+    log(`Limite hastaFase=${hastaFase}: se omiten ${fasesOmitidas.map((f) => f.numero).join(', ')}`)
+  }
+}
+
 log(`${plan.fases.length} fases`)
 
 const resultados = []
@@ -277,6 +288,8 @@ phase('Cerrar')
 const cierre = await agent(
   `Cierras la ejecucion nocturna del plan ${planPath}. Dos entregables, y el segundo es el que
    Emmanuel pidio expresamente.
+
+   ${fasesOmitidas.length ? `FASES NO EJECUTADAS a proposito (limite hastaFase=${hastaFase}; el informe debe decirlo y explicar que quedan pendientes): ${fasesOmitidas.map((f) => `${f.numero} (${f.titulo})`).join('; ')}` : ''}
 
    Resultado por fases:
    ${JSON.stringify(resultados.map((r) => ({
