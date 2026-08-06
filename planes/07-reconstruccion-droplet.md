@@ -143,15 +143,27 @@ Lista de comprobación ejecutable contra el servidor ya en pie:
 
 ---
 
-## Preguntas abiertas que el plan NO decide
+## Decisiones de producto — se toman, no se preguntan
 
-1. **¿Proveedor y tamaño del droplet?** Y si va detrás de CDN o WAF: cambia por completo la lectura
-   de `X-Forwarded-For` y, con ella, la corrección de A6.
-2. **¿PostgreSQL local o administrado?** Local es lo decidido y lo que hace correcta A8. Si se
-   externaliza, `DB_SSL=true` y hay que instalar la CA — y SB-09 deja de ser deuda.
-3. **¿Dominio y DNS dónde?** El síntoma del ataque fue una redirección de dominio y **nunca se supo
-   si salió de Nginx, del DNS o del proceso comprometido**. El acceso al panel de DNS merece 2FA y
-   revisión de contactos de recuperación.
-4. **¿Se restaura algún dato del sistema anterior?** La decisión registrada es que **no**: datos
-   nuevos, secretos nuevos. Si alguien quiere recuperar el padrón histórico, hay que decidir cómo se
-   valida que ese volcado no viene manipulado — venía de una máquina comprometida.
+Se registran en [DECISIONES.md](DECISIONES.md) y el crítico las evalúa.
+
+| # | Decisión | Valor por defecto | Razonamiento |
+|---|---|---|---|
+| D7.1 | Gestor de procesos | **systemd, un solo proceso** | PM2 en cluster multiplica por N los contadores en memoria del limitador, no lee `EnvironmentFile`, convierte el `process.exit(1)` de la validación en tormenta de reinicios y no soporta `next start` como script de cluster |
+| D7.2 | ¿CDN o WAF delante? | **No al principio** | Un segundo proxy cambia por completo la lectura de `X-Forwarded-For` y con ella la corrección de A6. Añadirlo después es fácil **si se recuerda revisar el limitador**; el plan lo deja escrito |
+| D7.3 | PostgreSQL | **Local, solo en `127.0.0.1`** | Es lo ya decidido y lo que hace correcta A8. Externalizarlo obliga a `DB_SSL=true` y a instalar la CA |
+| D7.4 | `output: 'standalone'` | **Decidir con la unidad systemd escrita delante** | Cambia el layout del árbol desplegado, así que decidirlo antes de tener la unidad es decidir a ciegas |
+| D7.5 | Node | **La LTS activa que cumpla `>=20.9.0`** de Next 16.2.12 | Fijada en `engines` y `.nvmrc`, iguales entre sí |
+| D7.6 | Copias de seguridad | **Diarias con restauración probada** antes de dar el droplet por terminado | Un backup que nunca se ha restaurado no es un backup. Es barato ahora y caro después |
+
+**No se decide solo — se propone y se espera:**
+
+1. **Restaurar datos del sistema anterior.** La decisión registrada es que **no**: datos nuevos,
+   secretos nuevos. Si alguien quiere recuperar el padrón histórico, hay que decidir cómo se valida
+   que ese volcado no viene manipulado — **venía de una máquina comprometida**, y esa validación no
+   es un detalle técnico.
+2. **Proveedor, dominio y acceso al panel de DNS.** El síntoma del ataque fue una redirección de
+   dominio y **nunca se supo si salió de Nginx, del DNS o del proceso comprometido**. El panel de
+   DNS merece 2FA y revisión de contactos de recuperación, y eso son credenciales de Emmanuel.
+3. **La ejecución real del script contra el droplet.** El script se escribe y se valida en seco de
+   noche; ejecutarlo contra el servidor es una fase supervisada.

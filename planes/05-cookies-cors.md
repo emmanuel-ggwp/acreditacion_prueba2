@@ -56,11 +56,17 @@ la aplicación funciona entera; una petición desde otro origen con credenciales
 
 ---
 
-## Preguntas abiertas
+## Decisiones de producto — se toman, no se preguntan
 
-1. ¿`SameSite=Strict` o `Lax`? Strict es más seguro y puede romper la vuelta desde un enlace
-   externo — hay que mirar si algún flujo (correo de confirmación, landing) depende de ello.
-2. Con cookies, ¿sigue teniendo sentido el refresco automático por temporizador de
-   `authStore.ts:132`? Puede simplificarse, y eso interactúa con SB-17 y con el límite del plan 02.
-3. ¿Hace falta protección CSRF explícita o basta `SameSite`? Depende de si algún endpoint acepta
-   navegación de terceros.
+Se registran en [DECISIONES.md](DECISIONES.md) y el crítico las evalúa.
+
+| # | Decisión | Valor por defecto | Razonamiento |
+|---|---|---|---|
+| D5.1 | `SameSite` de las cookies | **`Lax`** | `Strict` rompe la vuelta desde un enlace externo, y el producto **manda correos de confirmación** con enlaces a la landing. `Lax` cubre el CSRF que importa sin romper ese flujo |
+| D5.2 | ¿Protección CSRF explícita además de `SameSite`? | **No al principio**, pero **comprobarlo**, no suponerlo | Con `Lax`, una petición POST desde otro origen no lleva la cookie. Si al revisar aparece algún endpoint que acepte navegación de terceros, se añade token — y se registra la comprobación, no la suposición |
+| D5.3 | Refresco automático por temporizador | **Simplificarlo**, no eliminarlo | Con cookies el navegador las envía solo, así que el temporizador de `authStore.ts:132` pierde parte de su razón de ser. Eliminarlo del todo interactúa con SB-17 y con el límite del plan 02: mejor un cambio pequeño y verificable |
+| D5.4 | Una sola fuente de cabeceras CORS (SB-02) | **El middleware**, retirando las de `next.config.js` | Las del config se evalúan en build y hoy están congeladas como `*` (plan 08, D1). El middleware es de ejecución y es el único de los dos que puede leer la variable al desplegar |
+
+**No se decide solo:** invalidar las sesiones activas al migrar de `localStorage` a cookies. Si la
+migración obliga a que todo el mundo vuelva a entrar, **se propone y se espera** — con un evento en
+curso, echar a todo el personal a la vez no es una decisión técnica.

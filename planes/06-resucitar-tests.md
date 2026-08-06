@@ -66,11 +66,15 @@ el arreglo— para comprobar que falla. Un test que nunca se vio fallar no prueb
 
 ---
 
-## Preguntas abiertas
+## Decisiones de producto — se toman, no se preguntan
 
-1. ¿Contenedor efímero de PostgreSQL en la suite, o mock? Cambia el tiempo de ejecución y lo que se
-   puede probar.
-2. El umbral de cobertura del 80 %, ¿se mantiene? Con la suite en rojo lleva meses sin significar
-   nada; ponerlo en verde de golpe puede exigir mucho test de relleno sin valor.
-3. ¿Los tests entran en CI desde el principio, o primero se estabilizan en local? Si entran rotos,
-   CI nace ignorado — que es como se llegó hasta aquí.
+Se registran en [DECISIONES.md](DECISIONES.md) y el crítico las evalúa.
+
+| # | Decisión | Valor por defecto | Razonamiento |
+|---|---|---|---|
+| D6.1 | Base de datos en los tests | **Contenedor efímero** | Los tres fallos que esta remediación introdujo son de comportamiento **contra la base de datos**: un cupo mal calculado, una escritura que no debía ocurrir. Un mock no habría visto ninguno |
+| D6.2 | Umbral de cobertura | **El real que resulte al ponerlos en verde**, subiendo después | Exigir 80 % de golpe genera test de relleno sin valor. Un número real que sube vale más que uno alto que se ignora — que es justo lo que lleva meses pasando |
+| D6.3 | ¿Los tests entran en CI desde el principio? | **Sí, pero sin bloquear el merge** hasta que estén verdes dos semanas | Si entran rojos y bloqueando, se desactivan a la primera urgencia y CI nace ignorado, que es como se llegó hasta aquí |
+| D6.4 | Qué se cubre primero | **Lo que esta remediación tocó y rompió** | Son la especificación de lo que no puede volver a romperse, y ya se sabe que fallaban: cada test se escribe primero contra el código roto para verlo fallar |
+
+**No se decide solo:** nada de este plan afecta a producción.

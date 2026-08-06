@@ -8,16 +8,33 @@ otro haya corrido antes salvo donde se declare lo contrario.
 
 Cada fase la ejecutan **dos agentes en cadena**:
 
-1. **Implementador** — escribe el código de la fase, lo verifica y entrega: qué hizo, qué
-   verificación ejecutó con su salida real, **comentarios** sobre lo que encontró de camino y
-   **preguntas** sobre lo que no pudo decidir solo.
+1. **Implementador** — escribe el código de la fase, lo verifica, **toma las decisiones de producto
+   que la fase necesite** y entrega: qué hizo, qué verificación ejecutó con su salida real,
+   **comentarios** sobre lo que encontró de camino y **las decisiones que tomó, con su
+   razonamiento y la alternativa que descartó**.
 2. **Crítico** — recibe ese informe *y el diff real*, no se fía de él: comprueba las afirmaciones
-   contra el código, **responde cada pregunta** con una decisión accionable, señala lo que haya
-   que rehacer y decide si la fase puede darse por cerrada.
+   contra el código, **evalúa cada decisión de producto** (y la corrige si la considera
+   equivocada, dejando constancia de ambas posturas), señala lo que haya que rehacer y decide si
+   la fase puede darse por cerrada.
 
-Lo que el crítico responde entra como contexto de la fase siguiente. Si el crítico marca la fase
-como `rehacer`, el plan se detiene ahí en lugar de arrastrar el error: es preferible una fase
-menos que tres fases construidas sobre una premisa falsa.
+Lo que el crítico decide entra como contexto de la fase siguiente. Si marca la fase como
+`rehacer`, el plan se detiene ahí en lugar de arrastrar el error: es preferible una fase menos que
+tres fases construidas sobre una premisa falsa.
+
+### Las decisiones de producto no detienen el trabajo
+
+**Criterio fijado el 2026-08-05:** el equilibrio es **terminar cuanto antes y que el producto quede
+suficientemente funcional para trabajarlo**. Una decisión razonada y registrada vale más que una
+fase parada esperando respuesta.
+
+Cada plan trae ya un **valor por defecto razonado** para sus decisiones abiertas — no para que se
+aplique a ciegas, sino para que el implementador tenga un punto de partida y el crítico tenga
+contra qué contrastar. Todas se acumulan en **[DECISIONES.md](DECISIONES.md)**, que es la lista
+que Emmanuel revisa por la mañana.
+
+**Lo único que no se decide solo** es lo destructivo o difícil de revertir: borrar datos, reescribir
+la historia de git, cambios incompatibles del modelo, o alterar de forma irreversible algo que el
+usuario final ya ve. Eso se deja propuesto y se espera.
 
 ## Reglas que heredan todos los agentes
 

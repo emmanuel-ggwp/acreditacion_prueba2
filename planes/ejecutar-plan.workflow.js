@@ -26,6 +26,17 @@ REGLAS OBLIGATORIAS (estan en REMEDIATION-RULES.md, leelo):
   aplica lo correcto y se rectifica la referencia en el mismo cambio.
 - R2: nunca imprimas el valor de un secreto. Nombre de la variable si, valor no.
 
+DECISIONES DE PRODUCTO -- SE TOMAN, NO SE PREGUNTAN (criterio de Emmanuel, 2026-08-05):
+El equilibrio es terminar cuanto antes Y que el producto quede suficientemente funcional para
+trabajarlo. Una decision razonada y registrada vale mas que una fase parada esperando respuesta.
+- Cada plan trae una tabla "Decisiones de producto" con un valor por defecto YA RAZONADO. Usalo
+  salvo que el codigo lo desmienta; si lo desmiente, gana el codigo y lo registras rectificado.
+- Registra CADA decision con: que decidiste, por que, QUE ALTERNATIVA DESCARTASTE y que costaria
+  cambiarla. Una decision sin la alternativa descartada no esta registrada, esta afirmada.
+- NO decidas solo lo destructivo o dificil de revertir: borrar datos, reescribir historia de git,
+  cambios incompatibles del modelo, o algo irreversible que el usuario final ya ve. Eso lo
+  PROPONES y sigues con el resto de la fase.
+
 ENTORNO (necesario para W3):
   docker start acreditacion_pg_local
   npm run db:sync && npm run db:seed:users && npx tsx scripts/seed-test-event.ts
@@ -66,11 +77,31 @@ const ESQUEMA_IMPL = {
     verificacion: { type: 'string', description: 'Comandos EJECUTADOS y su salida real' },
     lineaBaseTests: { type: 'string', description: 'Salida de npx jest --silent (Test Suites)' },
     comentarios: { type: 'array', items: { type: 'string' }, description: 'Lo que encontro de camino' },
-    preguntas: { type: 'array', items: { type: 'string' }, description: 'Lo que no pudo decidir solo' },
+    decisiones: {
+      type: 'array',
+      description: 'Decisiones de producto TOMADAS en esta fase. Vacio solo si la fase no tenia ninguna.',
+      items: {
+        type: 'object',
+        properties: {
+          id: { type: 'string', description: 'El de la tabla del plan, p.ej. D1.2' },
+          decision: { type: 'string', description: 'Que se decidio, en una frase' },
+          porQue: { type: 'string' },
+          alternativaDescartada: { type: 'string', description: 'Obligatorio: que se descarto y por que' },
+          costeDeCambiarla: { type: 'string' },
+          siguioElDefecto: { type: 'boolean', description: 'false si el codigo desmintio el valor por defecto del plan' },
+        },
+        required: ['decision', 'porQue', 'alternativaDescartada', 'costeDeCambiarla'],
+      },
+    },
+    propuestasQueEsperan: {
+      type: 'array',
+      items: { type: 'string' },
+      description: 'Lo destructivo o irreversible que NO se decidio solo, con la propuesta',
+    },
     desviaciones: { type: 'array', items: { type: 'string' }, description: 'Donde el codigo desmintio al plan' },
     bloqueado: { type: 'boolean' },
   },
-  required: ['hecho', 'verificacion', 'comentarios', 'preguntas', 'bloqueado'],
+  required: ['hecho', 'verificacion', 'comentarios', 'decisiones', 'bloqueado'],
 }
 
 const ESQUEMA_CRITICA = {
@@ -79,21 +110,26 @@ const ESQUEMA_CRITICA = {
     veredicto: { type: 'string', enum: ['cerrada', 'cerrada_con_reservas', 'rehacer'] },
     razon: { type: 'string' },
     afirmacionesRefutadas: { type: 'array', items: { type: 'string' } },
-    respuestas: {
+    decisionesEvaluadas: {
       type: 'array',
+      description: 'Una entrada por cada decision que tomo el implementador',
       items: {
         type: 'object',
         properties: {
-          pregunta: { type: 'string' },
-          respuesta: { type: 'string', description: 'Decision accionable, no un quizas' },
+          id: { type: 'string' },
+          decision: { type: 'string' },
+          veredicto: { type: 'string', enum: ['de_acuerdo', 'corregida', 'para_emmanuel'] },
+          razonDelCritico: { type: 'string' },
+          decisionFinal: { type: 'string', description: 'La que queda en pie tras la evaluacion' },
+          costeDeCambiarla: { type: 'string' },
         },
-        required: ['pregunta', 'respuesta'],
+        required: ['decision', 'veredicto', 'razonDelCritico', 'decisionFinal'],
       },
     },
     paraLaSiguienteFase: { type: 'string' },
     aBacklog: { type: 'array', items: { type: 'string' } },
   },
-  required: ['veredicto', 'razon', 'respuestas', 'paraLaSiguienteFase'],
+  required: ['veredicto', 'razon', 'decisionesEvaluadas', 'paraLaSiguienteFase'],
 }
 
 phase('Leer el plan')
@@ -140,8 +176,11 @@ for (const fase of plan.fases) {
      codigo, NO lo implementes a ciegas: registralo en "desviaciones" y haz lo correcto.
      Si te bloqueas o la fase resulta mucho mayor de lo descrito, para y marca bloqueado=true.
 
-     Entrega el informe estructurado, con comentarios sobre lo que viste de camino y preguntas
-     concretas sobre lo que no pudiste decidir solo.`,
+     DECISIONES: la seccion "Decisiones de producto" del plan trae valores por defecto razonados.
+     TOMALAS -- no las dejes abiertas -- y registra cada una en "decisiones" con su alternativa
+     descartada. Lo destructivo o irreversible va a "propuestasQueEsperan" y sigues con el resto.
+
+     Entrega el informe estructurado, con comentarios sobre lo que viste de camino.`,
     { label: `impl:f${fase.numero}`, schema: ESQUEMA_IMPL }
   )
 
@@ -164,8 +203,13 @@ for (const fase of plan.fases) {
      TESTS: ${impl.lineaBaseTests || 'no declarado'}
      COMENTARIOS: ${(impl.comentarios || []).join(' | ')}
      DESVIACIONES: ${(impl.desviaciones || []).join(' | ') || 'ninguna'}
-     PREGUNTAS: ${(impl.preguntas || []).join(' | ') || 'ninguna'}
      BLOQUEADO: ${impl.bloqueado}
+
+     DECISIONES DE PRODUCTO QUE TOMO:
+     ${(impl.decisiones || []).map((d) => `- [${d.id || 's/n'}] ${d.decision}\n     POR QUE: ${d.porQue}\n     DESCARTO: ${d.alternativaDescartada}\n     COSTE DE CAMBIARLA: ${d.costeDeCambiarla}\n     ¿siguio el defecto del plan?: ${d.siguioElDefecto}`).join('\n') || '     ninguna'}
+
+     PROPUESTAS QUE ESPERAN A EMMANUEL:
+     ${(impl.propuestasQueEsperan || []).join('\n     ') || '     ninguna'}
 
      NO TE FIES DEL INFORME. Haz esto:
      1. Lee el diff REAL de sus commits (git show) y el estado actual de los ficheros.
@@ -175,9 +219,18 @@ for (const fase of plan.fases) {
         exacto dejo pasar dos fallos criticos en esta remediacion.
      4. Comprueba W7: la linea base es 6 suites fallidas / 6 / 0 tests. Si cambio, es motivo de
         "rehacer".
-     5. RESPONDE CADA PREGUNTA con una decision accionable. No "depende" ni "habria que valorar":
-        di que hacer y por que. Si la pregunta es de producto y no puedes decidirla, dilo
-        explicitamente y proponi la opcion mas conservadora como valor por defecto.
+     5. EVALUA CADA DECISION DE PRODUCTO, una por una, en "decisionesEvaluadas". El criterio de
+        Emmanuel es el equilibrio entre terminar cuanto antes y que el producto quede
+        SUFICIENTEMENTE FUNCIONAL PARA TRABAJARLO. Para cada una:
+        - "de_acuerdo" si la decision cumple ese equilibrio;
+        - "corregida" si no, y entonces escribe en "decisionFinal" la que debe quedar y por que.
+          Corregir una decision NO es motivo de "rehacer" salvo que el codigo ya escrito la
+          contradiga;
+        - "para_emmanuel" SOLO si es destructiva o irreversible.
+        Comprueba ademas que cada decision declara la alternativa que descarto: sin eso no esta
+        razonada, esta afirmada, y debes exigirla.
+        Verifica que la decision es CONSISTENTE CON EL CODIGO que se escribio: una decision
+        registrada que el diff no implementa es peor que no tomarla.
      6. Lo que este fuera de alcance pero merezca registrarse, a "aBacklog".
 
      Veredicto: "cerrada", "cerrada_con_reservas" o "rehacer". Usa "rehacer" si la fase no
@@ -204,8 +257,10 @@ for (const fase of plan.fases) {
   }
 
   contexto = critica
-    ? `Decisiones del critico tras la fase ${fase.numero}:\n` +
-      (critica.respuestas || []).map((r) => `- ${r.pregunta} -> ${r.respuesta}`).join('\n') +
+    ? `Decisiones ya cerradas tras la fase ${fase.numero} (NO las reabras):\n` +
+      (critica.decisionesEvaluadas || [])
+        .map((d) => `- [${d.id || 's/n'}] ${d.decisionFinal} (${d.veredicto})`)
+        .join('\n') +
       `\n${critica.paraLaSiguienteFase || ''}`
     : ''
 }
@@ -213,8 +268,8 @@ for (const fase of plan.fases) {
 phase('Cerrar')
 
 const cierre = await agent(
-  `Escribe el informe de cierre de la ejecucion nocturna del plan ${planPath}, en espanol, para
-   Emmanuel, que lo leera por la manana sin haber visto nada de esto.
+  `Cierras la ejecucion nocturna del plan ${planPath}. Dos entregables, y el segundo es el que
+   Emmanuel pidio expresamente.
 
    Resultado por fases:
    ${JSON.stringify(resultados.map((r) => ({
@@ -223,17 +278,38 @@ const cierre = await agent(
      veredicto: r.critica ? r.critica.veredicto : (r.error || 'sin critica'),
      razon: r.critica ? r.critica.razon : '',
      refutado: r.critica ? r.critica.afirmacionesRefutadas : [],
-     decisiones: r.critica ? r.critica.respuestas : [],
+     decisiones: r.critica ? r.critica.decisionesEvaluadas : [],
+     propuestas: r.implementacion ? r.implementacion.propuestasQueEsperan : [],
      backlog: r.critica ? r.critica.aBacklog : [],
    })), null, 1)}
 
-   Empieza por lo que importa: que quedo funcionando, que NO, y que decisiones necesitan su
-   respuesta. Se explicito si alguna fase quedo sin hacer y por que. Si el critico refuto algo
-   del implementador, dilo — es la informacion mas valiosa del informe.
-   Termina con la lista de lo que queda pendiente de este plan.
-   Escribelo en planes/resultados/${planName}-<fecha>.md usando la fecha que veas en el ultimo
-   commit, y devuelve tambien el texto.`,
+   ENTREGABLE 1 -- planes/resultados/${planName}-<fecha>.md (usa la fecha del ultimo commit).
+   Informe en espanol para quien no ha visto nada de esto. Empieza por lo que importa: que quedo
+   funcionando, que NO, y que quedo pendiente. Se explicito si alguna fase no se hizo y por que.
+   Si el critico refuto algo del implementador, DILO: es la informacion mas valiosa del informe.
+
+   ENTREGABLE 2 -- planes/DECISIONES.md. Lee el fichero, respeta lo que ya haya y ANADE una fila
+   a la tabla "Registro" por cada decision de producto tomada en esta ejecucion:
+     | # | Plan · Fase | Decision | Por que | Alternativa descartada | Coste de cambiarla |
+   Usa la decisionFinal del critico, no la del implementador, cuando difieran.
+   Marca de forma VISIBLE (negrita o un aviso arriba) las que el critico corrigio y las que
+   quedaron "para_emmanuel", porque son las que Emmanuel tiene que mirar primero.
+   Anade tambien una seccion "Esperan tu respuesta" con las propuestas destructivas o
+   irreversibles que no se decidieron solas.
+   Esta tabla es lo que Emmanuel revisa por la manana: si una decision no esta ahi, para el no
+   existe.
+
+   Devuelve un resumen breve de ambos.`,
   { label: 'cierre', effort: 'high' }
+)
+
+const decisiones = resultados.flatMap((r) =>
+  ((r.critica && r.critica.decisionesEvaluadas) || []).map((d) => ({
+    fase: r.fase,
+    id: d.id,
+    decision: d.decisionFinal,
+    veredicto: d.veredicto,
+  }))
 )
 
 return {
@@ -244,5 +320,9 @@ return {
     fase: r.fase,
     veredicto: r.critica ? r.critica.veredicto : (r.error || 'sin critica'),
   })),
+  // Lo que Emmanuel revisa por la manana. Las corregidas y las que esperan van primero.
+  decisionesDeProducto: decisiones,
+  decisionesQueRequierenSuRespuesta: decisiones.filter((d) => d.veredicto === 'para_emmanuel'),
+  decisionesCorregidasPorElCritico: decisiones.filter((d) => d.veredicto === 'corregida'),
   informe: cierre,
 }

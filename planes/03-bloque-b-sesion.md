@@ -68,10 +68,15 @@ los detalles, tras autenticación.
 
 ---
 
-## Preguntas abiertas
+## Decisiones de producto — se toman, no se preguntan
 
-1. ¿La aplicación debe tener un endpoint de salud **para Nginx y systemd**? Hoy no hay ninguno
-   utilizable como `ExecStartPost`, y el plan 07 lo necesita. Puede que F3-07 no sea «recortar» sino
-   «rehacer»: uno público y escueto para la sonda, y otro autenticado con detalle.
-2. La cota de recursión de SB-17, ¿cuántos reintentos? Uno solo es lo razonable, pero conviene
-   confirmarlo contra el flujo real de caducidad.
+Se registran en [DECISIONES.md](DECISIONES.md) y el crítico las evalúa.
+
+| # | Decisión | Valor por defecto | Razonamiento |
+|---|---|---|---|
+| D3.1 | Cota de reintento tras un 401 | **1** | Si el segundo intento con token nuevo también falla, el problema no es el token y reintentar solo alarga el fallo |
+| D3.2 | Forma de `/api/health` (F3-07) | **Dos endpoints**: uno público que devuelve solo vivo/muerto, y el detalle tras autenticación | El plan 07 necesita una sonda para Nginx y systemd, y hoy no hay ninguna. Recortar el actual sin dejar sonda deja al despliegue sin comprobación de arranque |
+| D3.3 | Mensajes de error hacia el usuario | **En español y accionables** | Hoy la landing muestra `"Validation error"` en inglés y, bajo un 429, un `Unexpected token 'T'` de intentar parsear texto plano como JSON. Un mensaje que el usuario no entiende es un fallo de producto, no un detalle |
+| D3.4 | ¿Qué ve el usuario ante un 403? | **«No tienes permiso para esta acción»**, distinto de «sin resultados» | Es la razón por la que un recorte de roles sería invisible: hoy un fallo de permisos se presenta como un padrón vacío |
+
+**No se decide solo:** nada de este plan es irreversible.

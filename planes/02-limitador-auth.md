@@ -141,12 +141,18 @@ ahí**: decidir si se normaliza en escritura (recomendado) y anotarlo.
 
 ---
 
-## Preguntas abiertas que el plan NO decide
+## Decisiones de producto — se toman, no se preguntan
 
-1. **El umbral general**: ¿cuántos puestos de acreditación simultáneos hay que soportar en hora
-   punta? Sin ese número, cualquier valor es otra intuición.
-2. **`/api/auth/logout`** no tiene limitador propio, es no autenticado y revoca cualquier refresh
-   token del cuerpo. Es F3-06 del Bloque B — ¿se adelanta aquí o se respeta el plan?
-3. **Política de contraseñas partida en dos**: `registerSchema` exige 8 caracteres y 4 clases, pero
-   `POST /api/users` va por `userService.ts:24`, que pide **6 sin complejidad**. Dos caminos de alta
-   con dos políticas hace que cualquier límite de intentos proteja menos de lo que aparenta.
+Se registran en [DECISIONES.md](DECISIONES.md) y el crítico las evalúa.
+
+| # | Decisión | Valor por defecto | Razonamiento |
+|---|---|---|---|
+| D2.1 | Umbral del límite general por IP | **600/min**, y **medir antes de fijarlo** | Seis puestos × 3 personas/min × ~14 peticiones ≈ 250/min. El doble deja margen para picos sin volver al 166 req/s original, que era no limitar. **El número real sale de contar las peticiones del flujo en el navegador**, no de esta estimación: si la medición dice otra cosa, gana la medición |
+| D2.2 | Clave del cubo de credenciales | **`(email, ip)`** | Es lo que elimina el DoS de cuenta: quien ataca se bloquea a sí mismo desde su origen. Cede terreno ante fuerza bruta distribuida, que necesita una botnet — compromiso estándar y aceptado |
+| D2.3 | ¿Cuándo se consume la cuota? | **Solo cuando el intento falla** | Quien acierta la contraseña entra aunque tenga cuota gastada. Elimina el bloqueo del usuario legítimo de raíz en vez de mitigarlo, y de paso hace que el tráfico legítimo de una sede no gaste nada |
+| D2.4 | ¿El límite general debe cubrir el flujo de acreditación autenticado? | **Separar tráfico autenticado del anónimo** | Un límite por IP identifica a **una sede entera** como si fuera un cliente. El tráfico anónimo sí se corta duro; el autenticado, con un umbral propio y holgado. Si separar resulta más caro de lo previsto, subir el umbral general y **registrar la deuda** |
+| D2.5 | `/api/auth/logout` sin autenticación ni límite (F3-06) | **Adelantarlo a este plan** | Es la única ruta de auth que queda fuera, cuesta poco y dejarla para el plan 03 significa tocar el mismo subsistema dos veces |
+| D2.6 | Política de contraseñas partida en dos | **Unificar a la más estricta** (8 caracteres, 4 clases) | `POST /api/users` pide hoy 6 sin complejidad mientras `registerSchema` pide 8 con 4 clases. Cualquier límite de intentos protege menos de lo que aparenta si el otro camino admite contraseñas débiles. **Afecta solo a altas nuevas**; no invalida las existentes |
+
+**No se decide solo:** forzar el cambio de las contraseñas ya existentes. Se propone y se espera —
+es un cambio que el usuario final nota y que no se puede deshacer.

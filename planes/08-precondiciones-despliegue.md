@@ -171,12 +171,23 @@ configuración de Nginx versionadas. Es el contenido de la fase 1 del plan 07.
 
 ---
 
-## Preguntas abiertas que el plan NO decide
+## Decisiones de producto — se toman, no se preguntan
 
-1. **El correo de contacto, ¿configurable en caliente o de build?** Si es lo primero hay que
-   servirlo desde el servidor; si es lo segundo, basta documentarlo. Afecta a cómo se cierra F6-10.
-2. **¿Se reescribe la historia de git** para eliminar el volcado, siendo un repositorio público, o
-   basta con dejar de rastrearlo asumiendo que lo publicado ya está publicado?
-3. **PM2 o systemd.** PM2 en cluster degrada las tres propiedades que el Bloque A compró: la
-   validación se convierte en tormenta de reinicios, no lee `EnvironmentFile` y multiplica por N los
-   contadores en memoria del limitador. La recomendación es systemd con un solo proceso.
+Se registran en [DECISIONES.md](DECISIONES.md) y el crítico las evalúa.
+
+| # | Decisión | Valor por defecto | Razonamiento |
+|---|---|---|---|
+| D8.1 | El correo de contacto, ¿de build o configurable en caliente? | **De build, documentado** | Servirlo desde el servidor para hacerlo dinámico es trabajo real por un valor que cambia una vez al año. Basta con que `.example.env` diga que las tres `NEXT_PUBLIC_*` **exigen recompilar** |
+| D8.2 | Fuente única de CORS | **El middleware**, retirando las cabeceras de `next.config.js` | Las del config se evalúan en build y hoy están congeladas como `*`. Es además lo que §7.4 ya pedía (SB-02) |
+| D8.3 | `NODE_ENV` en la plantilla | **`production`** | La plantilla es para el servidor; el desarrollo local ya la sobrescribe con su propio `.env`. Dejar `development` con una advertencia en comentario es lo que hay ahora y **no funciona** |
+| D8.4 | Permisos de base de datos para `rate_limits` | **Crear la tabla en el aprovisionamiento**, y a la aplicación solo DML | Así nunca necesita `CREATE`, que PostgreSQL 15+ no concede por defecto. Y la degradación silenciosa a memoria pasa a ser imposible en vez de improbable |
+| D8.5 | `npm run db:sync` destructivo (SB-26) | **Apuntarlo a la variante `alter`** y dejar la destructiva tras una confirmación explícita | Hoy la peligrosa tiene atajo y la segura no. Invertirlo es una línea |
+| D8.6 | `PORT` | **Declararla y validarla** | Es la única variable realmente huérfana del inventario, y decide a qué upstream apunta Nginx |
+
+**No se decide solo — se propone y se espera:**
+
+1. **Reescribir la historia de git** para eliminar `acreditacion_dump.sql` (SB-25). Es irreversible,
+   invalida todos los clones existentes y **no borra lo que ya se haya copiado** de un repositorio
+   público. Lo que sí se hace sin preguntar es **dejar de rastrearlo** y añadirlo a `.gitignore`.
+2. **Rotar las contraseñas de los seis usuarios del volcado.** Sus hashes están publicados; son
+   bcrypt con coste 12, así que no es urgente, pero es decisión de Emmanuel y afecta a personas.

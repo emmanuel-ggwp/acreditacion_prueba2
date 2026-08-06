@@ -57,10 +57,16 @@ y los códigos del registro público) deben seguir llegando. Genérico no es lo 
 
 ---
 
-## Preguntas abiertas
+## Decisiones de producto — se toman, no se preguntan
 
-1. ¿Los `.max()` se derivan de las columnas actuales, o hay columnas mal dimensionadas que
-   convendría ampliar? `dietaryComments` es `VARCHAR(255)` para un campo de texto libre donde la
-   gente escribe alergias: puede que el arreglo correcto sea la columna, no el tope.
-2. F2-05 toca el manejador de errores de toda la aplicación. ¿Se hace de una vez, o endpoint por
-   endpoint empezando por los públicos?
+Se registran en [DECISIONES.md](DECISIONES.md) y el crítico las evalúa.
+
+| # | Decisión | Valor por defecto | Razonamiento |
+|---|---|---|---|
+| D4.1 | Origen de cada `.max()` | **La columna que respalda el campo** | Un tope inventado rechaza datos legítimos: es exactamente el error que cometió el Bloque A con la dieta y que el plan 01 tiene que arreglar |
+| D4.2 | Campos de texto libre con columna corta | **Ampliar la columna a TEXT** si hay migraciones; si no, recortar el tope y registrar la deuda | `dietaryComments` es `VARCHAR(255)` para describir alergias. Sin migraciones (SB-26) ampliar exige un `sync` destructivo, que no compensa |
+| D4.3 | Alcance de F2-05 | **De una vez**, con una lista explícita de códigos que sí deben seguir llegando | Endpoint por endpoint deja meses con dos comportamientos conviviendo. La lista de códigos preservados (`ALREADY_REGISTERED`, `EVENT_FULL`, `SCHEDULE_FULL`…) es lo que evita romper el cliente |
+| D4.4 | Tope de `limit` en paginación | **200**, y `NaN`/negativos al valor por defecto | Los listados de la interfaz piden mucho menos; 200 permite exportaciones razonables sin volcar el padrón entero en una petición |
+
+**No se decide solo:** cualquier cambio de columna que exija recrear tablas. Se propone y se
+espera — con `db:sync` en estado destructivo (SB-26), una migración mal hecha borra los datos.

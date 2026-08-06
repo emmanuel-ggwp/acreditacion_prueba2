@@ -176,14 +176,19 @@ esquema. Decidir si se recorta aquí o se deja para F2-05 (plan 04) y **anotarlo
 
 ---
 
-## Preguntas abiertas que el plan NO decide
+## Decisiones de producto — se toman, no se preguntan
 
-Van al informe de fase para que las responda el crítico:
+Se aplican con el valor por defecto de abajo salvo que el código lo desmienta. **Cada una se
+registra en [DECISIONES.md](DECISIONES.md)** con su razonamiento y la alternativa descartada, y el
+crítico la evalúa antes de cerrar la fase.
 
-1. **El cupo por defecto es decisión de producto.** Un evento que no declara máximo, ¿permite
-   invitados sin límite, o ninguno? El código afirma hoy las dos cosas.
-2. **Las cargas precargadas, ¿cuentan contra el cupo del asistente?** Si el administrador precarga
-   3 cargas y el máximo es 2, ¿qué debe pasar?
-3. **`PublicRegistrationForm.tsx:123-130`** carga las cargas precargadas **sin su `id`**, con lo que
-   se reenvían como invitados nuevos. Antes se duplicaban en cada envío; ahora se descartan. El
-   bug de duplicación quedó **tapado por accidente, no corregido**. ¿Se arregla aquí o va a backlog?
+| # | Decisión | Valor por defecto | Razonamiento |
+|---|---|---|---|
+| D1.1 | Cupo cuando el evento no declara máximo | **2** | `Event.ts:99-102` ya declara `defaultValue: 2`; lo que lo pisa es el `.default(0)` de `eventSchemas.ts:97`. Elegir 2 devuelve el comportamiento que el producto tenía **antes** de esta remediación, que es la definición práctica de «suficientemente funcional». La alternativa —0 significa «sin invitados»— deja el producto peor que como estaba |
+| D1.2 | ¿Las cargas precargadas consumen el cupo del asistente? | **No** | Son presupuesto del organizador. Con la lectura contraria, un precargado con cargas **nunca** puede traer acompañante, que es exactamente el fallo que esta fase arregla. Implica poder distinguir unas de otras: si `Guest` no tiene campo para ello, **añadirlo es parte de la fase**, no una decisión aparte |
+| D1.3 | ¿Qué hace el servidor cuando llegan más invitados que cupo? | **Aceptar hasta el cupo y decirlo en la respuesta** | Rechazar la inscripción entera castiga al asistente por un límite que la interfaz no le enseñó. Descartar en silencio es lo que hay hoy y es lo que produjo el correo que miente. La respuesta debe llevar cuántos se guardaron |
+| D1.4 | `PublicRegistrationForm.tsx:123-130` reenvía las cargas **sin `id`** | **Arreglar aquí** | El bug de duplicación quedó *tapado* por el tope, no corregido: en cuanto D1.2 deje de contar las cargas, **vuelve a duplicar**. Arreglarlo aparte significa reintroducir un fallo conocido |
+| D1.5 | Topes de longitud de la fase 3 | **Derivar de la columna**, y si la columna se queda corta para texto libre, **ampliar la columna** | `dietaryComments` es `VARCHAR(255)` para un campo donde la gente describe alergias. Recortar el tope al 255 es funcional pero pobre; ampliar a TEXT es una migración pequeña. **Si no hay migraciones (SB-26), recortar y registrar la deuda** |
+
+**No se decide solo:** nada de esta fase borra datos ni es irreversible, así que todo lo anterior
+se aplica. Si alguna corrección exigiera un cambio incompatible del modelo, se propone y se espera.
