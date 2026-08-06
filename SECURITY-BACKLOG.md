@@ -818,9 +818,22 @@ se reescribe la historia. Los hashes son bcrypt con coste 12, así que no son de
 pero los RUT y los correos son datos personales y ya están publicados. El esquema debe venir de
 migraciones, no de un volcado.
 
-**Decisión que corresponde a Emmanuel**: reescribir la historia de un repositorio público invalida
-los clones existentes y no borra lo que ya se haya copiado. Es defendible dejar la historia como
-está y limitarse a dejar de rastrearlo — pero es una decisión que hay que tomar a sabiendas.
+**Estado (2026-08-06, plan 08 fase 3 — P08-D12): parcialmente resuelta.** Hecho: el fichero ya
+**no está rastreado** (`git rm --cached`, conserva la copia de trabajo local), `.gitignore` ignora
+`*.sql` y `*.dump` con la excepción explícita como único camino de vuelta, y el esquema ya viene
+de migraciones (`npm run db:migrate`, ver SB-26). Un `git clone` nuevo **ya no recibe el volcado
+en el árbol de trabajo** — pero **sigue completo en la historia** (`git show` de cualquier commit
+anterior lo recupera). La entrada queda **abierta** solo por lo que no se decide sin Emmanuel:
+
+1. **Reescribir la historia** (`git filter-repo` o equivalente) para eliminarlo de todos los
+   commits: invalida los clones existentes y no borra lo ya copiado del repositorio público.
+2. **Rotar las contraseñas de los 6 usuarios del volcado**: sus hashes están publicados (bcrypt
+   coste 12, no urgente, pero afecta a personas).
+
+**Nota de discrepancia con la auditoría**: `AUDIT-FINDINGS.md` §Fase 2 dio el fichero por «solo
+datos de prueba» por confirmación del usuario; la revisión de despliegue contó dentro 6 usuarios
+con hashes, 110 refresh tokens, 360 registros de auditoría y 3 empleados con RUT. Esta entrada
+—no aquella línea— es la que refleja el estado real.
 
 ---
 
