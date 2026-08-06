@@ -52,6 +52,6 @@ que la fase 3 busca por apellido, y la búsqueda devuelve vacío. Los seeds solo
 —crean eventos nuevos con sufijo de tiempo—, así que correrlos otra vez es gratis y
 seguro.
 
-**`npm run db:sync` NO.** Hace `sync({ force: true })` y borra las 16 tablas (SB-26). Si
-faltan datos, `npm run db:seed:users` y los `seed-*` de este directorio, que solo
-insertan.
+**`npm run db:sync` ya no borra** (desde P08-D4, 2026-08-06): por defecto hace
+`sync({ alter: true })`; el DROP total exige `FORCE_SYNC=yes` explícito. Si faltan
+datos, `npm run db:seed:users` y los `seed-*` de este directorio, que solo insertan.
