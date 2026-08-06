@@ -11,9 +11,11 @@
 # modo "workflow" lanza igualmente `claude`, con la instruccion de arrancarlo y esperarlo.
 #
 # Uso:
-#   pwsh planes/ejecutar-noche.ps1
-#   pwsh planes/ejecutar-noche.ps1 -SoloPrecondiciones
-#   pwsh planes/ejecutar-noche.ps1 -TodoDirecto          # sin workflows, mas barato
+#   pwsh planes/ejecutar-noche.ps1                        # los 3 que bloquean el despliegue
+#   pwsh planes/ejecutar-noche.ps1 -Conjunto todos        # los 8, en orden de dependencias
+#   pwsh planes/ejecutar-noche.ps1 -SoloPrecondiciones    # comprueba, lista y sale
+#   pwsh planes/ejecutar-noche.ps1 -TodoDirecto           # sin workflows, mas barato
+#   pwsh planes/ejecutar-noche.ps1 -Conjunto personalizado -Planes @('03-bloque-b-sesion')
 #
 # Por que en cadena y no en paralelo: los planes comparten la rama de git, la base de datos
 # (db:sync borra las 16 tablas), el puerto de la aplicacion y el directorio .next. En paralelo
@@ -22,18 +24,64 @@
 
 [CmdletBinding()]
 param(
-    # Orden y modo. Los dos primeros bloquean el despliegue y son los que arreglan fallos que
-    # introdujo la propia remediacion: ahi la critica independiente vale lo que cuesta.
-    [array] $Planes = @(
-        @{ nombre = '01-regresiones-bloque-a';      modo = 'workflow' },
-        @{ nombre = '02-limitador-auth';            modo = 'workflow' },
-        @{ nombre = '08-precondiciones-despliegue'; modo = 'directo'  }
-    ),
+    # Que conjunto se ejecuta:
+    #   bloqueantes -> 01, 02, 08. Los tres que impiden desplegar. Es el defecto.
+    #   todos       -> los ocho, en orden de dependencias.
+    #   <lista>     -> -Conjunto personalizado -Planes @('03-bloque-b-sesion')
+    [ValidateSet('bloqueantes', 'todos', 'personalizado')]
+    [string] $Conjunto = 'bloqueantes',
+
+    [string[]] $Planes = @(),
     [string] $Contenedor = 'acreditacion_pg_local',
     [switch] $SoloPrecondiciones,
     [switch] $TodoDirecto,
     [switch] $PararSiFalla
 )
+
+# --- Catalogo de planes -------------------------------------------------------------
+# El ORDEN de esta tabla no es estetico: respeta las dependencias reales entre planes.
+# Cambiarlo sin mirar la columna "depende" produce merges dolorosos o fases que se paran
+# porque la linea base cambio bajo sus pies.
+
+$CATALOGO = @(
+    @{ nombre = '01-regresiones-bloque-a';      modo = 'workflow'; bloqueante = $true;  depende = '';
+       nota = 'Fallos activos que introdujo la remediacion. Critica independiente: si.' }
+
+    @{ nombre = '02-limitador-auth';            modo = 'workflow'; bloqueante = $true;  depende = '';
+       nota = 'DoS de cuenta y puerta caida. Critica independiente: si.' }
+
+    @{ nombre = '08-precondiciones-despliegue'; modo = 'directo';  bloqueante = $true;  depende = '';
+       nota = 'Va ANTES del 07: es lo que haria fallar la reconstruccion.' }
+
+    @{ nombre = '03-bloque-b-sesion';           modo = 'directo';  bloqueante = $false; depende = '';
+       nota = 'Independiente de los demas.' }
+
+    @{ nombre = '04-bloque-b-validacion';       modo = 'directo';  bloqueante = $false; depende = '01';
+       nota = 'Se solapa con el 01 en los .max() de los validadores. Despues del 01.' }
+
+    @{ nombre = '05-cookies-cors';              modo = 'workflow'; bloqueante = $false; depende = '08';
+       nota = 'El 08 decide la fuente unica de cabeceras; este construye encima. Sus dos mitades no se pueden separar sin abrir un agujero: por eso workflow.' }
+
+    @{ nombre = '06-resucitar-tests';           modo = 'directo';  bloqueante = $false; depende = '';
+       nota = 'PENULTIMO A PROPOSITO: al poner tests en verde CAMBIA la linea base de W7 (hoy 6/6 fallidas) que los demas planes usan como criterio de parada.' }
+
+    @{ nombre = '07-reconstruccion-droplet';    modo = 'directo';  bloqueante = $false; depende = '08';
+       nota = 'PARCIAL. Sus fases 1-3 se automatizan; la fase 4 es supervisada por definicion (ejecutar contra el servidor real). El prompt le dice que pare antes.' }
+)
+
+$BLOQUEANTES = @('01-regresiones-bloque-a', '02-limitador-auth', '08-precondiciones-despliegue')
+
+# Resolver el conjunto pedido conservando SIEMPRE el orden del catalogo.
+$seleccion = switch ($Conjunto) {
+    'todos'         { $CATALOGO }
+    'personalizado' {
+        if ($Planes.Count -eq 0) { Write-Host 'Con -Conjunto personalizado hay que pasar -Planes' -ForegroundColor Red; exit 1 }
+        $CATALOGO | Where-Object { $Planes -contains $_.nombre }
+    }
+    default         { $CATALOGO | Where-Object { $BLOQUEANTES -contains $_.nombre } }
+}
+
+if ($seleccion.Count -eq 0) { Write-Host 'Ningun plan seleccionado.' -ForegroundColor Red; exit 1 }
 
 $ErrorActionPreference = 'Stop'
 $raiz = Split-Path -Parent $PSScriptRoot
@@ -72,9 +120,18 @@ if (-not (Test-Path (Join-Path $raiz '.env'))) {
     $problemas += 'No hay .env en la raiz. Los scripts de BD lo necesitan (ya no se versiona).'
 }
 
-foreach ($p in $Planes) {
+foreach ($p in $seleccion) {
     if (-not (Test-Path (Join-Path $raiz "planes\$($p.nombre).md"))) {
         $problemas += "No existe planes/$($p.nombre).md"
+    }
+}
+
+# Aviso, no error: ejecutar un plan cuya dependencia no va en esta tanda se puede querer a
+# proposito, pero conviene saberlo antes y no descubrirlo en el merge.
+$nombresTanda = $seleccion | ForEach-Object { $_.nombre }
+foreach ($p in $seleccion) {
+    if ($p.depende -and -not ($nombresTanda | Where-Object { $_ -like "$($p.depende)-*" })) {
+        Escribir "AVISO: $($p.nombre) depende del plan $($p.depende), que no va en esta tanda." 'Yellow'
     }
 }
 
@@ -85,6 +142,10 @@ if ($problemas.Count -gt 0) {
 }
 
 Escribir "Rama: $(git rev-parse --abbrev-ref HEAD)  | commit: $(git rev-parse --short HEAD)" 'Gray'
+Escribir "Conjunto '$Conjunto' -> $($seleccion.Count) de $($CATALOGO.Count) planes:" 'Gray'
+foreach ($p in $seleccion) {
+    Escribir "   $($p.nombre)  [$($p.modo)]$(if ($p.bloqueante) { '  BLOQUEA EL DESPLIEGUE' })" 'Gray'
+}
 
 # El contenedor se levanta una vez para toda la cadena; cada plan siembra lo que necesite.
 docker start $Contenedor 2>&1 | Out-Null
@@ -163,16 +224,37 @@ $comunes
 $resultados = @()
 $commitInicial = git rev-parse HEAD
 
-foreach ($p in $Planes) {
+foreach ($p in $seleccion) {
     $plan = $p.nombre
     $modo = if ($TodoDirecto) { 'directo' } else { $p.modo }
 
     Escribir ''
     Escribir "=== PLAN $plan  (modo: $modo) ===" 'Cyan'
+    if ($p.nota) { Escribir "    $($p.nota)" 'DarkGray' }
     $commitAntes = git rev-parse HEAD
     $logPlan = Join-Path $dirLogs "$plan-$marca.log"
 
     $prompt = if ($modo -eq 'workflow') { PromptWorkflow $plan $marca } else { PromptDirecto $plan $marca }
+
+    # El 07 lleva una fase que exige a alguien delante: ejecutar el aprovisionamiento contra el
+    # droplet real. Un script sin probar es una hipotesis con aspecto de certeza, asi que de
+    # noche se escribe y se valida en seco, y ahi para.
+    if ($plan -like '07-*') {
+        $prompt += "`n`nIMPORTANTE PARA ESTE PLAN: ejecuta SOLO las fases 1, 2 y 3. La fase 4 exige"
+        $prompt += "`nun droplet real delante y NO se ejecuta de noche. Escribe el script de"
+        $prompt += "`naprovisionamiento y validalo EN SECO (bash -n, shellcheck, nginx -t dentro de un"
+        $prompt += "`ncontenedor, systemd-analyze verify, y ejecutarlo dos veces en un contenedor Ubuntu"
+        $prompt += "`nlimpio para comprobar que es idempotente). No intentes conectar con ningun servidor."
+    }
+
+    # El 06 pone la suite en verde, y con ello cambia la linea base de W7 que el resto usa como
+    # criterio de parada. Si alguien lo mete antes de tiempo, que al menos quede escrito.
+    if ($plan -like '06-*') {
+        $prompt += "`n`nIMPORTANTE PARA ESTE PLAN: al terminar, si la linea base de tests deja de ser"
+        $prompt += "`n'6 suites fallidas / 6 / 0 tests', ACTUALIZALA en REMEDIATION-RULES.md (regla W7) y"
+        $prompt += "`nen planes/README.md, y dilo en tu informe. Los demas planes la usan como criterio de"
+        $prompt += "`nparada y se detendrian creyendo que rompieron algo."
+    }
 
     Escribir "Lanzando claude (log: $(Split-Path -Leaf $logPlan))" 'Gray'
     $inicio = Get-Date
