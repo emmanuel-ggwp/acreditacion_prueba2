@@ -49,14 +49,12 @@ módulos que hoy sí existen). Mezclar deuda de seguridad con esa lista escondí
 | [SB-22](#sb-22--el-limitador-comparte-el-pool-de-5-conexiones-de-la-aplicación) | El limitador comparte el pool de 5 conexiones de la aplicación | — (surgido en A6) | ~30 min |
 | [SB-23](#sb-23--endpoint-público-de-evento-roto-desde-siempre-y-sin-consumidores) | Endpoint público de evento roto desde siempre y sin consumidores | — (surgido en A3) | ~30 min |
 | [SB-24](#sb-24--la-capacidad-del-evento-no-cuenta-invitados) | La capacidad del evento no cuenta invitados | — (surgido en A4) | decisión de producto |
-| [SB-25](#sb-25--un-volcado-con-datos-reales-está-versionado) | ⚠ Un volcado con datos reales está versionado | — (revisión de despliegue) | ~1 h + decisión |
-| [SB-26](#sb-26--no-hay-migraciones-el-único-camino-de-esquema-borra-los-datos) | No hay migraciones: el único camino de esquema borra los datos | — (revisión de despliegue) | ~2 h |
+| [SB-25](#sb-25--un-volcado-con-datos-reales-está-versionado) | ⚠ Un volcado con datos reales está versionado *(parcial: quedan 2 decisiones de Emmanuel)* | — (revisión de despliegue) | decisión |
 | [SB-27](#sb-27--get-apipubliceventsslug-devuelve-500-siempre-include-sin-alias) | `GET /api/public/events/[slug]` devuelve 500 siempre | — (surgido en R1-01) | ~30 min |
 | [SB-28](#sb-28--el-login-distingue-cuenta-deshabilitada-de-credenciales-inválidas-enumeración-de-estado-de-cuenta) | El login distingue «cuenta deshabilitada» de «credenciales inválidas» | — (surgido en R2-01) | ~30 min |
 | [SB-29](#sb-29--dos-logins-o-refresh-del-mismo-usuario-en-el-mismo-segundo--500-por-token-idéntico) | Dos logins del mismo usuario en el mismo segundo → 500 por token idéntico | — (surgido en R2-02) | ~1 h |
 | [SB-30](#sb-30--el-cliente-descarta-el-refresh-token-rotado-cierre-de-sesión-forzoso-en-el-segundo-refresh) | El cliente descarta el refresh token rotado: logout forzoso en el 2º refresh | — (surgido en R2-02) | ~30 min |
 | [SB-31](#sb-31--esquemas-de-login-duplicados-y-ya-divergentes-dos-loginschema-y-dos-registerschema) | Esquemas de login duplicados y ya divergentes entre validators | — (surgido en R2-03a) | ~30 min |
-| [SB-32](#sb-32--npm-run-dbsync-ejecuta-sequelizesync-force-true--borra-todos-los-datos-y-hay-dos-sync-dbts-divergentes) | ⚠ `db:sync` hace `force: true` (borra todo) y hay dos `sync-db.ts` divergentes | — (surgido en R2-03b) | ~1 h |
 | [SB-33](#sb-33--next-16-declara-obsoleta-la-convención-middleware-la-fuente-única-de-cors-vive-en-una-api-en-retirada) | La convención `middleware` está deprecada en Next 16 y ahora es la fuente única de CORS | — (surgido en P08-D1) | ~1 h |
 
 > ⏱ **SB-13 y SB-16 tienen ventana fija, no plazo abierto.** Deben resolverse **al terminar los
@@ -65,7 +63,9 @@ módulos que hoy sí existen). Mezclar deuda de seguridad con esa lista escondí
 
 **Cerradas:** [SB-01](#sb-01--cerrada--prueba-de-identidad-en-el-registro-público-por-rut),
 [SB-05](#sb-05--cerrada--implementar-o-retirar-next_public_modify_contact_email),
-[SB-08](#sb-08--cerrada--validar-los-bytes-del-fichero-subido-promovida-al-bloque-b).
+[SB-08](#sb-08--cerrada--validar-los-bytes-del-fichero-subido-promovida-al-bloque-b),
+[SB-26](#sb-26--cerrada--no-hay-migraciones-el-único-camino-de-esquema-borra-los-datos),
+[SB-32](#sb-32--cerrada--npm-run-dbsync-ejecuta-sequelizesync-force-true).
 
 ---
 
@@ -578,6 +578,45 @@ aplica en el mismo cambio que cierra F4-01, **no es deuda diferida**: forma part
 la declara vacía, junto con las otras dos que faltan (`ALLOWED_ORIGIN` y `DB_SSL`) — elemento
 **A10**.
 
+### SB-26 — CERRADA — No hay migraciones: el único camino de esquema borra los datos
+
+**Motivo del cierre: resuelta y verificada en el plan 08, fase 3 (2026-08-06).**
+
+Decía: `npm run db:sync` ejecutaba `sequelize.sync({ force: true })` (borra y recrea las 16
+tablas), la variante `alter` vivía en un huérfano sin script npm, y sin migraciones no había
+forma de evolucionar el esquema sin recrearlo.
+
+**Lo hecho**: (1) `db:sync` pasa a `alter: true` por defecto y el DROP exige `FORCE_SYNC=yes`
+(ver SB-32); (2) **migraciones con umzug 3** — `npm run db:migrate` / `db:migrate:status`,
+runner en `scripts/migrate.ts`, registro en `sequelize_meta`, línea base idempotente y no
+destructiva en `migrations/0001-baseline.ts` (los 16 modelos + `rate_limits`). Verificado: sobre
+base poblada no toca datos (4 usuarios antes y después); sobre base vacía (`DROP SCHEMA CASCADE`)
+crea las 18 tablas y los seeds corren encima; reejecutar es no-op; `down` de la baseline se niega.
+
+**Trade-off registrado (P08-D4.1 en DECISIONES.md)**: la baseline usa `sync()` create-only sobre
+los modelos actuales, no DDL congelado a mano. Todo cambio de esquema posterior va en migración
+nueva con DDL explícito — modificar los modelos sin su migración es reabrir esta entrada.
+
+**Nota comprobada, para que nadie la reabra**: `force: true` **no** borra la tabla `rate_limits`
+del limitador — `sync` solo opera sobre los 16 modelos registrados en `src/models/index.ts`, y
+esa tabla no es un modelo (por eso el DDL vive aparte en `db:sync` y en la baseline).
+
+### SB-32 — CERRADA — `npm run db:sync` ejecuta `sequelize.sync({ force: true })`
+
+**Motivo del cierre: resuelta y verificada en el plan 08, fase 3 (2026-08-06), junto a SB-26.**
+
+Decía: el camino documentado de arranque (`db:sync`) hacía `DROP TABLE` de todo sin preguntar, y
+había dos `sync-db.ts` divergentes (`force` en `src/scripts/`, `alter` huérfano en `scripts/`).
+
+**Lo hecho, exactamente lo que la entrada proponía**: el huérfano `scripts/sync-db.ts` está
+**borrado**; `src/scripts/sync-db.ts` (el de npm) hace `alter` por defecto y `force` solo con
+`FORCE_SYNC=yes` exacto — cualquier otro valor, o `--force` sin la variable, **aborta con exit 1
+sin tocar nada** (degradar en silencio a `alter` sería otro fallo silencioso). Verificado en los
+dos sentidos contra la base con datos: `db:sync` → datos intactos; `FORCE_SYNC=1` y `--force` →
+exit 1 y datos intactos; `FORCE_SYNC=yes` → aviso «PÉRDIDA TOTAL» y recreación. La parte de
+runbook («el aprovisionamiento de producción usa `db:migrate`, nunca `db:sync`») queda escrita en
+el propio script y es insumo de la fase 1-2 del plan 07.
+
 ---
 
 ## SB-17 — Doble cabecera `Authorization` en el reintento tras un 401
@@ -837,29 +876,6 @@ con hashes, 110 refresh tokens, 360 registros de auditoría y 3 empleados con RU
 
 ---
 
-## SB-26 — No hay migraciones: el único camino de esquema borra los datos
-
-- **Referencia**: surgido en la **revisión de despliegue** del **2026-08-05**.
-- **Ficheros**: `package.json:13` → `src/scripts/sync-db.ts:15`, frente a `scripts/sync-db.ts:29`.
-- **Bloquea el redespliegue**: **no**, pero es una mina en el droplet nuevo.
-
-`npm run db:sync` ejecuta `sequelize.sync({ force: true })`: **borra y recrea las 16 tablas**.
-Existe una variante no destructiva con `{ alter: true }` en `scripts/sync-db.ts` que **no está
-enganchada a ningún script npm**. Es decir: la peligrosa tiene atajo y la segura no.
-
-En producción, un `npm run db:sync` tecleado por costumbre borra los datos reales. Y sin
-migraciones no hay forma de evolucionar el esquema sin recrearlo.
-
-**Corrección**: que `db:sync` apunte a la variante `alter` o exija una confirmación explícita
-(`--force` propio), e introducir migraciones (`umzug` o las de `sequelize-cli`) antes de la
-reconstrucción.
-
-**Nota comprobada, para que nadie la reabra**: `force: true` **no** borra la tabla `rate_limits` del
-limitador — `sync` solo opera sobre los 16 modelos registrados en `src/models/index.ts`, y esa
-tabla no es un modelo.
-
----
-
 ## SB-27 — `GET /api/public/events/[slug]` devuelve 500 siempre: `include` sin alias
 
 - **Referencia**: encontrado durante la verificación W3 de **R1-01** (plan 01, fase 1), 2026-08-06.
@@ -986,26 +1002,6 @@ para que el formulario y el servidor contaran lo mismo — ese parcheo por dupli
 el modo de fallo que la duplicación garantiza a futuro: quien toque uno no sabrá que existe el
 otro. **Corrección propuesta**: un único módulo de esquemas de auth importado por ambas capas
 (~30 min; revisar también la relación con D2.6, la política de contraseñas partida).
-
----
-
-## SB-32 — `npm run db:sync` ejecuta `sequelize.sync({ force: true })`: borra TODOS los datos, y hay dos `sync-db.ts` divergentes
-
-- **Referencia**: encontrado durante la implementación de **R2-03b** (plan 02, fase 3), 2026-08-06.
-- **Ficheros**: `src/scripts/sync-db.ts:15` (el que ejecuta `npm run db:sync`, con `force: true`)
-  y `scripts/sync-db.ts` (huérfano: ningún script npm lo referencia, usa `alter: true`).
-- **Bloquea el despliegue**: **sí como esté en el runbook de producción** — relacionado con SB-26
-  (no hay migraciones), pero es un peligro distinto: SB-26 es la ausencia de camino seguro; esto
-  es que el camino documentado (`db:sync` aparece en las instrucciones de arranque del entorno)
-  **destruye datos sin preguntar**.
-
-`sequelize.sync({ force: true })` hace `DROP TABLE` de todos los modelos antes de recrearlos. En
-desarrollo es cómodo; ejecutado por costumbre contra la base administrada de DigitalOcean con
-datos reales, es la pérdida total sin confirmación ni backup. Además hay dos `sync-db.ts` con
-comportamientos opuestos (`force` vs `alter`), y cuál corre depende de si se invoca por npm o por
-ruta — R2-03b tuvo que averiguarlo para saber dónde crear `rate_limits`. **Corrección propuesta**:
-borrar el huérfano, exigir confirmación explícita (variable `FORCE_SYNC=yes`) para `force: true`,
-y que el aprovisionamiento de producción use el camino del plan 08/D8.4, nunca `db:sync` (~1 h).
 
 ---
 
