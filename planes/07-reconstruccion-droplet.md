@@ -35,10 +35,13 @@ el compromiso.
 
 1. **`engines.node`** en `package.json` y **`.nvmrc`** con la misma versión. Hoy no consta con qué
    Node corría el servidor comprometido. Elegir una LTS con soporte largo y **justificar cuál**.
-   **Dato verificado el 2026-08-06:** el Node instalado en la máquina de desarrollo es **v24**,
-   mientras que D7.5 («la LTS activa») apunta a **22**. Next 16.2.12 exige `>=20.9.0`, así que las
-   dos valen — pero fijar una versión distinta de la que se usa a diario es una decisión a tomar y
-   registrar, no a asumir.
+   **Dato verificado el 2026-08-06:** el Node instalado en la máquina de desarrollo es **v24.18.0**.
+   La versión anterior de este párrafo afirmaba que D7.5 («la LTS activa») apuntaba a **22**; era
+   un dato desactualizado: desde octubre de 2025 la LTS **activa** es la **24** (la 22 pasó a
+   *maintenance*, fin de vida abril de 2027; la 24 tiene mantenimiento hasta abril de 2028). Es
+   decir, el valor por defecto de D7.5 y el Node de la máquina de desarrollo **coinciden en 24** —
+   no había conflicto que decidir. **Resuelta el 2026-08-06: Node 24** (`.nvmrc` = `24`,
+   `engines.node` = `24.x`), registrada como P07-D7.5 en DECISIONES.md.
 2. **`.github/dependabot.yml`** para npm, con agrupación de parches para que no genere ruido
    inmanejable.
 3. **`npm audit` en CI** como paso que falla ante vulnerabilidades críticas.
@@ -224,7 +227,7 @@ Se registran en [DECISIONES.md](DECISIONES.md) y el crítico las evalúa.
 | D7.2 | ¿CDN o WAF delante? | **No al principio** | Un segundo proxy cambia por completo la lectura de `X-Forwarded-For` y con ella la corrección de A6. Añadirlo después es fácil **si se recuerda revisar el limitador**; el plan lo deja escrito |
 | D7.3 | Base de datos | ~~Local, solo en `127.0.0.1`~~ → **ADMINISTRADA de DigitalOcean** (decisión de Emmanuel, 2026-08-06, D0) | El servidor anterior se comprometió y hubo que destruirlo **sin snapshot**: con la base en la misma máquina, los datos mueren con ella. **Ya no es una decisión de este plan** — está tomada. Lo que sí decide el plan es cómo se conecta: `DB_SSL=true`, la CA del proveedor disponible, *trusted sources* en lugar del `127.0.0.1`, y el pool dimensionado al límite del plan contratado. Los datos concretos los produce la **fase 2** |
 | D7.4 | `output: 'standalone'` | **Decidir con la unidad systemd escrita delante** | Cambia el layout del árbol desplegado, así que decidirlo antes de tener la unidad es decidir a ciegas |
-| D7.5 | Node | **La LTS activa que cumpla `>=20.9.0`** de Next 16.2.12 | Fijada en `engines` y `.nvmrc`, iguales entre sí |
+| D7.5 | Node | **La LTS activa que cumpla `>=20.9.0`** de Next 16.2.12 → **resuelta 2026-08-06: Node 24** (ver P07-D7.5 en DECISIONES.md) | Fijada en `engines` (`24.x`) y `.nvmrc` (`24`), iguales entre sí |
 | D7.6 | Copias de seguridad | **Las de DigitalOcean**, y **probar una restauración** antes de dar el droplet por terminado | Con la base administrada, el proveedor las gestiona: se acabó montarlas a mano. Lo que **no** desaparece es probar que restauran — un backup que nunca se ha restaurado no es un backup, lo gestione quien lo gestione. La retención y el procedimiento los averigua la fase 2 (I6) |
 
 **No se decide solo — se propone y se espera:**
