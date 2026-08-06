@@ -100,6 +100,18 @@ const envSchema = z.object({
   // por la configuración que la propia plantilla recomienda.
   DB_SSL: z.union([z.enum(['true', 'false']), z.literal('')]).optional(),
 
+  // Ruta al certificado de la CA de la base administrada, en PEM (P07-D7.9 /
+  // SB-09). En la Standard Edition de DigitalOcean el certificado del servidor
+  // lo firma una CA propia del cluster que Node NO lleva en su almacén: con
+  // DB_SSL=true y `rejectUnauthorized: true` (sequelize.ts), SIN esta CA la
+  // aplicación no conecta. La exigencia condicionada (DB_SSL=true ⇒ CA legible)
+  // se comprueba tras el parse, en validateEnv. Si el cluster resultara ser
+  // Advanced Edition (pregunta E1, plan 07), el certificado se valida contra el
+  // almacén del sistema y esta variable pasaría a ser opcional también con SSL:
+  // esa relajación es quitar el bloque condicionado de validateEnv, no tocar
+  // sequelize.ts (que ya tolera la ausencia).
+  DB_CA_CERT: z.string().optional(),
+
   // Obligatorias en producción pese a tener respaldo en `jwt.ts`: ese respaldo son
   // 7 días de access token y 30 de refresco, y un access token de 7 días no se
   // puede revocar. Es justo la degradación silenciosa que F6-05 existe para evitar.
@@ -139,6 +151,42 @@ function assertUploadsDirWritable(dir: string): void {
   }
 }
 
+/**
+ * P07-D7.9 (SB-09): con DB_SSL=true la CA debe existir y ser un certificado
+ * PEM legible ANTES de arrancar. Sin esta comprobación, el fallo aparecería
+ * como un error de handshake TLS opaco en `sequelize.authenticate()` — que sí
+ * aborta el arranque (P08-D8.7), pero sin nombrar la variable que lo causa.
+ * La comprobación de contenido es deliberadamente ligera (que parezca un
+ * certificado PEM): valida el error de configuración típico (ruta a otro
+ * fichero), no la cadena criptográfica — eso lo hace el handshake.
+ */
+function assertDbCaCertReadable(rutaCa: string | undefined): void {
+  const abort = (motivo: string): never => {
+    console.error(
+      `\nDB_SSL=true exige una CA verificable y DB_CA_CERT ${motivo}. La aplicación no arranca.\n\n` +
+        '  - La base administrada de DigitalOcean (Standard Edition) firma con una CA\n' +
+        '    propia del cluster: descárgala desde la consola (Connection Details →\n' +
+        '    Download CA certificate) y apunta DB_CA_CERT a esa ruta (PEM).\n' +
+        '  - Bajar rejectUnauthorized NO es la salida: deja el cifrado sin\n' +
+        '    autenticación, que es el defecto que F6-04 corrigió (ver SB-09).\n'
+    );
+    process.exit(1);
+  };
+
+  if (!rutaCa) abort('no está definida');
+  let contenido: string;
+  try {
+    contenido = fs.readFileSync(rutaCa as string, 'utf8');
+  } catch (e) {
+    const code = (e as NodeJS.ErrnoException)?.code ?? 'desconocido';
+    abort(`apunta a una ruta que no se puede leer (código ${code})`);
+    return; // inalcanzable; calma al control de flujo de TypeScript
+  }
+  if (!contenido.includes('BEGIN CERTIFICATE')) {
+    abort('apunta a un fichero que no contiene un certificado PEM');
+  }
+}
+
 export function validateEnv(): void {
   // Todas las exigencias de arriba cuelgan de NODE_ENV, así que un NODE_ENV
   // equivocado las desactiva TODAS en silencio. Matiz medido en el build real
@@ -161,6 +209,12 @@ export function validateEnv(): void {
     // (cwd()/uploads) se crea perezosamente sin systemd de por medio.
     if (isProduction && result.data.UPLOADS_DIR) {
       assertUploadsDirWritable(result.data.UPLOADS_DIR);
+    }
+    // Condicionada a DB_SSL, no a NODE_ENV: DB_SSL es la única fuente de
+    // decisión sobre el SSL de la base (F6-04), y pedir SSL sin CA verificable
+    // es un error de configuración también en desarrollo.
+    if (result.data.DB_SSL === 'true') {
+      assertDbCaCertReadable(result.data.DB_CA_CERT);
     }
     return;
   }
