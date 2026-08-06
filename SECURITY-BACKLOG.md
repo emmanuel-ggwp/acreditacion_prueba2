@@ -1010,3 +1010,23 @@ compilando la aplicación pero **sin CORS ni límites de tasa**, que es exactame
 silenciosa que esta remediación combate. **Corrección propuesta**: migrar a la convención `proxy`
 siguiendo la guía oficial y re-ejecutar la batería W3 de CORS y rate-limit (~1 h). Conviene
 hacerlo antes de la siguiente subida de versión de Next.
+
+---
+
+## SB-34 — El build avisa «Encountered unexpected file in NFT list» por la ruta de subidas
+
+- **Referencia**: visto de camino en **P08-D6** (plan 08, fase 2), 2026-08-06.
+- **Ficheros**: `src/app/api/uploads/route.ts` (traza del aviso) y
+  `src/utils/uploadsStorage.ts`; lo emite `next build` (Turbopack).
+- **Bloquea el despliegue**: no.
+
+Cada `next build` emite un warning NFT — *«A file was traced that indicates that the whole
+project was traced unintentionally»* — con traza a `api/uploads/route.ts`: el trazador de
+ficheros ve operaciones `path.join`/fs sobre rutas que solo se conocen en ejecución
+(`UPLOADS_DIR` sale del entorno; ese diseño es correcto y es D6). Se probó el remedio que
+sugiere el propio warning (`/*turbopackIgnore: true*/` en los `path.join` de
+`uploadsStorage.ts`) y **no lo silencia** — el disparador parece estar en las llamadas fs del
+propio handler. Sin efecto en el despliegue actual (no se usa `output: standalone`); si algún
+día se adopta standalone, ese trazado engordaría el artefacto. **Corrección propuesta**: acotar
+las operaciones fs de las rutas de uploads con `turbopackIgnore` (incluido el handler) o mover
+la resolución a un módulo de ruta estática, y comprobar que el warning desaparece (~30 min).
