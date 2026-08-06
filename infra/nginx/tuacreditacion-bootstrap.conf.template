@@ -1,0 +1,26 @@
+# infra/nginx/tuacreditacion-bootstrap.conf.template — PLANTILLA; la instancia
+# real la renderiza infra/provision.sh sustituyendo @DOMAIN@.
+#
+# Configuración de ARRANQUE, solo HTTP: existe únicamente para que certbot
+# pueda responder el reto ACME ANTES de que exista el certificado. En cuanto
+# certbot lo emite, provision.sh instala la definitiva
+# (tuacreditacion.conf.template) y esta deja de estar en sites-enabled.
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name @DOMAIN@;
+
+    # Reto ACME de certbot (webroot).
+    location ^~ /.well-known/acme-challenge/ {
+        root /var/www/letsencrypt;
+    }
+
+    # Todavía no hay TLS que ofrecer: se redirige ya a https para que ningún
+    # cliente se acostumbre a la versión en claro. Hasta que exista el
+    # certificado, la URL https no responde — es el estado esperado del
+    # aprovisionamiento a medias, no un fallo.
+    location / {
+        return 301 https://@DOMAIN@$request_uri;
+    }
+}

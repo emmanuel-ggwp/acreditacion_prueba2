@@ -1,0 +1,92 @@
+# infra/systemd/tuacreditacion.service — unidad del servicio (plan 07, fase 3).
+#
+# La configuración del servidor VIVE EN EL REPOSITORIO (F6-01): la copia
+# instalada en /etc/systemd/system/ la pone infra/provision.sh, y un cambio no
+# autorizado en el droplet es un `git diff` contra este fichero.
+#
+# P07-D7.1 — systemd, UN solo proceso, sin PM2: PM2 en cluster multiplica por N
+# los contadores en memoria del limitador, no lee EnvironmentFile y convierte
+# el process.exit(1) de la validación de arranque en tormenta de reinicios.
+# Aquí la tormenta la frena el backoff (RestartSec/RestartSteps, abajo).
+#
+# P07-D7.4 — SIN `output: 'standalone'`: `next start` sobre el árbol completo,
+# invocando el bin de Next directamente (sin el envoltorio `npm start`, que
+# solo añade un proceso intermedio entre systemd y Node). Con standalone, el
+# bind dependería de la variable HOSTNAME (olvidarla = escuchar en 0.0.0.0);
+# aquí el `-H 127.0.0.1` va EXPLÍCITO y versionado en el ExecStart, que es la
+# forma que no se puede olvidar. Ver DECISIONES.md.
+#
+# Requiere systemd >= 254 (RestartSteps): Ubuntu 24.04 LTS trae 255.
+
+[Unit]
+Description=tuacreditacion — Next.js en produccion (solo 127.0.0.1, detras de Nginx)
+Wants=network-online.target
+After=network-online.target
+# Sin corte definitivo por acumulación de reinicios: un fallo de configuración
+# (validateEnv/authenticate -> exit 1) se queda reintentando con el backoff de
+# abajo y se recupera solo al corregir el EnvironmentFile. (Va en [Unit]:
+# systemd-analyze verify lo rechaza en [Service].)
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=tuacreditacion
+Group=tuacreditacion
+
+WorkingDirectory=/srv/tuacreditacion/app
+
+# Permisos 600 y propiedad del usuario de servicio (los aplica provision.sh).
+# Contiene DATABASE_URL y los secretos JWT: jamás se versiona ni se imprime (R2).
+EnvironmentFile=/etc/tuacreditacion.env
+
+# PORT sale del EnvironmentFile (`next start` lo lee). El bind a loopback va
+# explícito aquí: el limitador por IP (A6) confía en el último x-forwarded-for
+# SOLO si Nginx es el único camino de entrada (§7.4).
+ExecStart=/usr/bin/node /srv/tuacreditacion/app/node_modules/next/dist/bin/next start -H 127.0.0.1
+
+# Reinicio con backoff: 2s, luego escalando hasta 60s — sin tormenta de
+# reinicios y sin quedarse muerto (el corte por acumulación lo desactiva el
+# StartLimitIntervalSec=0 de [Unit]).
+Restart=on-failure
+RestartSec=2
+RestartSteps=6
+RestartMaxDelaySec=60
+
+# ---- Endurecimiento ----
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+
+# StateDirectory crea /var/lib/tuacreditacion escribible (y propiedad del
+# usuario de servicio) incluso bajo ProtectSystem=strict; env.ts añade el
+# subdirectorio uploads y PRUEBA una escritura real en el arranque (D6, plan 08).
+StateDirectory=tuacreditacion
+
+# UPLOADS_DIR absoluto y explícito: sin esto la subida de ficheros falla bajo
+# ProtectSystem=strict y el error no es evidente (plan 07). Redundante con
+# StateDirectory A PROPÓSITO: si UPLOADS_DIR se mueve fuera de
+# /var/lib/tuacreditacion, esta es la línea que lo mantiene escribible.
+# El directorio existe antes del arranque (lo crea provision.sh).
+ReadWritePaths=/var/lib/tuacreditacion/uploads
+
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictSUIDSGID=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+LockPersonality=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+CapabilityBoundingSet=
+SystemCallArchitectures=native
+# MemoryDenyWriteExecute NO se activa: el JIT de V8 necesita páginas W+X.
+
+# UMask por defecto (0022): los ficheros subidos quedan 644 y Nginx (www-data,
+# con acceso de grupo al directorio) puede servirlos por alias.
+
+[Install]
+WantedBy=multi-user.target
