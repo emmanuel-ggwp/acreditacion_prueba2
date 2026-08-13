@@ -239,7 +239,8 @@ const ParticipantCard: React.FC<ParticipantCardProps> = ({ person, type, schedul
             <p className="flex items-center"><FileText size={16} className="mr-2" /> {documentNumber || 'No proporcionado'}</p>
           </div>
         </div>
-        <div>
+        {/* Sin premio no aporta nada en celular: se oculta para acercar el botón ACREDITAR. */}
+        <div className={isParticipant && (participant as any)?.isAwarded ? '' : 'hidden md:block'}>
           <h3 className="font-semibold text-lg mb-3">Premiación</h3>
           {isParticipant && (participant as any)?.isAwarded ? (
             <div className="flex items-start gap-2">

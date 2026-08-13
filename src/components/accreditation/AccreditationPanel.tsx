@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import useEventStore from '@/store/eventStore';
 import apiClient from '@/utils/apiClient';
 import SearchParticipant from './SearchParticipant';
@@ -53,6 +53,10 @@ const AccreditationPanel = ({ eventId: eventIdProp, scheduleId: scheduleIdProp }
   const [eventStats, setEventStats] = useState<EventStats | null>(null);
   const [showAwarded, setShowAwarded] = useState(false);
   const [showDietary, setShowDietary] = useState(false);
+  // En celular, tras elegir la fecha se colapsan los pasos 1-2 (y el resumen) en una
+  // barra compacta, para que el buscador quede arriba sin scroll. En desktop no aplica.
+  const [setupCollapsed, setSetupCollapsed] = useState(false);
+  const personCardRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     apiClient.get<any>('/api/events?page=1&limit=100')
@@ -65,8 +69,17 @@ const AccreditationPanel = ({ eventId: eventIdProp, scheduleId: scheduleIdProp }
     setScheduleId('');
     setSelectedPerson(null);
     setStats(null);
+    setSetupCollapsed(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventId]);
+
+  // En celular, la ficha de la persona aparece bajo el buscador y queda fuera de
+  // pantalla (más aún con el teclado abierto): bajar hasta ella al seleccionarla.
+  useEffect(() => {
+    if (selectedPerson && personCardRef.current && window.matchMedia('(max-width: 639px)').matches) {
+      personCardRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [selectedPerson]);
 
   const loadStats = useCallback(() => {
     if (!scheduleId) { setStats(null); return; }
@@ -97,6 +110,33 @@ const AccreditationPanel = ({ eventId: eventIdProp, scheduleId: scheduleIdProp }
   return (
     <div className="p-4 sm:p-6 md:p-8 max-w-4xl mx-auto space-y-6">
       <h1 className="text-2xl sm:text-3xl font-bold">Acreditación</h1>
+
+      {/* Barra compacta (solo celular): evento y fecha elegidos + botón para cambiarlos. */}
+      {scheduleId && setupCollapsed && (
+        <div className="sm:hidden flex items-center justify-between gap-3 bg-white border border-gray-200 rounded-lg p-3">
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-gray-800 truncate">
+              {events.find((e) => e.id === eventId)?.name || 'Evento'}
+            </p>
+            <p className="text-xs text-gray-500 truncate">
+              {selectedScheduleLabel}
+              {selectedSchedule?.startDateTime ? (
+                <span className="capitalize"> · {fmtDate(selectedSchedule.startDateTime)} {fmtTime(selectedSchedule.startDateTime)}</span>
+              ) : null}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setSetupCollapsed(false)}
+            className="shrink-0 text-sm font-medium text-indigo-600 border border-indigo-200 rounded-lg px-3 py-2 hover:bg-indigo-50 active:bg-indigo-100"
+          >
+            Cambiar
+          </button>
+        </div>
+      )}
+
+      {/* Pasos 1-2 y resumen: en celular se ocultan tras elegir fecha (barra compacta arriba). */}
+      <div className={`space-y-6 ${scheduleId && setupCollapsed ? 'hidden sm:block' : ''}`}>
 
       {/* Paso 1: Evento */}
       <div>
@@ -142,11 +182,11 @@ const AccreditationPanel = ({ eventId: eventIdProp, scheduleId: scheduleIdProp }
                       {cap > 0 && <div className="w-full bg-gray-200 rounded-full h-1.5"><div className="bg-indigo-600 h-1.5 rounded-full" style={{ width: `${pct}%` }} /></div>}
                     </div>
                     <div className="mt-3 flex items-center gap-2">
-                      <button onClick={() => { setScheduleId(s.id); setSelectedPerson(null); }} className={`flex-1 text-sm font-medium rounded-md py-1.5 ${sel ? 'bg-indigo-600 text-white' : 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200'}`}>
+                      <button onClick={() => { setScheduleId(s.id); setSelectedPerson(null); setSetupCollapsed(true); }} className={`flex-1 text-sm font-medium rounded-md py-2 ${sel ? 'bg-indigo-600 text-white' : 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200 active:bg-indigo-300'}`}>
                         {sel ? 'Seleccionada' : 'Trabajar aquí'}
                       </button>
-                      {s.status === 'published' && <button onClick={() => toggleStatus(s, 'accrediting')} title="Abrir acreditación" className="text-green-600 hover:bg-green-50 rounded-md p-1.5 border border-green-200"><DoorOpen size={16} /></button>}
-                      {s.status === 'accrediting' && <button onClick={() => toggleStatus(s, 'accredited')} title="Cerrar acreditación" className="text-gray-500 hover:bg-gray-100 rounded-md p-1.5 border border-gray-200"><DoorClosed size={16} /></button>}
+                      {s.status === 'published' && <button onClick={() => toggleStatus(s, 'accrediting')} title="Abrir acreditación" className="text-green-600 hover:bg-green-50 rounded-md p-2 border border-green-200"><DoorOpen size={18} /></button>}
+                      {s.status === 'accrediting' && <button onClick={() => toggleStatus(s, 'accredited')} title="Cerrar acreditación" className="text-gray-500 hover:bg-gray-100 rounded-md p-2 border border-gray-200"><DoorClosed size={18} /></button>}
                     </div>
                   </div>
                 );
@@ -188,6 +228,8 @@ const AccreditationPanel = ({ eventId: eventIdProp, scheduleId: scheduleIdProp }
         </div>
       )}
 
+      </div>{/* fin pasos 1-2 + resumen (colapsables en celular) */}
+
       {/* Paso 3: Stats + Buscar participante */}
       {scheduleId && (
         <div className="space-y-4">
@@ -212,7 +254,9 @@ const AccreditationPanel = ({ eventId: eventIdProp, scheduleId: scheduleIdProp }
           </div>
 
           {selectedPerson && (
-            <ParticipantCard person={selectedPerson.data} type={selectedPerson.type} scheduleId={scheduleId} scheduleLabel={selectedScheduleLabel} onAccredited={onAccredited} />
+            <div ref={personCardRef} className="scroll-mt-4">
+              <ParticipantCard person={selectedPerson.data} type={selectedPerson.type} scheduleId={scheduleId} scheduleLabel={selectedScheduleLabel} onAccredited={onAccredited} />
+            </div>
           )}
         </div>
       )}

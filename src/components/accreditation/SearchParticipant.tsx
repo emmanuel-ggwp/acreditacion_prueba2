@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useCallback, useEffect } from 'react';
-import { Search } from 'lucide-react';
+import { Search, X } from 'lucide-react';
 import { debounce } from 'lodash';
 import useParticipantStore from '@/store/participantStore';
 import Participant from '@/models/Participant';
@@ -58,9 +58,19 @@ const SearchParticipant: React.FC<SearchParticipantProps> = ({ eventId, onSelect
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Buscar por nombre, correo o documento..."
-          className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-lg text-lg focus:ring-indigo-500 focus:border-indigo-500"
+          placeholder="Buscar por nombre, correo o RUT..."
+          className="w-full pl-12 pr-10 py-3 border border-gray-300 rounded-lg text-lg focus:ring-indigo-500 focus:border-indigo-500"
         />
+        {query && (
+          <button
+            type="button"
+            onClick={() => { setQuery(''); setResults([]); }}
+            aria-label="Limpiar búsqueda"
+            className="absolute right-1 top-1/2 -translate-y-1/2 p-2 text-gray-400 hover:text-gray-600 active:text-gray-700"
+          >
+            <X size={20} />
+          </button>
+        )}
       </div>
       {isLoading && <div className="p-2 text-sm text-gray-500">Buscando...</div>}
       {results.length > 0 && (
@@ -69,10 +79,12 @@ const SearchParticipant: React.FC<SearchParticipantProps> = ({ eventId, onSelect
             <li
               key={person.id}
               onClick={() => handleSelect(person)}
-              className="px-4 py-3 hover:bg-gray-100 cursor-pointer border-b last:border-b-0"
+              className="px-4 py-3 hover:bg-gray-100 active:bg-gray-100 cursor-pointer border-b last:border-b-0"
             >
               <p className="font-medium text-base">{`${(person as any).firstName} ${(person as any).lastName}`}</p>
-              <p className="text-sm text-gray-500">{(person as any).email || 'Invitado'}</p>
+              <p className="text-sm text-gray-500">
+                {[(person as any).documentNumber, (person as any).email].filter(Boolean).join(' · ') || 'Sin RUT ni correo'}
+              </p>
             </li>
           ))}
         </ul>
