@@ -163,10 +163,25 @@ const ParticipantImport: React.FC<ParticipantImportProps> = ({ eventId, guestMod
     });
   };
 
-  // Filas con RUT presente Y válido (se subirán). El RUT debe ser un RUT chileno válido.
+  // ¿La fila es importable? Con RUT: debe ser un RUT chileno válido. Sin RUT: al
+  // menos nombre o apellido, para poder identificar a la persona.
+  const rowOk = (p: any) => {
+    const rut = String(p.documentNumber ?? '').trim();
+    if (rut) return isValidRut(rut);
+    return !!(String(p.firstName ?? '').trim() || String(p.lastName ?? '').trim());
+  };
+
+  // Filas importables (se subirán).
   const validCount = useMemo(() => {
     if (!rows.length) return 0;
-    return buildParticipants().filter((p) => p.documentNumber && isValidRut(String(p.documentNumber))).length;
+    return buildParticipants().filter(rowOk).length;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, headers, mapping]);
+
+  // Filas importables pero SIN RUT (aviso: no podrán auto-inscribirse en la landing).
+  const noRutCount = useMemo(() => {
+    if (!rows.length) return 0;
+    return buildParticipants().filter((p) => !String(p.documentNumber ?? '').trim() && rowOk(p)).length;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows, headers, mapping]);
 
@@ -180,9 +195,9 @@ const ParticipantImport: React.FC<ParticipantImportProps> = ({ eventId, guestMod
   }, [rows, headers, mapping]);
 
   const handleImport = async () => {
-    const participants = buildParticipants().filter((p) => p.documentNumber && isValidRut(String(p.documentNumber)));
+    const participants = buildParticipants().filter(rowOk);
     if (participants.length === 0) {
-      showToast.error('No hay filas con RUT válido. Revisa la columna del RUT (deben ser RUT chilenos válidos).');
+      showToast.error('No hay filas válidas. Cada fila necesita un RUT chileno válido o, al menos, un nombre.');
       return;
     }
     setImporting(true);
@@ -266,8 +281,9 @@ const ParticipantImport: React.FC<ParticipantImportProps> = ({ eventId, guestMod
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-900 space-y-2">
                 <p className="font-semibold">📋 Cómo llenar la planilla</p>
                 <p>
-                  <b>Solo el RUT es obligatorio.</b> Todo lo demás es opcional: Nombre, Apellido, Correo,
-                  Teléfono, Empresa, Cargo, Código SAP y Preferencia alimenticia. La primera fila deben ser los
+                  <b>El RUT es opcional pero recomendado.</b> Cada fila debe traer un <b>RUT válido</b> o, si no
+                  tiene RUT, al menos el <b>Nombre</b> o <b>Apellido</b>. El resto (Correo, Teléfono, Empresa,
+                  Cargo, Código SAP y Preferencia alimenticia) es opcional. La primera fila deben ser los
                   encabezados.
                 </p>
                 <div>
@@ -289,7 +305,9 @@ const ParticipantImport: React.FC<ParticipantImportProps> = ({ eventId, guestMod
                 <p className="text-blue-800/80">
                   <b>Importante:</b> la <b>precarga NO inscribe</b> a nadie. Solo habilita el <b>acceso al formulario</b>:
                   la persona entra a la landing, valida su RUT y <b>se inscribe ella misma</b>. Para precargar así, al
-                  importar deja la opción “Sin fecha — dejar como precargados”.
+                  importar deja la opción “Sin fecha — dejar como precargados”. Ojo: las filas <b>sin RUT</b> no podrán
+                  inscribirse solas por la landing (el ingreso es con RUT); inscríbelas directamente en una fecha o
+                  gestiónalas desde administración.
                 </p>
               </div>
 
@@ -369,7 +387,19 @@ const ParticipantImport: React.FC<ParticipantImportProps> = ({ eventId, guestMod
                 );
               })()}
 
-              <p className="text-sm text-gray-600">Filas con RUT válido a importar: <b>{validCount}</b> de {rows.length}</p>
+              <p className="text-sm text-gray-600">
+                Filas válidas a importar: <b>{validCount}</b> de {rows.length}
+                {noRutCount > 0 ? <> · sin RUT: <b>{noRutCount}</b></> : null}
+              </p>
+
+              {/* Aviso: precargar filas sin RUT las deja sin acceso a la landing (el ingreso es con RUT). */}
+              {noRutCount > 0 && !scheduleId && (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">
+                  ⚠️ <b>{noRutCount} fila(s) sin RUT</b> se precargarán, pero esas personas <b>no podrán inscribirse
+                  solas</b> en la landing (el ingreso es con RUT). Tendrás que inscribirlas en una fecha desde
+                  administración o acreditarlas directamente el día del evento.
+                </div>
+              )}
 
               {/* RUT inválidos: NO se subirán */}
               {invalidRuts.length > 0 && (
@@ -377,7 +407,7 @@ const ParticipantImport: React.FC<ParticipantImportProps> = ({ eventId, guestMod
                   <p className="font-semibold text-red-800 flex items-center gap-2 mb-1">
                     <AlertTriangle className="h-4 w-4" /> {invalidRuts.length} fila(s) con RUT inválido — NO se subirán
                   </p>
-                  <p className="text-red-700/90 mb-2">El RUT debe ser un RUT chileno válido (dígito verificador correcto). Corrígelos en el Excel y vuelve a subirlo.</p>
+                  <p className="text-red-700/90 mb-2">El RUT debe ser un RUT chileno válido (dígito verificador correcto). Corrígelos en el Excel o deja la celda vacía (sin RUT, la fila se acepta si trae al menos el nombre).</p>
                   <div className="border border-red-200 rounded-md bg-white max-h-32 overflow-y-auto divide-y">
                     {invalidRuts.map((r, i) => (
                       <div key={i} className="px-3 py-1.5 text-xs">

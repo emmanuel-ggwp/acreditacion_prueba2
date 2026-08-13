@@ -153,27 +153,30 @@ export class ParticipantService {
       const { guests = [], ...pdata } = row;
       const tx = await sequelize.transaction();
       try {
-        // Solo el RUT es obligatorio. El resto (nombre, correo, etc.) es opcional.
-        if (!pdata.documentNumber || !String(pdata.documentNumber).trim()) {
-          throw new Error('Falta el RUT (es el único campo obligatorio).');
-        }
-        // El RUT debe ser un RUT chileno válido (dígito verificador correcto),
-        // porque la landing lo exige para inscribirse. Si no, se rechaza la fila.
-        if (!isValidRut(String(pdata.documentNumber))) {
+        // El RUT es opcional: sin RUT se exige al menos nombre o apellido para poder
+        // identificar a la persona en acreditación. Si el RUT viene, debe ser un RUT
+        // chileno válido (dígito verificador correcto); un RUT malo rechaza la fila,
+        // porque la landing lo usa como llave de ingreso.
+        const rawRut = pdata.documentNumber != null ? String(pdata.documentNumber).trim() : '';
+        if (rawRut && !isValidRut(rawRut)) {
           throw new Error('RUT inválido (dígito verificador incorrecto).');
         }
+        if (!rawRut && !String(pdata.firstName || '').trim() && !String(pdata.lastName || '').trim()) {
+          throw new Error('Fila sin RUT y sin nombre: se necesita al menos uno para identificar a la persona.');
+        }
 
-        // Dedup por RUT NORMALIZADO (sin puntos, guion ni espacios), así
-        // 28088678-5 = 28.088.678-5 = 280886785 se tratan como la misma persona.
-        const normRut = cleanRut(String(pdata.documentNumber));
-        const rutMatch = sqlWhere(normalizedRutCol(), normRut);
-        const orConds: any[] = [rutMatch];
+        // Dedup: por RUT NORMALIZADO (sin puntos, guion ni espacios, así 28088678-5 =
+        // 28.088.678-5 = 280886785) y/o por correo. Sin RUT ni correo no hay llave de
+        // dedup y la fila siempre crea un participante nuevo.
+        const orConds: any[] = [];
+        if (rawRut) orConds.push(sqlWhere(normalizedRutCol(), cleanRut(rawRut)));
         if (pdata.email) orConds.push({ email: pdata.email });
-        let participant = await Participant.findOne({ where: { eventId, [Op.or]: orConds }, transaction: tx });
+        let participant = orConds.length
+          ? await Participant.findOne({ where: { eventId, [Op.or]: orConds }, transaction: tx })
+          : null;
 
-        // RUT canónico para guardar (28088678-5: sin puntos, con guion).
-        // Si no es un RUT chileno válido, se deja tal cual.
-        const canonicalRut = isValidRut(pdata.documentNumber) ? normalizeRut(pdata.documentNumber) : String(pdata.documentNumber).trim();
+        // RUT canónico para guardar (28088678-5: sin puntos, con guion), o null si no vino.
+        const canonicalRut = rawRut ? normalizeRut(rawRut) : null;
 
         if (!participant) {
           // Invitados en modos numéricos (count / companion). "Acompañante" acepta sí/si/x/1.
