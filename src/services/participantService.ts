@@ -2,7 +2,7 @@
 import { z } from 'zod';
 import { Op, fn, col, where as sqlWhere } from 'sequelize';
 import { sequelize } from '@/lib/sequelize';
-import { formatRut, isValidRut } from '@/utils/validators/rut';
+import { cleanRut, isValidRut, normalizeRut } from '@/utils/validators/rut';
 import {
   Participant,
   Guest,
@@ -14,6 +14,15 @@ import {
 } from '@/models/index';
 import { createParticipantSchema, updateParticipantSchema, bulkCreateParticipantSchema } from '@/utils/validators/participantSchemas';
 import { auditLogService } from './auditLogService';
+
+/**
+ * Columna de RUT normalizada en SQL (sin puntos, guion ni espacios, en mayúsculas),
+ * para comparar/buscar sin importar el formato con que se haya guardado
+ * (28.088.678-5 = 28088678-5 = 280886785). En consultas con JOIN hay que calificar
+ * la columna (p. ej. 'Participant.document_number').
+ */
+const normalizedRutCol = (column = 'document_number') =>
+  fn('UPPER', fn('REPLACE', fn('REPLACE', fn('REPLACE', col(column), '.', ''), '-', ''), ' ', ''));
 
 export class ParticipantService {
   async createParticipant(data: z.infer<typeof createParticipantSchema>, createdBy: string) {
@@ -156,17 +165,15 @@ export class ParticipantService {
 
         // Dedup por RUT NORMALIZADO (sin puntos, guion ni espacios), así
         // 28088678-5 = 28.088.678-5 = 280886785 se tratan como la misma persona.
-        const normRut = String(pdata.documentNumber).replace(/[.\-\s]/g, '').toUpperCase();
-        const rutMatch = sqlWhere(
-          fn('UPPER', fn('REPLACE', fn('REPLACE', fn('REPLACE', col('document_number'), '.', ''), '-', ''), ' ', '')),
-          normRut
-        );
+        const normRut = cleanRut(String(pdata.documentNumber));
+        const rutMatch = sqlWhere(normalizedRutCol(), normRut);
         const orConds: any[] = [rutMatch];
         if (pdata.email) orConds.push({ email: pdata.email });
         let participant = await Participant.findOne({ where: { eventId, [Op.or]: orConds }, transaction: tx });
 
-        // RUT canónico para guardar (12.345.678-5). Si no es un RUT chileno válido, se deja tal cual.
-        const canonicalRut = isValidRut(pdata.documentNumber) ? formatRut(pdata.documentNumber) : String(pdata.documentNumber).trim();
+        // RUT canónico para guardar (28088678-5: sin puntos, con guion).
+        // Si no es un RUT chileno válido, se deja tal cual.
+        const canonicalRut = isValidRut(pdata.documentNumber) ? normalizeRut(pdata.documentNumber) : String(pdata.documentNumber).trim();
 
         if (!participant) {
           // Invitados en modos numéricos (count / companion). "Acompañante" acepta sí/si/x/1.
@@ -213,7 +220,7 @@ export class ParticipantService {
             participantId: participant.id,
             firstName: g.firstName,
             lastName: g.lastName || null,
-            documentNumber: g.documentNumber ? (isValidRut(g.documentNumber) ? formatRut(g.documentNumber) : String(g.documentNumber).trim()) : null,
+            documentNumber: g.documentNumber ? (isValidRut(g.documentNumber) ? normalizeRut(g.documentNumber) : String(g.documentNumber).trim()) : null,
             guestType: g.guestType || null,
             dietaryPreference: (g.dietaryPreference && String(g.dietaryPreference).trim()) || null,
             confirmed: !!schedule,
@@ -415,6 +422,15 @@ export class ParticipantService {
         { lastName: { [Op.iLike]: `%${filters.name}%` } },
         { documentNumber: { [Op.iLike]: `%${filters.name}%` } },
       ];
+      // Si lo buscado parece un RUT (o un trozo de RUT), comparar además contra la
+      // columna normalizada: así 28088678-5, 28.088.678-5 y 280886785 encuentran al
+      // mismo participante sin importar el formato con que quedó guardado.
+      const rutTerm = cleanRut(filters.name);
+      if (/^\d+K?$/.test(rutTerm)) {
+        where[Op.or].push(
+          sqlWhere(normalizedRutCol('Participant.document_number'), { [Op.like]: `%${rutTerm}%` })
+        );
+      }
     }
     if (filters.email) {
       where.email = { [Op.iLike]: `%${filters.email}%` };
@@ -473,15 +489,22 @@ export class ParticipantService {
     if (!query || query.trim().length < 3) {
         return [];
     }
+    const orConds: any[] = [
+      { firstName: { [Op.iLike]: `%${query}%` } },
+      { lastName: { [Op.iLike]: `%${query}%` } },
+      { email: { [Op.iLike]: `%${query}%` } },
+      { documentNumber: { [Op.iLike]: `%${query}%` } },
+    ];
+    // Igual que en listParticipants: un RUT (o trozo de RUT) debe encontrar al
+    // participante sin importar el formato guardado (con/sin puntos o guion).
+    const rutTerm = cleanRut(query);
+    if (/^\d+K?$/.test(rutTerm)) {
+      orConds.push(sqlWhere(normalizedRutCol('Participant.document_number'), { [Op.like]: `%${rutTerm}%` }));
+    }
     const participants = await Participant.findAll({
       where: {
         eventId,
-        [Op.or]: [
-          { firstName: { [Op.iLike]: `%${query}%` } },
-          { lastName: { [Op.iLike]: `%${query}%` } },
-          { email: { [Op.iLike]: `%${query}%` } },
-          { documentNumber: { [Op.iLike]: `%${query}%` } },
-        ],
+        [Op.or]: orConds,
       },
       include: [
         { model: Guest, as: 'guests' },

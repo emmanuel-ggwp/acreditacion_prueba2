@@ -37,6 +37,17 @@ export const isValidRut = (rut: string): boolean => {
   return computeRutDv(body) === dv;
 };
 
+/**
+ * Normaliza un RUT al formato canónico de base de datos: sin puntos y con
+ * guion antes del dígito verificador (28.088.678-5 / 280886785 -> 28088678-5).
+ * Es el formato con que se GUARDA; `formatRut` es solo para mostrar.
+ */
+export const normalizeRut = (rut: string): string => {
+  const clean = cleanRut(rut);
+  if (clean.length < 2) return clean;
+  return `${clean.slice(0, -1)}-${clean.slice(-1)}`;
+};
+
 /** Formatea un RUT con puntos y guion: 12345678-5 -> 12.345.678-5 */
 export const formatRut = (rut: string): string => {
   const clean = cleanRut(rut);
