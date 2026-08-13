@@ -402,7 +402,7 @@ export class ParticipantService {
     return participant;
   }
 
-  async listParticipants(eventId: string, filters: { name?: string, email?: string, accredited?: boolean, withAward?: boolean }, pagination: { page: number, limit: number }) {
+  async listParticipants(eventId: string, filters: { name?: string, email?: string, accredited?: boolean, withAward?: boolean, awarded?: boolean }, pagination: { page: number, limit: number }) {
     const { page = 1, limit = 10 } = pagination;
     
     // Participantes del evento (incluye precargados sin horario) vía eventId.
@@ -437,6 +437,11 @@ export class ParticipantService {
     }
     if (filters.email) {
       where.email = { [Op.iLike]: `%${filters.email}%` };
+    }
+    // Premiación manual (columna isAwarded), distinta del módulo de premios
+    // (participant_awards) que filtra withAward.
+    if (filters.awarded) {
+      where.isAwarded = true;
     }
     
     // Note: Accredited logic might need to change if accreditation is per schedule. 

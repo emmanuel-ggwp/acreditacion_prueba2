@@ -24,6 +24,7 @@ export const GET = withAuth(async (
     const search = searchParams.get('search') || undefined;
     const accredited = searchParams.get('accredited') === 'true' ? true : searchParams.get('accredited') === 'false' ? false : undefined;
     const withAward = searchParams.get('withAward') === 'true' ? true : undefined;
+    const awarded = searchParams.get('awarded') === 'true' ? true : undefined;
 
     if (search) {
       const results = await participantService.searchParticipants(eventId, search);
@@ -32,7 +33,7 @@ export const GET = withAuth(async (
 
     const result = await participantService.listParticipants(
       eventId,
-      { name, email, accredited, withAward },
+      { name, email, accredited, withAward, awarded },
       { page, limit }
     );
 

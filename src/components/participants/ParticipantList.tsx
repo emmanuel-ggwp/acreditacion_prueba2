@@ -1,12 +1,11 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import useParticipantStore from '@/store/participantStore';
 import useEventStore from '@/store/eventStore';
 import useAuthStore from '@/store/authStore';
-import { PlusCircle, FileDown, FileUp, Edit, Trash2, Award, X, CheckCircle2, Clock } from 'lucide-react';
-import ParticipantSearch from './ParticipantSearch';
+import { PlusCircle, FileDown, FileUp, Edit, Trash2, Award, X, CheckCircle2, Clock, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import Participant from '@/models/Participant';
 import ParticipantForm from './ParticipantForm';
 import ParticipantImport from './ParticipantImport';
@@ -23,15 +22,17 @@ const fmtAccreditedAt = (d?: string | null) => {
   } catch { return null; }
 };
 
+// Tamaño de página de la tabla (la búsqueda y los filtros corren en el servidor).
+const PAGE_SIZE = 25;
+
 const ParticipantList = ({ eventId }: { eventId: string }) => {
   const router = useRouter();
-  const { 
-    participants, 
-    loading, 
-    error, 
+  const {
+    participants,
+    loading,
+    error,
     total,
     fetchParticipantsByEvent,
-    setCurrentParticipant,
     deleteParticipant,
     bulkDeleteParticipants,
     updateParticipant
@@ -63,20 +64,42 @@ const ParticipantList = ({ eventId }: { eventId: string }) => {
     }
   };
 
+  const [page, setPage] = useState(1);
+
+  // Filtros que viajan al servidor: la búsqueda cubre TODOS los participantes del
+  // evento (por nombre, correo o RUT en cualquier formato), no solo la página cargada.
+  const currentFilters = useMemo(() => {
+    const f: Record<string, string> = {};
+    if (filter.trim()) f.name = filter.trim();
+    if (showOnlyAwarded) f.awarded = 'true';
+    return f;
+  }, [filter, showOnlyAwarded]);
+
+  const reload = useCallback(() => {
+    fetchParticipantsByEvent(eventId, page, PAGE_SIZE, currentFilters);
+  }, [eventId, page, currentFilters, fetchParticipantsByEvent]);
+
+  // Cambiar la búsqueda o el filtro vuelve a la página 1.
+  useEffect(() => { setPage(1); }, [filter, showOnlyAwarded]);
+
+  // Carga de la tabla (con debounce mientras se escribe en el buscador).
+  useEffect(() => {
+    const t = setTimeout(reload, filter.trim() ? 300 : 0);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reload]);
+
+  // El total con filtros activos es el total FILTRADO; para el aforo se recuerda
+  // el total sin filtros (el que corresponde a la capacidad del evento).
+  const [unfilteredTotal, setUnfilteredTotal] = useState(0);
+  useEffect(() => {
+    if (!loading && Object.keys(currentFilters).length === 0) setUnfilteredTotal(total);
+  }, [total, loading, currentFilters]);
+
   const isEventFull = useMemo(() => {
     if (!currentEvent?.maxCapacity) return false;
-    return total >= currentEvent.maxCapacity;
-  }, [currentEvent, total]);
-
-  useEffect(() => {
-    fetchParticipantsByEvent(eventId);
-  }, [eventId, fetchParticipantsByEvent]);
-
-  const handleSelectParticipant = (participant: Participant) => {
-    setCurrentParticipant(participant);
-    // router.push(`/participants/${participant.id}`);
-    handleEdit(participant);
-  };
+    return unfilteredTotal >= currentEvent.maxCapacity;
+  }, [currentEvent, unfilteredTotal]);
 
   const handleEdit = (participant: Participant) => {
     setSelectedParticipant(participant);
@@ -91,28 +114,19 @@ const ParticipantList = ({ eventId }: { eventId: string }) => {
     if (!deleteTarget) return;
     await deleteParticipant(deleteTarget.id, reason);
     setDeleteTarget(null);
-    fetchParticipantsByEvent(eventId);
+    reload();
   };
 
   const handleCloseForm = () => {
     setIsFormOpen(false);
     setSelectedParticipant(undefined);
-    fetchParticipantsByEvent(eventId);
+    reload();
   };
 
-  const filteredParticipants = useMemo(() => {
-    return participants.filter(p =>
-      (
-        `${p.firstName} ${p.lastName}`.toLowerCase().includes(filter.toLowerCase()) ||
-        p.email.toLowerCase().includes(filter.toLowerCase()) ||
-        (p.documentNumber && p.documentNumber.toLowerCase().includes(filter.toLowerCase()))
-      ) && (!showOnlyAwarded || (p as any).isAwarded)
-    );
-  }, [participants, filter, showOnlyAwarded]);
-
-  const allSelected = filteredParticipants.length > 0 && selectedIds.length === filteredParticipants.length;
+  // La búsqueda y el filtro de premiados ya vienen resueltos del servidor.
+  const allSelected = participants.length > 0 && selectedIds.length === participants.length;
   const toggleSelect = (id: string) => setSelectedIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
-  const toggleSelectAll = () => setSelectedIds(allSelected ? [] : filteredParticipants.map((p) => p.id));
+  const toggleSelectAll = () => setSelectedIds(allSelected ? [] : participants.map((p) => p.id));
 
   const handleDeleteSelected = async () => {
     if (!selectedIds.length) return;
@@ -122,7 +136,7 @@ const ParticipantList = ({ eventId }: { eventId: string }) => {
       const r = await bulkDeleteParticipants(eventId, { ids: selectedIds });
       showToast.success(`Eliminados: ${r.deleted} · Invitados: ${r.guestsDeleted}`);
       setSelectedIds([]);
-      fetchParticipantsByEvent(eventId);
+      reload();
     } catch (e: any) {
       showToast.error(e.message || 'No se pudo eliminar');
     } finally { setBulkDeleting(false); }
@@ -136,7 +150,7 @@ const ParticipantList = ({ eventId }: { eventId: string }) => {
       const r = await bulkDeleteParticipants(eventId, { all: true });
       showToast.success(`Participantes vaciados: ${r.deleted} (invitados: ${r.guestsDeleted})`);
       setSelectedIds([]);
-      fetchParticipantsByEvent(eventId);
+      reload();
     } catch (e: any) {
       showToast.error(e.message || 'No se pudo vaciar');
     } finally { setBulkDeleting(false); }
@@ -151,7 +165,7 @@ const ParticipantList = ({ eventId }: { eventId: string }) => {
       await updateParticipant(awarding.id, { isAwarded: awarded, awardReason: awarded ? (awardReasonInput.trim() || null) : null } as any);
       showToast.success(awarded ? 'Participante premiado' : 'Premiación quitada');
       setAwarding(null);
-      fetchParticipantsByEvent(eventId);
+      reload();
     } catch (e: any) {
       showToast.error(e.message || 'No se pudo guardar la premiación');
     } finally {
@@ -159,7 +173,11 @@ const ParticipantList = ({ eventId }: { eventId: string }) => {
     }
   };
 
-  if (loading && participants.length === 0) return <div className="p-4 text-center">Cargando participantes...</div>;
+  // Solo en la carga inicial: con una búsqueda activa NO se desmonta la pantalla
+  // (haría perder el foco del buscador en cada tecleo sin resultados).
+  if (loading && participants.length === 0 && !filter.trim() && !showOnlyAwarded) {
+    return <div className="p-4 text-center">Cargando participantes...</div>;
+  }
   
   return (
     <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
@@ -227,7 +245,28 @@ const ParticipantList = ({ eventId }: { eventId: string }) => {
       </div>
 
       <div className="mb-6 flex flex-col sm:flex-row sm:items-center gap-3">
-        <div className="flex-1"><ParticipantSearch eventId={eventId} onSelect={handleSelectParticipant} /></div>
+        {/* Filtra la TABLA en el servidor (todos los participantes del evento, no solo
+            la página visible). Acepta nombre, correo o RUT en cualquier formato. */}
+        <div className="flex-1 relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+          <input
+            type="text"
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            placeholder="Buscar en la tabla por nombre, correo o RUT…"
+            className="w-full pl-10 pr-9 py-2 border border-gray-300 rounded-lg text-sm focus:ring-indigo-500 focus:border-indigo-500"
+          />
+          {filter && (
+            <button
+              type="button"
+              onClick={() => setFilter('')}
+              aria-label="Limpiar búsqueda"
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600"
+            >
+              <X size={16} />
+            </button>
+          )}
+        </div>
         <button
           type="button"
           onClick={() => setShowOnlyAwarded((v) => !v)}
@@ -262,8 +301,8 @@ const ParticipantList = ({ eventId }: { eventId: string }) => {
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {filteredParticipants.length > 0 ? (
-              filteredParticipants.map((participant) => (
+            {participants.length > 0 ? (
+              participants.map((participant) => (
                 <tr key={participant.id} className={`hover:bg-gray-50 transition-colors ${selectedIds.includes(participant.id) ? 'bg-indigo-50/50' : ''}`}>
                   <td className="px-4 py-4 w-10">
                     <input
@@ -327,13 +366,43 @@ const ParticipantList = ({ eventId }: { eventId: string }) => {
             ) : (
               <tr>
                 <td colSpan={8} className="px-6 py-10 text-center text-gray-500">
-                  No se encontraron participantes. Agrega uno para comenzar.
+                  {filter.trim() || showOnlyAwarded
+                    ? <>No se encontraron participantes para esta búsqueda{filter.trim() ? <>: <b>&quot;{filter.trim()}&quot;</b></> : ''}.</>
+                    : 'No se encontraron participantes. Agrega uno para comenzar.'}
                 </td>
               </tr>
             )}
           </tbody>
         </table>
       </div>
+
+      {/* Paginación: la tabla muestra PAGE_SIZE filas por página sobre el total filtrado. */}
+      {total > PAGE_SIZE && (
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mt-4 text-sm text-gray-600">
+          <span>
+            Mostrando <b>{(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, total)}</b> de <b>{total}</b>
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page <= 1 || loading}
+              className="inline-flex items-center gap-1 px-3 py-1.5 border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-40"
+            >
+              <ChevronLeft size={15} /> Anterior
+            </button>
+            <span className="px-1">Página {page} de {Math.max(1, Math.ceil(total / PAGE_SIZE))}</span>
+            <button
+              type="button"
+              onClick={() => setPage((p) => p + 1)}
+              disabled={page >= Math.ceil(total / PAGE_SIZE) || loading}
+              className="inline-flex items-center gap-1 px-3 py-1.5 border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-40"
+            >
+              Siguiente <ChevronRight size={15} />
+            </button>
+          </div>
+        </div>
+      )}
 
       {isFormOpen && (
         <ParticipantForm
@@ -349,7 +418,7 @@ const ParticipantList = ({ eventId }: { eventId: string }) => {
           guestMode={getGuestMode((currentEvent as any)?.registrationConfig)}
           dietaryOptions={getDietaryOptions((currentEvent as any)?.registrationConfig).filter((o) => o.value !== 'NONE').map((o) => o.label)}
           onClose={() => setIsImportOpen(false)}
-          onImported={() => fetchParticipantsByEvent(eventId)}
+          onImported={reload}
         />
       )}
 
