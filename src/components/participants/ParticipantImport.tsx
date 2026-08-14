@@ -60,24 +60,34 @@ function targetsForMode(mode: GuestMode) {
 
 function autodetect(header: string, mode: GuestMode): string {
   const h = (header || '').toLowerCase().trim();
+  const mentionsGuest = /invitad|acompa/.test(h);
+
   // Modo-específico primero.
-  if (mode === 'count' && /invitad/.test(h)) return 'guestCount';
+  if (mode === 'count' && mentionsGuest) {
+    // Solo columnas de CANTIDAD ("N° de invitados", "Invitados"). Las columnas con
+    // datos del invitado ("Nombre invitado") no son cantidades y se ignoran abajo.
+    if (/cantidad|invitados/.test(h)) return 'guestCount';
+  }
   if (mode === 'companion') {
     if (/acompa/.test(h)) return 'guestCompanion';
     if (/carga/.test(h)) return 'guestLoads';
   }
-  if (mode === 'named') {
-    const gnum = h.match(/invitado\s*(\d+)/);
-    if (gnum) {
-      const n = gnum[1];
-      if (/rut|documento|dni/.test(h)) return `guest${n}.documentNumber`;
-      if (/tipo/.test(h)) return `guest${n}.guestType`;
-      if (/preferencia|aliment|dieta|comida/.test(h)) return `guest${n}.dietaryPreference`;
-      if (/nombre/.test(h)) return `guest${n}.firstName`;
-    }
-    if (/acompa/.test(h)) return 'guest1.firstName';
+  if (mode === 'named' && mentionsGuest) {
     if (/cantidad.*invitad|invitados/.test(h)) return 'allowedGuests';
+    // "Invitado 2: RUT" → invitado 2; sin número ("Nombre invitado") → invitado 1.
+    const gnum = h.match(/invitado\s*(\d+)/);
+    const n = gnum ? gnum[1] : '1';
+    if (/rut|documento|dni/.test(h)) return `guest${n}.documentNumber`;
+    if (/tipo/.test(h)) return `guest${n}.guestType`;
+    if (/preferencia|aliment|dieta|comida/.test(h)) return `guest${n}.dietaryPreference`;
+    if (/nombre|acompa/.test(h) || h === 'invitado') return `guest${n}.firstName`;
   }
+  // Una columna de invitado/acompañante que no calzó arriba NUNCA debe caer a los
+  // campos del participante: "Nombre invitado" mapeado a Nombre pisaba el nombre real
+  // del titular (quedaba "Karen Swaneck Diaz Figueroa Cortes" en la carga de Mantos).
+  // Mejor ignorarla y que el usuario la asigne a mano si corresponde.
+  if (mentionsGuest) return 'ignore';
+
   if (/apellido/.test(h)) return 'lastName';
   if (/nombre/.test(h)) return 'firstName';
   if (/correo|email|e-mail/.test(h)) return 'email';
@@ -113,6 +123,7 @@ const ParticipantImport: React.FC<ParticipantImportProps> = ({ eventId, guestMod
   const [rows, setRows] = useState<any[]>([]);
   const [mapping, setMapping] = useState<Record<string, string>>({});
   const [scheduleId, setScheduleId] = useState('');
+  const [overwriteNames, setOverwriteNames] = useState(false);
   const [importing, setImporting] = useState(false);
   const [result, setResult] = useState<any>(null);
 
@@ -185,6 +196,22 @@ const ParticipantImport: React.FC<ParticipantImportProps> = ({ eventId, guestMod
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows, headers, mapping]);
 
+  // Dos columnas del Excel apuntando al MISMO campo del sistema: antes se aceptaba
+  // en silencio y la última pisaba a la primera (caso Mantos: dos columnas en
+  // "Nombre" y el nombre del invitado sobrescribió al del titular). Se avisa y se
+  // bloquea la importación hasta resolverlo.
+  const duplicateTargets = useMemo(() => {
+    const byTarget: Record<string, string[]> = {};
+    for (const h of headers) {
+      const t = mapping[h];
+      if (!t || t === 'ignore') continue;
+      (byTarget[t] = byTarget[t] || []).push(h);
+    }
+    return Object.entries(byTarget).filter(([, hs]) => hs.length > 1);
+  }, [headers, mapping]);
+  const duplicatedTargetSet = useMemo(() => new Set(duplicateTargets.map(([t]) => t)), [duplicateTargets]);
+  const targetLabel = (value: string) => allTargets.find((t) => t.value === value)?.label || value;
+
   // Filas con RUT presente pero INVÁLIDO (no se subirán).
   const invalidRuts = useMemo(() => {
     if (!rows.length) return [] as any[];
@@ -195,6 +222,10 @@ const ParticipantImport: React.FC<ParticipantImportProps> = ({ eventId, guestMod
   }, [rows, headers, mapping]);
 
   const handleImport = async () => {
+    if (duplicateTargets.length > 0) {
+      showToast.error('Hay columnas repetidas apuntando al mismo campo. Corrige el mapeo antes de importar.');
+      return;
+    }
     const participants = buildParticipants().filter(rowOk);
     if (participants.length === 0) {
       showToast.error('No hay filas válidas. Cada fila necesita un RUT chileno válido o, al menos, un nombre.');
@@ -205,9 +236,10 @@ const ParticipantImport: React.FC<ParticipantImportProps> = ({ eventId, guestMod
       const res = await apiClient.post<any>(`/api/events/${eventId}/participants/import`, {
         scheduleId: scheduleId || null,
         participants,
+        overwriteNames,
       });
       setResult(res);
-      showToast.success(`Importados: ${res.created} · Reusados: ${res.reused} · Invitados: ${res.guestsCreated}`);
+      showToast.success(`Importados: ${res.created} · Reusados: ${res.reused}${res.namesUpdated ? ` · Nombres corregidos: ${res.namesUpdated}` : ''} · Invitados: ${res.guestsCreated}`);
       if (onImported) onImported();
     } catch (e: any) {
       showToast.error(e.message || 'Error al importar.');
@@ -348,7 +380,7 @@ const ParticipantImport: React.FC<ParticipantImportProps> = ({ eventId, guestMod
                       <select
                         value={mapping[h] || 'ignore'}
                         onChange={(e) => setMapping((m) => ({ ...m, [h]: e.target.value }))}
-                        className="text-sm border border-gray-300 rounded-md px-2 py-1 bg-white w-56"
+                        className={`text-sm border rounded-md px-2 py-1 bg-white w-56 ${duplicatedTargetSet.has(mapping[h]) ? 'border-red-400 ring-1 ring-red-300' : 'border-gray-300'}`}
                       >
                         {allTargets.map((t) => (<option key={t.value} value={t.value}>{t.label}</option>))}
                       </select>
@@ -356,6 +388,25 @@ const ParticipantImport: React.FC<ParticipantImportProps> = ({ eventId, guestMod
                   ))}
                 </div>
               </div>
+
+              {/* Mapeo con columnas repetidas: bloquea la importación (pisarían datos). */}
+              {duplicateTargets.length > 0 && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-sm">
+                  <p className="font-semibold text-red-800 flex items-center gap-2 mb-1">
+                    <AlertTriangle className="h-4 w-4" /> Hay columnas repetidas apuntando al mismo campo
+                  </p>
+                  <p className="text-red-700/90 mb-2">
+                    Cada campo del sistema puede recibir <b>una sola columna</b> del Excel; si hay dos, una pisa a la
+                    otra (p. ej. el nombre del invitado sobrescribe el nombre del participante). Deja una y cambia las
+                    demás a «— Ignorar —» o al campo correcto (p. ej. «Invitado 1: Nombre»).
+                  </p>
+                  <ul className="list-disc pl-5 text-red-700/90 space-y-0.5">
+                    {duplicateTargets.map(([t, hs]) => (
+                      <li key={t}><b>{targetLabel(t)}</b> ← columnas: {hs.map((h) => `“${h}”`).join(', ')}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
 
               {/* Opción de fecha / estado */}
               <div>
@@ -374,6 +425,24 @@ const ParticipantImport: React.FC<ParticipantImportProps> = ({ eventId, guestMod
                   ℹ️ El Excel <b>no necesita columna de fecha</b>: todos los participantes del archivo se inscribirán en la fecha que elijas aquí.
                 </p>
               </div>
+
+              {/* Corrección de una carga anterior: sobrescribe SOLO nombre y apellido. */}
+              <label className="flex items-start gap-2 text-sm text-gray-700 cursor-pointer bg-gray-50 border border-gray-200 rounded-lg p-3">
+                <input
+                  type="checkbox"
+                  checked={overwriteNames}
+                  onChange={(e) => setOverwriteNames(e.target.checked)}
+                  className="h-4 w-4 mt-0.5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                />
+                <span>
+                  <b>Sobrescribir nombre y apellido</b> de los participantes que ya existen (se identifican por RUT)
+                  con lo que trae este Excel. Útil para corregir una carga anterior con nombres malos.
+                  <span className="block text-xs text-gray-500 mt-0.5">
+                    Solo cambia nombre y apellido: correo, teléfono y el resto de los datos no se tocan.
+                    {' '}<b>Los ya acreditados o con marca de premiado quedan protegidos</b>: a ellos no se les cambia nada.
+                  </span>
+                </span>
+              </label>
 
               {/* Confirmación de lo que se va a hacer */}
               {(() => {
@@ -443,7 +512,7 @@ const ParticipantImport: React.FC<ParticipantImportProps> = ({ eventId, guestMod
                     📅 {(() => { const sel = EventSchedules.find((s: any) => s.id === scheduleId); return sel ? <>Inscritos en: <b>{fmtSchedule(sel)}</b></> : <b>Precarga (sin fecha)</b>; })()}
                   </p>
                   <p className="text-gray-700">
-                    ✅ Creados: <b>{result.created}</b> · ♻️ Reusados (ya existían por RUT): <b>{result.reused}</b> · 👥 Invitados: <b>{result.guestsCreated}</b>
+                    ✅ Creados: <b>{result.created}</b> · ♻️ Reusados (ya existían por RUT): <b>{result.reused}</b>{result.namesUpdated ? <> · ✏️ Nombres corregidos: <b>{result.namesUpdated}</b></> : null}{result.namesProtected ? <> · 🔒 Protegidos (acreditados/premiados): <b>{result.namesProtected}</b></> : null} · 👥 Invitados: <b>{result.guestsCreated}</b>{result.guestsDiscarded ? <> · 🗑️ Descartados (no eran nombres, ej. "Si"/"No llevo acompañante"): <b>{result.guestsDiscarded}</b></> : null}
                     {result.errors?.length ? <> · ❌ Con error: <b>{result.errors.length}</b></> : null}
                   </p>
                   {result.errors?.length > 0 && (
@@ -470,9 +539,14 @@ const ParticipantImport: React.FC<ParticipantImportProps> = ({ eventId, guestMod
         <div className="flex justify-end gap-3 px-6 py-4 border-t bg-gray-50">
           <button onClick={onClose} className="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-50 text-sm">Cerrar</button>
           {headers.length > 0 && (
-            <button onClick={handleImport} disabled={importing || validCount === 0} className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 disabled:opacity-50 text-sm inline-flex items-center gap-2">
+            <button
+              onClick={handleImport}
+              disabled={importing || validCount === 0 || duplicateTargets.length > 0}
+              title={duplicateTargets.length > 0 ? 'Corrige las columnas repetidas del mapeo antes de importar' : undefined}
+              className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 disabled:opacity-50 text-sm inline-flex items-center gap-2"
+            >
               {importing && <Loader2 className="h-4 w-4 animate-spin" />}
-              {importing ? 'Importando…' : `Importar ${validCount} participantes`}
+              {importing ? 'Importando…' : duplicateTargets.length > 0 ? 'Corrige el mapeo para importar' : `Importar ${validCount} participantes`}
             </button>
           )}
         </div>

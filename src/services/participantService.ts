@@ -13,6 +13,7 @@ import {
   Accreditation
 } from '@/models/index';
 import { createParticipantSchema, updateParticipantSchema, bulkCreateParticipantSchema } from '@/utils/validators/participantSchemas';
+import { isJunkGuestName } from '@/utils/guestNames';
 import { auditLogService } from './auditLogService';
 
 /**
@@ -135,7 +136,8 @@ export class ParticipantService {
     eventId: string,
     scheduleId: string | null,
     rows: any[],
-    createdBy: string
+    createdBy: string,
+    opts: { overwriteNames?: boolean } = {}
   ) {
     const event = await Event.findByPk(eventId);
     if (!event) throw new Error('Event not found');
@@ -146,7 +148,7 @@ export class ParticipantService {
       if (!schedule) throw new Error('Schedule not found for this event');
     }
 
-    const results = { created: 0, reused: 0, guestsCreated: 0, errors: [] as { row: number; rut?: string; name?: string; error: string }[] };
+    const results = { created: 0, reused: 0, namesUpdated: 0, namesProtected: 0, guestsCreated: 0, guestsDiscarded: 0, errors: [] as { row: number; rut?: string; name?: string; error: string }[] };
 
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i] || {};
@@ -207,6 +209,29 @@ export class ParticipantService {
           results.created++;
         } else {
           results.reused++;
+          // Sobrescribir SOLO nombre y apellido del ya existente con lo que trae el
+          // Excel (opt-in): corrige cargas anteriores con nombres pisados sin tocar
+          // correo, teléfono ni ningún otro campo.
+          if (opts.overwriteNames) {
+            const fName = String(pdata.firstName || '').trim();
+            const lName = String(pdata.lastName || '').trim();
+            const upd: any = {};
+            if (fName && fName !== (participant as any).firstName) upd.firstName = fName;
+            if (lName && lName !== (participant as any).lastName) upd.lastName = lName;
+            if (Object.keys(upd).length) {
+              // Protección: si la persona YA fue acreditada o tiene marca de premiado,
+              // su identidad ya se usó en puerta o en la premiación — no se le toca el
+              // nombre. Se informa aparte (namesProtected).
+              const isProtected = !!(participant as any).isAwarded ||
+                (await Accreditation.count({ where: { participantId: participant.id }, transaction: tx })) > 0;
+              if (isProtected) {
+                results.namesProtected++;
+              } else {
+                await participant.update(upd, { transaction: tx });
+                results.namesUpdated++;
+              }
+            }
+          }
         }
 
         if (schedule) {
@@ -219,9 +244,20 @@ export class ParticipantService {
 
         for (const g of (Array.isArray(guests) ? guests : [])) {
           if (!g || !g.firstName) continue;
+          const gName = String(g.firstName).trim();
+          // Respuestas tipo "Si"/"No llevo acompañante" del formulario web no son
+          // nombres de invitado: se descartan en vez de crear invitados basura.
+          if (isJunkGuestName(gName)) { results.guestsDiscarded++; continue; }
+          // No duplicar: si el titular ya tiene un invitado con el mismo nombre
+          // (p. ej. al reimportar el mismo Excel para corregir datos), se salta.
+          const dupGuest = await Guest.findOne({
+            where: { participantId: participant.id, firstName: { [Op.iLike]: gName } },
+            transaction: tx,
+          });
+          if (dupGuest) continue;
           await Guest.create({
             participantId: participant.id,
-            firstName: g.firstName,
+            firstName: gName,
             lastName: g.lastName || null,
             documentNumber: g.documentNumber ? (isValidRut(g.documentNumber) ? normalizeRut(g.documentNumber) : String(g.documentNumber).trim()) : null,
             guestType: g.guestType || null,
@@ -257,7 +293,7 @@ export class ParticipantService {
       entityId: eventId,
       details: {
         name: `Importación de participantes — ${event.name}`,
-        summary: `${schedule ? 'Carga masiva (inscritos)' : 'Precarga'} · Fecha: ${scheduleLabel} · ${results.created} creados, ${results.reused} reusados, ${results.guestsCreated} invitados, ${results.errors.length} con error (de ${rows.length} filas)`,
+        summary: `${schedule ? 'Carga masiva (inscritos)' : 'Precarga'} · Fecha: ${scheduleLabel} · ${results.created} creados, ${results.reused} reusados${results.namesUpdated ? `, ${results.namesUpdated} nombres corregidos` : ''}${results.namesProtected ? `, ${results.namesProtected} protegidos (acreditados/premiados, no se tocaron)` : ''}, ${results.guestsCreated} invitados, ${results.errors.length} con error (de ${rows.length} filas)`,
         operacion: schedule ? 'Carga masiva (inscritos)' : 'Precarga',
         evento: event.name,
         fecha: scheduleLabel,

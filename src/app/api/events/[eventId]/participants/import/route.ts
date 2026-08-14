@@ -11,7 +11,7 @@ export const POST = withAuth(async (req: AuthenticatedRequest, { params }: { par
   try {
     const { eventId } = await params;
     const body = await req.json();
-    const { scheduleId, participants } = body || {};
+    const { scheduleId, participants, overwriteNames } = body || {};
 
     if (!Array.isArray(participants) || participants.length === 0) {
       return NextResponse.json({ message: 'No hay filas para importar.' }, { status: 400 });
@@ -21,7 +21,8 @@ export const POST = withAuth(async (req: AuthenticatedRequest, { params }: { par
       eventId,
       scheduleId || null,
       participants,
-      req.user.id
+      req.user.id,
+      { overwriteNames: !!overwriteNames }
     );
 
     return NextResponse.json(result, { status: 200 });
