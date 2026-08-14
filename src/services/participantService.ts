@@ -137,7 +137,7 @@ export class ParticipantService {
     scheduleId: string | null,
     rows: any[],
     createdBy: string,
-    opts: { overwriteNames?: boolean } = {}
+    opts: { overwriteNames?: boolean; includeProtected?: boolean } = {}
   ) {
     const event = await Event.findByPk(eventId);
     if (!event) throw new Error('Event not found');
@@ -221,9 +221,12 @@ export class ParticipantService {
             if (Object.keys(upd).length) {
               // Protección: si la persona YA fue acreditada o tiene marca de premiado,
               // su identidad ya se usó en puerta o en la premiación — no se le toca el
-              // nombre. Se informa aparte (namesProtected).
-              const isProtected = !!(participant as any).isAwarded ||
-                (await Accreditation.count({ where: { participantId: participant.id }, transaction: tx })) > 0;
+              // nombre, salvo que se pida explícitamente incluirlos (includeProtected:
+              // corrige SOLO el nombre; la acreditación y la premiación no se tocan).
+              const isProtected = !opts.includeProtected && (
+                !!(participant as any).isAwarded ||
+                (await Accreditation.count({ where: { participantId: participant.id }, transaction: tx })) > 0
+              );
               if (isProtected) {
                 results.namesProtected++;
               } else {

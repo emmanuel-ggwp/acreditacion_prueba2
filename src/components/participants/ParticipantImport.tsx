@@ -124,6 +124,7 @@ const ParticipantImport: React.FC<ParticipantImportProps> = ({ eventId, guestMod
   const [mapping, setMapping] = useState<Record<string, string>>({});
   const [scheduleId, setScheduleId] = useState('');
   const [overwriteNames, setOverwriteNames] = useState(false);
+  const [includeProtected, setIncludeProtected] = useState(false);
   const [importing, setImporting] = useState(false);
   const [result, setResult] = useState<any>(null);
 
@@ -237,6 +238,7 @@ const ParticipantImport: React.FC<ParticipantImportProps> = ({ eventId, guestMod
         scheduleId: scheduleId || null,
         participants,
         overwriteNames,
+        includeProtected: overwriteNames && includeProtected,
       });
       setResult(res);
       showToast.success(`Importados: ${res.created} · Reusados: ${res.reused}${res.namesUpdated ? ` · Nombres corregidos: ${res.namesUpdated}` : ''} · Invitados: ${res.guestsCreated}`);
@@ -427,22 +429,41 @@ const ParticipantImport: React.FC<ParticipantImportProps> = ({ eventId, guestMod
               </div>
 
               {/* Corrección de una carga anterior: sobrescribe SOLO nombre y apellido. */}
-              <label className="flex items-start gap-2 text-sm text-gray-700 cursor-pointer bg-gray-50 border border-gray-200 rounded-lg p-3">
-                <input
-                  type="checkbox"
-                  checked={overwriteNames}
-                  onChange={(e) => setOverwriteNames(e.target.checked)}
-                  className="h-4 w-4 mt-0.5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                />
-                <span>
-                  <b>Sobrescribir nombre y apellido</b> de los participantes que ya existen (se identifican por RUT)
-                  con lo que trae este Excel. Útil para corregir una carga anterior con nombres malos.
-                  <span className="block text-xs text-gray-500 mt-0.5">
-                    Solo cambia nombre y apellido: correo, teléfono y el resto de los datos no se tocan.
-                    {' '}<b>Los ya acreditados o con marca de premiado quedan protegidos</b>: a ellos no se les cambia nada.
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 space-y-2">
+                <label className="flex items-start gap-2 text-sm text-gray-700 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={overwriteNames}
+                    onChange={(e) => { setOverwriteNames(e.target.checked); if (!e.target.checked) setIncludeProtected(false); }}
+                    className="h-4 w-4 mt-0.5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                  />
+                  <span>
+                    <b>Sobrescribir nombre y apellido</b> de los participantes que ya existen (se identifican por RUT)
+                    con lo que trae este Excel. Útil para corregir una carga anterior con nombres malos.
+                    <span className="block text-xs text-gray-500 mt-0.5">
+                      Solo cambia nombre y apellido: correo, teléfono y el resto de los datos no se tocan.
+                      {' '}<b>Los ya acreditados o con marca de premiado quedan protegidos</b>: a ellos no se les cambia nada
+                      (salvo que marques la opción de abajo).
+                    </span>
                   </span>
-                </span>
-              </label>
+                </label>
+                {overwriteNames && (
+                  <label className="flex items-start gap-2 text-sm text-gray-700 cursor-pointer pl-6">
+                    <input
+                      type="checkbox"
+                      checked={includeProtected}
+                      onChange={(e) => setIncludeProtected(e.target.checked)}
+                      className="h-4 w-4 mt-0.5 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+                    />
+                    <span>
+                      <b>Incluir también a los ya acreditados o premiados</b>: se les corrige solo el nombre y apellido.
+                      <span className="block text-xs text-gray-500 mt-0.5">
+                        Su acreditación y su premiación <b>no se tocan</b> — siguen acreditados/premiados igual, solo con el nombre corregido.
+                      </span>
+                    </span>
+                  </label>
+                )}
+              </div>
 
               {/* Confirmación de lo que se va a hacer */}
               {(() => {
