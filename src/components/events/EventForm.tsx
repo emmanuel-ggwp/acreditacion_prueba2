@@ -216,7 +216,7 @@ const EventForm: React.FC<EventFormProps> = ({ event, onClose, onSuccess }) => {
 
   const [uploading, setUploading] = useState<{ logo?: boolean; bg?: boolean; hero?: boolean; successD?: boolean; successM?: boolean }>({});
   // Pestaña activa del formulario (para no tener un modal tan largo).
-  const [activeTab, setActiveTab] = useState<'general' | 'diseno' | 'formulario'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'diseno' | 'registro' | 'formulario'>('general');
   const logoUrl = watch('logoUrl');
   const backgroundImageUrl = watch('backgroundImageUrl');
   const heroUrl = watch('registrationConfig.images.heroUrl' as any);
@@ -270,16 +270,16 @@ const EventForm: React.FC<EventFormProps> = ({ event, onClose, onSuccess }) => {
   };
 
   // Si la validación falla, saltar a la pestaña que contiene el primer campo con error.
-  const FIELD_TAB: Record<string, 'general' | 'diseno' | 'formulario'> = {
+  const FIELD_TAB: Record<string, 'general' | 'diseno' | 'registro' | 'formulario'> = {
     name: 'general', description: 'general', location: 'general', maxCapacity: 'general',
     allowGuests: 'general', maxGuestsPerParticipant: 'general',
     logoUrl: 'diseno', backgroundImageUrl: 'diseno',
-    publicSlug: 'formulario', publicTemplate: 'formulario', isPublic: 'formulario',
-    registrationOpen: 'formulario', allowMultipleSchedules: 'formulario',
+    publicSlug: 'registro', publicTemplate: 'registro', isPublic: 'registro',
+    registrationOpen: 'registro', allowMultipleSchedules: 'registro',
     emailTemplateId: 'formulario', registrationConfig: 'formulario',
   };
   const onInvalid = (errs: any) => {
-    const order: Array<'general' | 'diseno' | 'formulario'> = ['general', 'diseno', 'formulario'];
+    const order: Array<'general' | 'diseno' | 'registro' | 'formulario'> = ['general', 'diseno', 'registro', 'formulario'];
     const tabsWithError = new Set(Object.keys(errs || {}).map((k) => FIELD_TAB[k] || 'general'));
     const target = order.find((t) => tabsWithError.has(t));
     if (target) setActiveTab(target);
@@ -349,7 +349,7 @@ const EventForm: React.FC<EventFormProps> = ({ event, onClose, onSuccess }) => {
         <form onSubmit={handleSubmit(onSubmit as any, onInvalid)} className="flex flex-col flex-1 overflow-hidden">
           {/* Pestañas: dividen el formulario para que no sea un scroll enorme. */}
           <div className="px-8 pt-4 flex gap-1 flex-shrink-0 border-b border-gray-100 overflow-x-auto">
-            {([['general', 'General'], ['diseno', 'Diseño'], ['formulario', 'Formulario y registro']] as const).map(([id, lbl]) => (
+            {([['general', 'General'], ['diseno', 'Diseño'], ['registro', 'Registro'], ['formulario', 'Formulario']] as const).map(([id, lbl]) => (
               <button
                 key={id}
                 type="button"
@@ -674,7 +674,7 @@ const EventForm: React.FC<EventFormProps> = ({ event, onClose, onSuccess }) => {
               </div>
 
             {/* Pestaña: Formulario y registro */}
-            <div className={activeTab === 'formulario' ? '' : 'hidden'}>
+            <div className={activeTab === 'registro' ? '' : 'hidden'}>
                 <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
                   Registro Público
                   <InfoTooltip text="Crea una página web pública donde personas externas pueden inscribirse solas, sin entrar al sistema. Si está desactivado, el evento es interno y solo tu equipo inscribe manualmente." />
@@ -817,6 +817,13 @@ const EventForm: React.FC<EventFormProps> = ({ event, onClose, onSuccess }) => {
                       <option value="rut">Solo RUT precargado</option>
                     </select>
                   </div>
+                </div>
+            </div>
+
+            {/* Pestaña: Formulario (campos, opciones, preguntas, correo) */}
+            <div className={activeTab === 'formulario' ? '' : 'hidden'}>
+                <h3 className="text-lg font-medium text-gray-900 mb-4">Formulario de inscripción</h3>
+                <div className="space-y-4">
 
                   {/* Campos del formulario */}
                   <div>
