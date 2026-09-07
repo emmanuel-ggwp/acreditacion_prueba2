@@ -10,6 +10,8 @@ import { getDietaryOptions, isFreeTextDiet, dietaryFull, ensureDietOption, DIET_
 import { sendConfirmationEmail } from '@/lib/emailjs';
 import { buildGuestSummary } from '@/utils/guests';
 import DateSelectModal from '@/components/public/DateSelectModal';
+import CustomQuestionFields from '@/components/public/CustomQuestionFields';
+import { getCustomQuestions, initCustomAnswers, missingRequiredCustom, type CustomAnswers } from '@/utils/customQuestions';
 import { CONTACT_EMAIL } from '@/utils/contact';
 import { Loader2, CheckCircle, AlertCircle, Calendar, ChevronDown, ShieldCheck } from 'lucide-react';
 
@@ -64,6 +66,9 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
   const [showDateModal, setShowDateModal] = useState(availableSchedules.length > 1);
   const guestDiet = guestDietaryEnabled((event as any).registrationConfig);
   const dietOpts = getDietaryOptions((event as any).registrationConfig);
+  // Preguntas configurables del evento (Sí/No + lista, ej. transporte + recorrido).
+  const customQuestions = getCustomQuestions((event as any).registrationConfig);
+  const [customAnswers, setCustomAnswers] = useState<CustomAnswers>(() => initCustomAnswers(customQuestions));
   // Mismo cálculo que el servidor (`api/public/events/[slug]/register/route.ts`):
   // `registrationConfig.guests.max` solo manda si declara algo — su esquema lo guarda
   // en 0 por defecto y taparía el máximo real del evento (R1-01).
@@ -145,6 +150,8 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
       if (p.guestCount != null) setCountGuests(Number(p.guestCount) || 0);
       if (p.guestCompanion != null) setCompanion(!!p.guestCompanion);
       if (p.guestLoads != null) setLoads(Number(p.guestLoads) || 0);
+      // Respuestas previas a las preguntas configurables (si el precargado ya las traía).
+      setCustomAnswers(initCustomAnswers(customQuestions, p.customData));
       setRutPassed(true);
     } catch (e: any) {
       setLookupError(e.message || 'Error al validar el RUT.');
@@ -174,6 +181,8 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
         const val = key === 'dietary' ? (data as any).dietaryPreference : (data as any)[key];
         if (!val || val === '' || (key === 'dietary' && val === 'NONE')) missing.push(FIELD_LABELS[key]);
       }
+      // Preguntas configurables obligatorias (Sí + sin opción elegida).
+      missing.push(...missingRequiredCustom(customQuestions, customAnswers));
       if (missing.length) { setError('Completa los campos obligatorios: ' + missing.join(', ') + '.'); setIsSubmitting(false); return; }
 
       // Invitados según el modo del evento.
@@ -211,7 +220,7 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ ...data, ...guestData, guests, ...(registrationMode === 'rut' && rutParticipantId ? { participantId: rutParticipantId } : {}) }),
+        body: JSON.stringify({ ...data, ...guestData, guests, customData: customAnswers, ...(registrationMode === 'rut' && rutParticipantId ? { participantId: rutParticipantId } : {}) }),
       });
 
       const result = await response.json();
@@ -568,6 +577,18 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
           </div>
         )}
       </div>
+
+      {customQuestions.length > 0 && (
+        <div className="border-t border-gray-200 pt-5">
+          <CustomQuestionFields
+            questions={customQuestions}
+            answers={customAnswers}
+            onChange={setCustomAnswers}
+            tone="light"
+            accent={btnColor}
+          />
+        </div>
+      )}
 
       {allowGuests && maxGuests > 0 && guestMode === 'named' && (
         <div className="border-t border-gray-200 pt-5">

@@ -197,5 +197,9 @@ export const rutRegistrationSchema = z.object({
   guestLoads: z.number().int().min(0).max(50).optional().nullable(),
 
   guests: z.array(publicGuestSchema).max(MAX_GUESTS_PER_REQUEST).optional(),
+
+  // Respuestas a las preguntas configurables del evento (Sí/No + lista). El servidor
+  // las normaliza contra la config antes de guardar, así que aquí basta con aceptarlas.
+  customData: z.any().optional().nullable(),
 });
 

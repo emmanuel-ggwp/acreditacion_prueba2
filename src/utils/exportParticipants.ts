@@ -1,6 +1,7 @@
 import * as XLSX from 'xlsx';
 import apiClient from './apiClient';
 import { dietaryFull, dietaryLabel } from './dietary';
+import { getCustomQuestions, answerText } from './customQuestions';
 
 const fmtDate = (d?: string) => {
   if (!d) return '';
@@ -20,12 +21,25 @@ const guestTypeLabel = (t?: string) =>
  */
 export async function exportParticipantsToExcel(eventId: string, eventName: string) {
   const participants = await apiClient.get<any[]>(`/api/events/${eventId}/export`);
+  // Preguntas configurables del evento (Sí/No + lista): una columna por pregunta.
+  let customQuestions: ReturnType<typeof getCustomQuestions> = [];
+  try {
+    const event = await apiClient.get<any>(`/api/events/${eventId}`);
+    customQuestions = getCustomQuestions(event?.registrationConfig);
+  } catch { /* si no se puede leer la config, se exporta sin esas columnas */ }
 
   const partRows = participants.map((p) => {
     const schedules = p.schedules || [];
     const fechas = schedules.map((s: any) => `${s.label || s.scheduleName} (${fmtDate(s.startDateTime)})`).join(' ; ');
     const lugares = Array.from(new Set(schedules.map((s: any) => s.location).filter(Boolean))).join(' ; ');
     const guests = p.guests || [];
+    // Respuesta a cada pregunta configurable del evento (usa la respuesta guardada
+    // en customData; si falta, se lee "No" cuando la pregunta existe).
+    const customCols: Record<string, string> = {};
+    for (const q of customQuestions) {
+      const a = (p.customData && typeof p.customData === 'object') ? p.customData[q.key] : null;
+      customCols[q.label] = a ? answerText(a) : '';
+    }
     return {
       'Nombre': p.firstName || '',
       'Apellido': p.lastName || '',
@@ -47,6 +61,7 @@ export async function exportParticipantsToExcel(eventId: string, eventName: stri
       'Acompañante': p.guestCompanion ? 'Sí' : (Number(p.guestLoads) > 0 ? 'No' : ''),
       'Cargas': Number(p.guestLoads) > 0 ? p.guestLoads : '',
       'Invitados': guests.map((g: any) => `${g.firstName} ${g.lastName || ''}`.trim()).join(' ; '),
+      ...customCols,
     };
   });
 

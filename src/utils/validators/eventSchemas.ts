@@ -48,6 +48,20 @@ export const fieldToggleSchema = z.object({
   required: z.boolean().optional(),
 });
 
+/**
+ * Pregunta configurable tipo "Sí/No + lista": el asistente elige Sí/No y, si elige
+ * Sí, escoge una opción de un desplegable (ej. "¿Necesitas transporte?" → recorrido).
+ * Reutilizable por evento; se guarda en Participant.customData bajo `key`.
+ */
+export const customQuestionSchema = z.object({
+  key: z.string(),                 // id estable (ej. 'q_transporte')
+  label: z.string(),               // título visible (ej. "¿Necesitas transporte?")
+  selectLabel: z.string().optional(), // etiqueta del desplegable (ej. "Recorrido")
+  options: z.array(z.string()).default([]), // opciones del desplegable
+  required: z.boolean().default(false),     // si elige Sí, debe escoger una opción
+  active: z.boolean().default(true),
+});
+
 /** Configuración de colores / tema visual de la landing. */
 export const themeConfigSchema = z.object({
   primaryColor: z.string().optional(),
@@ -79,6 +93,8 @@ export const registrationConfigSchema = z.object({
   // Opciones de preferencia alimenticia personalizadas por evento (etiquetas).
   dietaryOptions: z.array(z.string()).optional(),
   guests: guestsConfigSchema.optional(),
+  // Preguntas "Sí/No + lista" configurables por evento (ej. transporte + recorrido).
+  customQuestions: z.array(customQuestionSchema).optional(),
 });
 
 export type FieldType = z.infer<typeof fieldTypeEnum>;

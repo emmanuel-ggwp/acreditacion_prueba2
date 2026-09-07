@@ -8,6 +8,7 @@ import {
   type PublicGuestInput,
 } from '@/utils/validators/participantSchemas';
 import { CONTACT_EMAIL } from '@/utils/contact';
+import { getCustomQuestions, sanitizeCustomAnswers } from '@/utils/customQuestions';
 import { sequelize } from '@/lib/sequelize';
 import { Op, fn, col, where as sqlWhere } from 'sequelize';
 import { getScheduleParticipantCount, getEventParticipantCount } from '@/services/capacityService';
@@ -41,6 +42,9 @@ export async function POST(
     }
 
     const mode = (event as any).registrationConfig?.mode === 'rut' ? 'rut' : 'open';
+    // Preguntas configurables del evento (Sí/No + lista): sirven para normalizar las
+    // respuestas que llegan en `customData` antes de guardarlas.
+    const customQuestions = getCustomQuestions((event as any).registrationConfig);
 
     // 2. VALIDAR EL CUERPO. Va aquí, antes de la primera consulta que lo use (R1-04).
     //
@@ -132,6 +136,10 @@ export async function POST(
           if (typeof value === 'string' && value.trim() === '') continue;
           upd[field] = value;
         }
+        // Respuestas a las preguntas configurables (Sí/No + lista).
+        if (customQuestions.length) {
+          upd.customData = sanitizeCustomAnswers(customQuestions, (data as any).customData);
+        }
         if (Object.keys(upd).length) await participant.update(upd, { transaction: t });
       }
     } else {
@@ -175,6 +183,8 @@ export async function POST(
             numeroSap: (data as any).numeroSap ?? null,
             dietaryPreference: (data as any).dietaryPreference ?? 'NONE',
             dietaryComments: (data as any).dietaryComments ?? null,
+            // Respuestas a las preguntas configurables del evento (Sí/No + lista).
+            customData: customQuestions.length ? sanitizeCustomAnswers(customQuestions, (data as any).customData) : null,
             // Invitados en modos numéricos (count / companion).
             guestCount: (data as any).guestCount ?? 0,
             guestCompanion: (data as any).guestCompanion ?? false,

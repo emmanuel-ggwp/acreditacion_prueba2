@@ -201,6 +201,7 @@ const EventForm: React.FC<EventFormProps> = ({ event, onClose, onSuccess }) => {
         dietaryOptions: (event?.registrationConfig?.dietaryOptions && event.registrationConfig.dietaryOptions.length)
           ? event.registrationConfig.dietaryOptions
           : DEFAULT_DIET_LABELS,
+        customQuestions: event?.registrationConfig?.customQuestions || [],
       },
     },
   });
@@ -767,6 +768,77 @@ const EventForm: React.FC<EventFormProps> = ({ event, onClose, onSuccess }) => {
                       </button>
                     </div>
                   )}
+
+                  {/* Preguntas configurables "Sí/No + lista" (ej. transporte + recorrido) */}
+                  {(() => {
+                    const path = 'registrationConfig.customQuestions' as any;
+                    const questions: any[] = (watch(path) as any[]) || [];
+                    const update = (next: any[]) => setValue(path, next, { shouldDirty: true });
+                    const patch = (i: number, key: string, value: any) => {
+                      const next = questions.map((q, idx) => (idx === i ? { ...q, [key]: value } : q));
+                      update(next);
+                    };
+                    return (
+                      <div className="border-t border-gray-100 pt-5">
+                        <label className="flex items-center text-sm font-semibold text-gray-700 mb-1">
+                          Preguntas del formulario (Sí/No + lista)
+                          <InfoTooltip text="Preguntas de tipo Sí/No con una lista desplegable (ej. '¿Necesitas transporte?' → recorrido). El asistente elige Sí/No y, si elige Sí, escoge una opción de la lista. Se guardan por participante y aparecen en la acreditación, la exportación y al editar el participante." />
+                        </label>
+                        <p className="text-xs text-gray-500 mb-3">Si el asistente elige "No", la lista queda vacía y bloqueada.</p>
+
+                        <div className="space-y-4">
+                          {questions.map((q, i) => (
+                            <div key={q.key || i} className="rounded-xl border border-gray-200 p-4 bg-gray-50/60">
+                              <div className="flex items-start gap-2">
+                                <input
+                                  value={q.label || ''}
+                                  onChange={(e) => patch(i, 'label', e.target.value)}
+                                  placeholder="Título de la pregunta (ej. ¿Necesitas transporte?)"
+                                  className="flex-1 rounded-lg border-gray-200 bg-white px-3 py-2 text-gray-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 sm:text-sm"
+                                />
+                                <button type="button" title="Quitar pregunta" onClick={() => update(questions.filter((_, idx) => idx !== i))} className="px-3 py-2 text-gray-400 hover:text-red-600 border border-gray-200 rounded-lg bg-white">✕</button>
+                              </div>
+                              <input
+                                value={q.selectLabel || ''}
+                                onChange={(e) => patch(i, 'selectLabel', e.target.value)}
+                                placeholder="Etiqueta de la lista (opcional, ej. Recorrido)"
+                                className="mt-2 w-full rounded-lg border-gray-200 bg-white px-3 py-2 text-gray-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 sm:text-sm"
+                              />
+                              <div className="mt-3">
+                                <p className="text-xs font-medium text-gray-600 mb-1">Opciones de la lista</p>
+                                <div className="space-y-2">
+                                  {((q.options as string[]) || []).map((opt: string, oi: number) => (
+                                    <div key={oi} className="flex gap-2">
+                                      <input
+                                        value={opt}
+                                        onChange={(e) => { const opts = [...((q.options as string[]) || [])]; opts[oi] = e.target.value; patch(i, 'options', opts); }}
+                                        placeholder={`Opción ${oi + 1}`}
+                                        className="flex-1 rounded-lg border-gray-200 bg-white px-3 py-2 text-gray-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 sm:text-sm"
+                                      />
+                                      <button type="button" title="Quitar opción" onClick={() => patch(i, 'options', ((q.options as string[]) || []).filter((_, idx) => idx !== oi))} className="px-3 text-gray-400 hover:text-red-600 border border-gray-200 rounded-lg bg-white">✕</button>
+                                    </div>
+                                  ))}
+                                </div>
+                                <button type="button" onClick={() => patch(i, 'options', [...((q.options as string[]) || []), ''])} className="mt-2 text-sm font-medium text-indigo-600 hover:text-indigo-700">+ Agregar opción</button>
+                              </div>
+                              <label className="mt-3 flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                                <input type="checkbox" checked={!!q.required} onChange={(e) => patch(i, 'required', e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
+                                Si elige "Sí", es obligatorio escoger una opción
+                              </label>
+                            </div>
+                          ))}
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => update([...questions, { key: `q_${Math.random().toString(36).slice(2, 9)}`, label: '', selectLabel: '', options: [''], required: false, active: true }])}
+                          className="mt-3 text-sm font-medium text-indigo-600 hover:text-indigo-700"
+                        >
+                          + Agregar pregunta
+                        </button>
+                      </div>
+                    );
+                  })()}
 
                   {/* Plantilla de correo */}
                   <div>

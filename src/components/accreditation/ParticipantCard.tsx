@@ -7,6 +7,7 @@ import useAccreditationStore from '@/store/accreditationStore';
 import useAuthStore from '@/store/authStore';
 import { Check, X, User, Users, Award, Mail, FileText, Loader2, CalendarClock, Utensils, RotateCcw } from 'lucide-react';
 import { dietaryFull, dietaryLabel } from '@/utils/dietary';
+import { describeStoredAnswers } from '@/utils/customQuestions';
 
 interface ParticipantCardProps {
   person: Participant | Guest;
@@ -237,6 +238,9 @@ const ParticipantCard: React.FC<ParticipantCardProps> = ({ person, type, schedul
           <div className="space-y-2 text-gray-700">
             <p className="flex items-center"><Mail size={16} className="mr-2" /> {email}</p>
             <p className="flex items-center"><FileText size={16} className="mr-2" /> {documentNumber || 'No proporcionado'}</p>
+            {isParticipant && describeStoredAnswers((participant as any)?.customData).map((a) => (
+              <p key={a.key} className="text-sm"><span className="text-gray-500">{a.label}:</span> <span className="font-medium">{a.text}</span></p>
+            ))}
           </div>
         </div>
         {/* Sin premio no aporta nada en celular: se oculta para acercar el botón ACREDITAR. */}

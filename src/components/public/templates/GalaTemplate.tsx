@@ -6,6 +6,8 @@ import { isValidRut } from '@/utils/validators/rut';
 import { sendConfirmationEmail } from '@/lib/emailjs';
 import { buildGuestSummary } from '@/utils/guests';
 import { getFormFields, guestDietaryEnabled, getGuestMode } from '@/utils/formFields';
+import CustomQuestionFields from '@/components/public/CustomQuestionFields';
+import { getCustomQuestions, initCustomAnswers, missingRequiredCustom, type CustomAnswers } from '@/utils/customQuestions';
 import { getDietaryOptions, isFreeTextDiet, dietaryFull, dietaryLabel, ensureDietOption, DIET_COMMENTS_MAX, GUEST_DIET_DETAIL_MAX } from '@/utils/dietary';
 import { hexToRgba } from '@/utils/color';
 import { CONTACT_EMAIL } from '@/utils/contact';
@@ -60,6 +62,9 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
   ff.documentNumber = { enabled: true, required: true }; // RUT siempre visible y obligatorio.
   const guestDiet = guestDietaryEnabled(event.registrationConfig);
   const dietOpts = getDietaryOptions(event.registrationConfig);
+  // Preguntas configurables del evento (Sí/No + lista, ej. transporte + recorrido).
+  const customQuestions = getCustomQuestions(event.registrationConfig);
+  const [customAnswers, setCustomAnswers] = useState<CustomAnswers>(() => initCustomAnswers(customQuestions));
 
   const [step, setStep] = useState<'welcome' | 'rut' | 'fecha' | 'form' | 'already'>('welcome');
   const [allowMultiple, setAllowMultiple] = useState<boolean>(!!event.allowMultipleSchedules);
@@ -135,6 +140,7 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
       setParticipantId(p.id);
       setForm((f) => ({ ...f, firstName: p.firstName || '', lastName: p.lastName || '', email: p.email || '', phone: p.phone || '', documentNumber: p.documentNumber || rutInput, dietaryPreference: p.dietaryPreference || 'NONE', dietaryComments: p.dietaryComments || '' }));
       setCargas((data.guests || []).map((g: any) => ({ id: g.id, firstName: g.firstName, lastName: g.lastName, guestType: g.guestType, dietaryPreference: g.dietaryPreference || null, selected: false })));
+      setCustomAnswers(initCustomAnswers(customQuestions, p.customData));
       const regIds: string[] = data.registeredScheduleIds || [];
       setAllowMultiple(!!data.allowMultiple);
       setRegisteredScheduleIds(regIds);
@@ -170,6 +176,7 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
         if (!val || val === '' || (key === 'dietary' && val === 'NONE')) missing.push(GALA_LABELS[key]);
       }
       if (form.email.trim() && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(form.email.trim())) { setError('Ingresa un correo electrónico válido.'); return; }
+      missing.push(...missingRequiredCustom(customQuestions, customAnswers));
       if (missing.length) { setError('Completa los campos obligatorios: ' + missing.join(', ') + '.'); return; }
       const guests = [
         ...cargas.filter((c) => c.selected).map((c) => ({ id: c.id })),
@@ -181,6 +188,7 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
         phone: form.phone.trim() || undefined, company: form.company.trim() || undefined,
         position: form.position.trim() || undefined, numeroSap: form.numeroSap.trim() || undefined,
         ...(ff.dietary.enabled ? { dietaryPreference: form.dietaryPreference, dietaryComments: form.dietaryComments.trim() || undefined } : {}),
+        customData: customAnswers,
         scheduleIds: [selectedScheduleId],
         guests,
       };
@@ -195,6 +203,7 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
         const val = key === 'dietary' ? form.dietaryPreference : (form as any)[key];
         if (!val || val === '' || (key === 'dietary' && val === 'NONE')) missing.push(GALA_LABELS[key]);
       }
+      missing.push(...missingRequiredCustom(customQuestions, customAnswers));
       if (missing.length) { setError('Completa los campos obligatorios: ' + missing.join(', ') + '.'); return; }
       // Invitados según el modo del evento.
       let openGuestList: any[] = [];
@@ -230,6 +239,7 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
         numeroSap: form.numeroSap.trim() || undefined,
         ...(ff.dietary.enabled ? { dietaryPreference: form.dietaryPreference, dietaryComments: form.dietaryComments.trim() || undefined } : {}),
         ...guestData,
+        customData: customAnswers,
         scheduleIds: [selectedScheduleId],
         guests: openGuestList,
       };
@@ -596,6 +606,12 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
                 )}
               </div>
 
+              {customQuestions.length > 0 && (
+                <div className="mb-5 mt-4">
+                  <CustomQuestionFields questions={customQuestions} answers={customAnswers} onChange={setCustomAnswers} tone="dark" accent={buttonColor} />
+                </div>
+              )}
+
               {/* Cargas */}
               {cargas.length > 0 && (
                 <div className="mb-5">
@@ -672,6 +688,12 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
                   </div>
                 )}
               </div>
+
+              {customQuestions.length > 0 && (
+                <div className="mt-5">
+                  <CustomQuestionFields questions={customQuestions} answers={customAnswers} onChange={setCustomAnswers} tone="dark" accent={buttonColor} />
+                </div>
+              )}
 
               {event.allowGuests && maxGuests > 0 && guestMode === 'named' && (
                 <div className="mt-5">

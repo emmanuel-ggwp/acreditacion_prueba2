@@ -15,6 +15,8 @@ import { showToast } from '@/components/ui/Toast';
 import GuestList from './GuestList';
 import { getFormFields, guestDietaryEnabled, getGuestMode } from '@/utils/formFields';
 import { getDietaryOptions } from '@/utils/dietary';
+import CustomQuestionFields from '@/components/public/CustomQuestionFields';
+import { getCustomQuestions, initCustomAnswers, type CustomAnswers } from '@/utils/customQuestions';
 
 const participantFormSchema = createParticipantSchema.extend({
   id: z.guid().optional(),
@@ -41,6 +43,11 @@ const ParticipantForm: React.FC<ParticipantFormProps> = ({ eventId, participant,
   const guestMode = getGuestMode(eventForCfg?.registrationConfig);
   const maxGuests = Number(eventForCfg?.maxGuestsPerParticipant) || 0;
   const allowGuests = eventForCfg?.allowGuests !== false;
+  // Preguntas configurables del evento (Sí/No + lista). Se editan aquí por si la
+  // persona se retracta y hay que corregir su respuesta.
+  const customQuestions = getCustomQuestions(eventForCfg?.registrationConfig);
+  const customQuestionsKey = customQuestions.map((q) => q.key).join('|');
+  const [customAnswers, setCustomAnswers] = useState<CustomAnswers>({});
 
   const {
     register,
@@ -159,10 +166,21 @@ const ParticipantForm: React.FC<ParticipantFormProps> = ({ eventId, participant,
     }
   }, [currentParticipant, participant, reset]);
 
+  // Cargar respuestas a las preguntas configurables desde el participante.
+  useEffect(() => {
+    const src = (currentParticipant && participant && currentParticipant.id === participant.id)
+      ? (currentParticipant as any).customData
+      : (participant as any)?.customData;
+    setCustomAnswers(initCustomAnswers(customQuestions, src));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentParticipant, participant, customQuestionsKey]);
+
   const onSubmit: SubmitHandler<ParticipantFormData> = async (data) => {
     try {
       // Remove eventId injection
       const participantData: any = { ...data };
+      // Respuestas a las preguntas configurables (Sí/No + lista).
+      if (customQuestions.length) participantData.customData = customAnswers;
 
       // Invitados numéricos: normalizamos guestCount según el modo del evento.
       if (allowGuests && maxGuests > 0) {
@@ -262,6 +280,18 @@ const ParticipantForm: React.FC<ParticipantFormProps> = ({ eventId, participant,
             </div>
             )}
           </div>
+
+          {customQuestions.length > 0 && (
+            <div className="border-t pt-4">
+              <h3 className="text-sm font-medium text-gray-900 mb-3">Preguntas del evento</h3>
+              <CustomQuestionFields
+                questions={customQuestions}
+                answers={customAnswers}
+                onChange={setCustomAnswers}
+                tone="light"
+              />
+            </div>
+          )}
 
           {allowGuests && maxGuests > 0 && guestMode === 'count' && (
             <div className="col-span-2">
