@@ -324,8 +324,12 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
     const already = registeredScheduleIds.includes(s.id);
     const full = !!s.full;
     const blocked = already || full;
+    // Ancho FIJO por tarjeta (móvil: ancho completo). Todas quedan del mismo tamaño
+    // sin importar cuántas fechas haya; el contenedor las reparte y centra la última
+    // fila incompleta (5 fechas → 3 arriba y 2 centradas). Con 4 fechas, el contenedor
+    // se estrecha (abajo) para que queden 2 y 2 SIN ensancharse.
     return (
-      <button key={s.id} type="button" disabled={blocked} onClick={() => { if (!blocked) setSelectedScheduleId(s.id); }} className="text-left rounded-2xl overflow-hidden transition shadow-lg disabled:cursor-not-allowed" style={{ outline: selected ? `3px solid ${primary}` : '3px solid transparent', backgroundColor: 'rgba(0,0,0,0.5)', border: '1px solid rgba(255,255,255,0.15)', opacity: blocked ? 0.55 : 1 }}>
+      <button key={s.id} type="button" disabled={blocked} onClick={() => { if (!blocked) setSelectedScheduleId(s.id); }} className="w-full sm:w-[18rem] text-left rounded-2xl overflow-hidden transition shadow-lg disabled:cursor-not-allowed" style={{ outline: selected ? `3px solid ${primary}` : '3px solid transparent', backgroundColor: 'rgba(0,0,0,0.5)', border: '1px solid rgba(255,255,255,0.15)', opacity: blocked ? 0.55 : 1 }}>
         {s.imageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={s.imageUrl} alt={s.scheduleName} className="w-full h-32 object-cover" />
@@ -512,7 +516,7 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
             {error && <p className="mt-3 text-sm text-red-300">{error}</p>}
           </header>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className={`flex flex-wrap justify-center gap-4 mx-auto ${schedules.length === 4 ? 'max-w-[40rem]' : ''}`}>
             {schedules.map(renderDateCard)}
           </div>
 
