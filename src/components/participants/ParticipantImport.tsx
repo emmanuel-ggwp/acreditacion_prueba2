@@ -16,7 +16,7 @@ interface ParticipantImportProps {
   onImported?: () => void;
 }
 
-const GUEST_SLOTS = 5;
+const GUEST_SLOTS = 20;
 type GuestMode = 'named' | 'count' | 'companion';
 
 const BASE_TARGETS = [
