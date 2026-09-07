@@ -212,6 +212,8 @@ const EventForm: React.FC<EventFormProps> = ({ event, onClose, onSuccess }) => {
   });
 
   const [uploading, setUploading] = useState<{ logo?: boolean; bg?: boolean; hero?: boolean; successD?: boolean; successM?: boolean }>({});
+  // Pestaña activa del formulario (para no tener un modal tan largo).
+  const [activeTab, setActiveTab] = useState<'general' | 'diseno' | 'formulario'>('general');
   const logoUrl = watch('logoUrl');
   const backgroundImageUrl = watch('backgroundImageUrl');
   const heroUrl = watch('registrationConfig.images.heroUrl' as any);
@@ -264,6 +266,22 @@ const EventForm: React.FC<EventFormProps> = ({ event, onClose, onSuccess }) => {
     }
   };
 
+  // Si la validación falla, saltar a la pestaña que contiene el primer campo con error.
+  const FIELD_TAB: Record<string, 'general' | 'diseno' | 'formulario'> = {
+    name: 'general', description: 'general', location: 'general', maxCapacity: 'general',
+    allowGuests: 'general', maxGuestsPerParticipant: 'general',
+    logoUrl: 'diseno', backgroundImageUrl: 'diseno',
+    publicSlug: 'formulario', publicTemplate: 'formulario', isPublic: 'formulario',
+    registrationOpen: 'formulario', allowMultipleSchedules: 'formulario',
+    emailTemplateId: 'formulario', registrationConfig: 'formulario',
+  };
+  const onInvalid = (errs: any) => {
+    const order: Array<'general' | 'diseno' | 'formulario'> = ['general', 'diseno', 'formulario'];
+    const tabsWithError = new Set(Object.keys(errs || {}).map((k) => FIELD_TAB[k] || 'general'));
+    const target = order.find((t) => tabsWithError.has(t));
+    if (target) setActiveTab(target);
+  };
+
   const onSubmit: SubmitHandler<EventFormInputs> = async (data) => {
     try {
       (data as any).emailTemplateId = data.emailTemplateId || null;
@@ -303,7 +321,7 @@ const EventForm: React.FC<EventFormProps> = ({ event, onClose, onSuccess }) => {
 
   return (
     <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm z-50 flex justify-center items-center p-4 animate-in fade-in duration-200">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col max-h-[90vh] transform transition-all animate-in zoom-in-95 duration-200">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl flex flex-col max-h-[90vh] transform transition-all animate-in zoom-in-95 duration-200">
         
         {/* Header */}
         <div className="bg-white px-8 py-6 border-b border-gray-100 flex justify-between items-center flex-shrink-0">
@@ -325,10 +343,23 @@ const EventForm: React.FC<EventFormProps> = ({ event, onClose, onSuccess }) => {
           </button>
         </div>
 
-        <form onSubmit={handleSubmit(onSubmit as any)} className="flex flex-col flex-1 overflow-hidden">
+        <form onSubmit={handleSubmit(onSubmit as any, onInvalid)} className="flex flex-col flex-1 overflow-hidden">
+          {/* Pestañas: dividen el formulario para que no sea un scroll enorme. */}
+          <div className="px-8 pt-4 flex gap-1 flex-shrink-0 border-b border-gray-100 overflow-x-auto">
+            {([['general', 'General'], ['diseno', 'Diseño'], ['formulario', 'Formulario y registro']] as const).map(([id, lbl]) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setActiveTab(id)}
+                className={`px-4 py-2.5 text-sm font-semibold whitespace-nowrap rounded-t-lg -mb-px border-b-2 transition ${activeTab === id ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+              >
+                {lbl}
+              </button>
+            ))}
+          </div>
           <div className="p-8 space-y-6 overflow-y-auto flex-1">
-            <div className="grid grid-cols-1 gap-y-6 sm:grid-cols-2 sm:gap-x-8">
-              
+            <div className={activeTab === 'general' ? 'grid grid-cols-1 gap-y-6 sm:grid-cols-2 sm:gap-x-8' : 'hidden'}>
+
               {/* Name */}
               <div className="sm:col-span-2">
                 <label htmlFor="name" className="block text-sm font-semibold text-gray-700 mb-1">
@@ -470,9 +501,10 @@ const EventForm: React.FC<EventFormProps> = ({ event, onClose, onSuccess }) => {
                   </p>
                 </div>
               )}
+            </div>
 
-              {/* Landing Design Section */}
-              <div className="sm:col-span-2 border-t border-gray-100 pt-6 mt-2">
+            {/* Pestaña: Diseño de la landing */}
+            <div className={activeTab === 'diseno' ? '' : 'hidden'}>
                 <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
                   Diseño de la landing
                   <InfoTooltip text="Personaliza el aspecto de la página pública de inscripción: logo, imagen de fondo y colores. La vista previa completa se aplica hoy en la plantilla 'Por defecto'." />
@@ -602,8 +634,8 @@ const EventForm: React.FC<EventFormProps> = ({ event, onClose, onSuccess }) => {
                 </div>
               </div>
 
-              {/* Public Registration Section */}
-              <div className="sm:col-span-2 border-t border-gray-100 pt-6 mt-2">
+            {/* Pestaña: Formulario y registro */}
+            <div className={activeTab === 'formulario' ? '' : 'hidden'}>
                 <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
                   Registro Público
                   <InfoTooltip text="Crea una página web pública donde personas externas pueden inscribirse solas, sin entrar al sistema. Si está desactivado, el evento es interno y solo tu equipo inscribe manualmente." />
@@ -929,7 +961,6 @@ const EventForm: React.FC<EventFormProps> = ({ event, onClose, onSuccess }) => {
                   </div>
                 </div>
               </div>
-            </div>
           </div>
 
           {/* Footer */}
