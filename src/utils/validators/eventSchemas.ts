@@ -82,6 +82,9 @@ export const themeConfigSchema = z.object({
 export const imagesConfigSchema = z.object({
   logoUrl: z.string().optional().nullable(),
   backgroundImageUrl: z.string().optional().nullable(),
+  // Imagen destacada del evento (ej. el título "AURORA"): se muestra en el inicio
+  // de la landing Gala, separada del fondo para que escale bien en móvil.
+  heroUrl: z.string().optional().nullable(),
 });
 
 /** Forma canónica de Event.registrationConfig. */

@@ -203,13 +203,18 @@ const EventForm: React.FC<EventFormProps> = ({ event, onClose, onSuccess }) => {
           ? event.registrationConfig.dietaryOptions
           : DEFAULT_DIET_LABELS,
         customQuestions: event?.registrationConfig?.customQuestions || [],
+        images: {
+          ...(event?.registrationConfig?.images || {}),
+          heroUrl: event?.registrationConfig?.images?.heroUrl || '',
+        },
       },
     },
   });
 
-  const [uploading, setUploading] = useState<{ logo?: boolean; bg?: boolean }>({});
+  const [uploading, setUploading] = useState<{ logo?: boolean; bg?: boolean; hero?: boolean }>({});
   const logoUrl = watch('logoUrl');
   const backgroundImageUrl = watch('backgroundImageUrl');
+  const heroUrl = watch('registrationConfig.images.heroUrl' as any);
 
   const [emailTemplates, setEmailTemplates] = useState<{ id: string; name: string }[]>([]);
   useEffect(() => {
@@ -228,6 +233,20 @@ const EventForm: React.FC<EventFormProps> = ({ event, onClose, onSuccess }) => {
       toast.error(e.message || 'Error al subir la imagen');
     } finally {
       setUploading((u) => ({ ...u, [key]: false }));
+    }
+  };
+
+  const handleHeroUpload = async (file?: File) => {
+    if (!file) return;
+    setUploading((u) => ({ ...u, hero: true }));
+    try {
+      const url = await uploadImage(file);
+      setValue('registrationConfig.images.heroUrl' as any, url, { shouldDirty: true });
+      toast.success('Imagen subida');
+    } catch (e: any) {
+      toast.error(e.message || 'Error al subir la imagen');
+    } finally {
+      setUploading((u) => ({ ...u, hero: false }));
     }
   };
 
@@ -461,6 +480,13 @@ const EventForm: React.FC<EventFormProps> = ({ event, onClose, onSuccess }) => {
                     uploading={!!uploading.bg}
                     onSelect={(f) => handleImageUpload('backgroundImageUrl', f)}
                     onClear={() => setValue('backgroundImageUrl', '', { shouldDirty: true })}
+                  />
+                  <ImageUploadField
+                    label="Imagen del evento (destacada)"
+                    value={heroUrl}
+                    uploading={!!uploading.hero}
+                    onSelect={(f) => handleHeroUpload(f)}
+                    onClear={() => setValue('registrationConfig.images.heroUrl' as any, '', { shouldDirty: true })}
                   />
 
                   <div>

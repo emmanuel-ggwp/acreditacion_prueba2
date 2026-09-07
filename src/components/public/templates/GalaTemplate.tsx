@@ -52,6 +52,9 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
   const primary = theme.primaryColor || '#008a98';
   const buttonColor = theme.buttonColor || primary;
   const hasBg = !!event.backgroundImageUrl;
+  // Imagen destacada del evento (ej. "AURORA"): separada del fondo para que escale
+  // bien en móvil. Se muestra en el inicio; si no hay, se usa el nombre como título.
+  const heroUrl = event.registrationConfig?.images?.heroUrl || '';
   const overlay = typeof theme.overlayOpacity === 'number' ? theme.overlayOpacity : 0.55;
   const overlayColor = theme.overlayColor || '#000000';
   const titleFont = getTitleFont(event.registrationConfig, 'gala');
@@ -496,16 +499,30 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
       <div className="relative min-h-screen flex flex-col items-center justify-center px-4 py-12 text-center" style={pageStyle}>
         {fontHref && <link rel="stylesheet" href={fontHref} />}
         <div className="absolute inset-0" style={{ backgroundColor: hexToRgba(overlayColor, Math.max(overlay, 0.4)) }} aria-hidden="true" />
-        <div className="relative flex flex-col items-center">
+        <div className="relative flex flex-col items-center w-full max-w-2xl">
+          {/* Logo arriba, centrado */}
           {event.logoUrl && (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={event.logoUrl} alt={event.name} className="w-40 md:w-52 h-auto mb-8 drop-shadow-lg" />
+            <img src={event.logoUrl} alt={event.name} className="h-16 md:h-20 w-auto mb-8 md:mb-10 drop-shadow-lg" />
           )}
-          <h1 className="text-3xl md:text-5xl font-bold text-white mb-3 break-words max-w-full" style={{ fontFamily: titleFont.stack }}>{event.name}</h1>
-          {event.description && <p className="text-white/80 max-w-xl mb-8">{event.description}</p>}
+          {/* Imagen destacada del evento (si se subió); si no, el nombre como título */}
+          {heroUrl ? (
+            <>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={heroUrl} alt={event.name} className="w-full max-w-xs sm:max-w-md md:max-w-lg h-auto mb-6 drop-shadow-2xl" />
+              <p className="text-white/85 text-lg md:text-xl mb-1" style={{ fontFamily: titleFont.stack }}>Bienvenidos</p>
+              <h1 className="text-2xl md:text-3xl font-semibold text-white mb-8 break-words max-w-full" style={{ fontFamily: titleFont.stack }}>{event.name}</h1>
+            </>
+          ) : (
+            <>
+              <p className="text-white/85 text-lg md:text-xl mb-2" style={{ fontFamily: titleFont.stack }}>Bienvenidos</p>
+              <h1 className="text-3xl md:text-5xl font-bold text-white mb-8 break-words max-w-full" style={{ fontFamily: titleFont.stack }}>{event.name}</h1>
+            </>
+          )}
           <button onClick={() => setStep(mode === 'rut' ? 'rut' : (schedules.length ? 'fecha' : 'form'))} className="inline-flex items-center gap-2 rounded-full px-8 py-3 text-white font-semibold shadow-lg hover:brightness-110 transition" style={{ backgroundColor: buttonColor }}>
             Entrar <ArrowRight className="h-5 w-5" />
           </button>
+          {event.description && <p className="mt-6 text-sm text-white/70 max-w-xl">{event.description}</p>}
           <p className="mt-8 text-xs text-white/60">
             ¿Dudas o cambios en tu inscripción? Escríbenos a{' '}
             <a href={`mailto:${CONTACT_EMAIL}`} className="underline">{CONTACT_EMAIL}</a>
