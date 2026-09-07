@@ -194,7 +194,9 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
       for (const key of Object.keys(ff)) {
         if (!ff[key].enabled || !ff[key].required) continue;
         const val = key === 'dietary' ? form.dietaryPreference : (form as any)[key];
-        if (!val || val === '' || (key === 'dietary' && val === 'NONE')) missing.push(GALA_LABELS[key]);
+        // "Ninguna" (NONE) ES una respuesta válida: la preferencia obligatoria se
+        // cumple cuando la persona ELIGIÓ en el modal (dietChosen), aunque elija Ninguna.
+        if (key === 'dietary' ? !dietChosen : (!val || val === '')) missing.push(GALA_LABELS[key]);
       }
       if (form.email.trim() && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(form.email.trim())) { setError('Ingresa un correo electrónico válido.'); return; }
       missing.push(...missingRequiredCustom(customQuestions, customAnswers));
@@ -222,7 +224,9 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
       for (const key of Object.keys(ff)) {
         if (!ff[key].enabled || !ff[key].required) continue;
         const val = key === 'dietary' ? form.dietaryPreference : (form as any)[key];
-        if (!val || val === '' || (key === 'dietary' && val === 'NONE')) missing.push(GALA_LABELS[key]);
+        // "Ninguna" (NONE) ES una respuesta válida: la preferencia obligatoria se
+        // cumple cuando la persona ELIGIÓ en el modal (dietChosen), aunque elija Ninguna.
+        if (key === 'dietary' ? !dietChosen : (!val || val === '')) missing.push(GALA_LABELS[key]);
       }
       missing.push(...missingRequiredCustom(customQuestions, customAnswers));
       if (missing.length) { setError('Completa los campos obligatorios: ' + missing.join(', ') + '.'); return; }
