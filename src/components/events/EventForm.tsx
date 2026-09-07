@@ -1014,14 +1014,28 @@ const EventForm: React.FC<EventFormProps> = ({ event, onClose, onSuccess }) => {
                       Plantilla de correo de confirmación
                       <InfoTooltip text="Correo (EmailJS) que se envía al inscribirse. Crea y gestiona las plantillas en Configuración." />
                     </label>
-                    <select
-                      id="emailTemplateId"
-                      {...register('emailTemplateId')}
-                      className="block w-full rounded-xl border-gray-200 bg-gray-50 px-4 py-3 text-gray-900 focus:border-indigo-500 focus:bg-white focus:ring-2 focus:ring-indigo-500/20 transition-all duration-200 sm:text-sm"
-                    >
-                      <option value="">Sin correo de confirmación</option>
-                      {emailTemplates.map((t) => (<option key={t.id} value={t.id}>{t.name}</option>))}
-                    </select>
+                    {/* Controlado por el estado del formulario (no por `register`): la lista
+                        de plantillas se carga async y, si tardaba, el <select> con register
+                        quedaba vacío al montar y se BORRABA la selección al guardar. Así el
+                        valor lo manda siempre el estado, aunque las opciones lleguen después. */}
+                    {(() => {
+                      const val = (watch('emailTemplateId') as string) || '';
+                      // Si la plantilla guardada aún no está en la lista, se muestra igual
+                      // (no se pierde por un fallo/tardanza de carga).
+                      const missing = val && !emailTemplates.some((t) => t.id === val);
+                      return (
+                        <select
+                          id="emailTemplateId"
+                          value={val}
+                          onChange={(e) => setValue('emailTemplateId' as any, e.target.value, { shouldDirty: true })}
+                          className="block w-full rounded-xl border-gray-200 bg-gray-50 px-4 py-3 text-gray-900 focus:border-indigo-500 focus:bg-white focus:ring-2 focus:ring-indigo-500/20 transition-all duration-200 sm:text-sm"
+                        >
+                          <option value="">Sin correo de confirmación</option>
+                          {emailTemplates.map((t) => (<option key={t.id} value={t.id}>{t.name}</option>))}
+                          {missing && <option value={val}>Plantilla seleccionada</option>}
+                        </select>
+                      );
+                    })()}
                   </div>
                 </div>
               </div>
