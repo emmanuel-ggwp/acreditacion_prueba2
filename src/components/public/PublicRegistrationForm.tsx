@@ -57,7 +57,8 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
   `;
   const ff = getFormFields((event as any).registrationConfig);
   ff.documentNumber = { enabled: true, required: true }; // RUT siempre visible y obligatorio.
-  const allSchedules: any[] = Array.isArray((event as any).schedules) ? (event as any).schedules : [];
+  const allSchedules: any[] = (Array.isArray((event as any).schedules) ? [...(event as any).schedules] : [])
+    .sort((a: any, b: any) => new Date(a.startDateTime).getTime() - new Date(b.startDateTime).getTime());
   const availableSchedules = allSchedules.filter((s: any) => !s.full);
   const allFull = allSchedules.length > 0 && availableSchedules.length === 0;
   const variant: string = (event as any).publicTemplate || 'default';

@@ -20,9 +20,11 @@ async function getEvent(slug: string) {
         {
           model: EventSchedule,
           as: 'schedules',
-          required: false 
+          required: false
         }
       ],
+      // Fechas ordenadas cronológicamente (la landing las muestra en este orden).
+      order: [[{ model: EventSchedule, as: 'schedules' }, 'startDateTime', 'ASC']],
     });
 
     if (!event) return null;

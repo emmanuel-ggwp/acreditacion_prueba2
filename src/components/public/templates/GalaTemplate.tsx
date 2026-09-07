@@ -59,7 +59,9 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
   const overlayColor = theme.overlayColor || '#000000';
   const titleFont = getTitleFont(event.registrationConfig, 'gala');
   const fontHref = googleFontHref(titleFont);
-  const schedules: any[] = Array.isArray(event.schedules) ? event.schedules : [];
+  // Fechas ordenadas cronológicamente (orden defensivo por si llegan sin ordenar).
+  const schedules: any[] = (Array.isArray(event.schedules) ? [...event.schedules] : [])
+    .sort((a: any, b: any) => new Date(a.startDateTime).getTime() - new Date(b.startDateTime).getTime());
   const mode: 'open' | 'rut' = event.registrationConfig?.mode === 'rut' ? 'rut' : 'open';
   const ff = getFormFields(event.registrationConfig);
   ff.documentNumber = { enabled: true, required: true }; // RUT siempre visible y obligatorio.
