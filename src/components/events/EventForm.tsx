@@ -225,6 +225,10 @@ const EventForm: React.FC<EventFormProps> = ({ event, onClose, onSuccess }) => {
   // Si hay plantilla de correo, el Correo del asistente es imprescindible (para poder
   // enviárselo): se bloquea activado + obligatorio.
   const emailOn = !!watch('emailTemplateId');
+  // Plantilla elegida: varias opciones de diseño son EXCLUSIVAS de Gala.
+  const selectedTemplate = (watch('publicTemplate') as string) || 'default';
+  const isGala = selectedTemplate === 'gala';
+  const TEMPLATE_NAMES: Record<string, string> = { default: 'Por Defecto', modern: 'Moderno', minimal: 'Minimalista', gala: 'Gala' };
 
   const [emailTemplates, setEmailTemplates] = useState<{ id: string; name: string }[]>([]);
   useEffect(() => {
@@ -508,10 +512,20 @@ const EventForm: React.FC<EventFormProps> = ({ event, onClose, onSuccess }) => {
 
             {/* Pestaña: Diseño de la landing */}
             <div className={activeTab === 'diseno' ? '' : 'hidden'}>
-                <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
+                <h3 className="text-lg font-medium text-gray-900 mb-2 flex items-center">
                   Diseño de la landing
-                  <InfoTooltip text="Personaliza el aspecto de la página pública de inscripción: logo, imagen de fondo y colores. La vista previa completa se aplica hoy en la plantilla 'Por defecto'." />
+                  <InfoTooltip text="Personaliza el aspecto de la página pública de inscripción: logo, imagen de fondo y colores." />
                 </h3>
+                <p className="text-sm text-gray-600 mb-3">Plantilla seleccionada: <b>{TEMPLATE_NAMES[selectedTemplate] || selectedTemplate}</b> <span className="text-gray-400">(se cambia en la pestaña Registro).</span></p>
+                {isGala ? (
+                  <div className="mb-4 rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-2 text-xs text-emerald-800">
+                    ✅ La plantilla <b>Gala</b> usa <b>todas</b> las opciones de abajo, incluidas las marcadas <b>Solo Gala</b> (imagen destacada, imágenes de éxito, color/tamaño/sombra del título y el modal de restricción).
+                  </div>
+                ) : (
+                  <div className="mb-4 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-800">
+                    ⚠️ En la plantilla <b>{TEMPLATE_NAMES[selectedTemplate] || selectedTemplate}</b>, las opciones marcadas <b>Solo Gala</b> <b>no tienen efecto</b> (imagen destacada, imágenes de éxito, color/tamaño/sombra del título, modal de restricción). Sí aplican: logo, fondo, colores generales y tipografía.
+                  </div>
+                )}
 
                 <div className="space-y-5">
                   <ImageUploadField
@@ -529,7 +543,7 @@ const EventForm: React.FC<EventFormProps> = ({ event, onClose, onSuccess }) => {
                     onClear={() => setValue('backgroundImageUrl', '', { shouldDirty: true })}
                   />
                   <ImageUploadField
-                    label="Imagen del evento (destacada)"
+                    label="Imagen del evento (destacada) — solo Gala"
                     value={heroUrl}
                     uploading={!!uploading.hero}
                     onSelect={(f) => uploadConfigImage('registrationConfig.images.heroUrl', 'hero', f)}
@@ -558,12 +572,12 @@ const EventForm: React.FC<EventFormProps> = ({ event, onClose, onSuccess }) => {
                         ['registrationConfig.theme.primaryColor', 'Principal', 'Acentos: barra superior, íconos y detalles.'],
                         ['registrationConfig.theme.secondaryColor', 'Secundario', 'Acento complementario (degradados y detalles).'],
                         ['registrationConfig.theme.buttonColor', 'Botones', 'Color del botón de registro.'],
-                        ['registrationConfig.theme.titleColor', 'Título', 'Color del nombre del evento (título) en la landing Gala.'],
+                        ['registrationConfig.theme.titleColor', 'Título · solo Gala', 'Color del nombre del evento (título) en la landing Gala.'],
                         ['registrationConfig.theme.textColor', 'Texto', 'Color del texto y las etiquetas del formulario.'],
                         ['registrationConfig.theme.inputColor', 'Inputs', 'Fondo de los campos donde se escribe.'],
                         ['registrationConfig.theme.borderColor', 'Bordes', 'Color del borde de los campos.'],
                         ['registrationConfig.theme.formBackgroundColor', 'Fondo formulario', 'Fondo de la tarjeta que contiene el formulario.'],
-                        ['registrationConfig.theme.dietModalColor', 'Modal restricción', 'Fondo del modal para elegir la restricción alimentaria (plantilla Gala).'],
+                        ['registrationConfig.theme.dietModalColor', 'Modal restricción · solo Gala', 'Fondo del modal para elegir la restricción alimentaria (plantilla Gala).'],
                       ] as const).map(([name, label, desc]) => (
                         <div key={name} className="flex items-start gap-2.5 text-sm text-gray-600">
                           <input type="color" {...register(name as any)} className="h-9 w-10 rounded border border-gray-200 cursor-pointer bg-white p-0.5 flex-shrink-0" />
@@ -615,7 +629,7 @@ const EventForm: React.FC<EventFormProps> = ({ event, onClose, onSuccess }) => {
                   {/* Tamaño del título (nombre del evento) cuando no hay imagen destacada */}
                   <div>
                     <label className="text-sm font-semibold text-gray-700 mb-1 flex items-center">
-                      Tamaño del título (nombre del evento)
+                      Tamaño del título (nombre del evento) <span className="ml-1 text-xs font-normal text-amber-600">· solo Gala</span>
                       <InfoTooltip text="Tamaño del nombre del evento en el inicio de la landing Gala cuando NO se subió una imagen destacada. Si hay imagen destacada, el nombre va más pequeño debajo." />
                     </label>
                     <select
@@ -634,7 +648,7 @@ const EventForm: React.FC<EventFormProps> = ({ event, onClose, onSuccess }) => {
                   {/* Sombra del título */}
                   <div>
                     <label className="text-sm font-semibold text-gray-700 mb-1 flex items-center">
-                      Sombra del título
+                      Sombra del título <span className="ml-1 text-xs font-normal text-amber-600">· solo Gala</span>
                       <InfoTooltip text="Agrega una sombra al nombre del evento para que resalte sobre el fondo (útil con imágenes de fondo claras o con mucho detalle)." />
                     </label>
                     <select
