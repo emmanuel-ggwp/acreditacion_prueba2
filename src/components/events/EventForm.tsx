@@ -187,6 +187,7 @@ const EventForm: React.FC<EventFormProps> = ({ event, onClose, onSuccess }) => {
           inputColor: '#f8fafc',
           borderColor: '#e2e8f0',
           formBackgroundColor: '#ffffff',
+          dietModalColor: '#0b1220',
           overlayColor: '#0f172a',
           overlayOpacity: 0.55,
           titleFont: 'montserrat',
@@ -474,6 +475,7 @@ const EventForm: React.FC<EventFormProps> = ({ event, onClose, onSuccess }) => {
                         ['registrationConfig.theme.inputColor', 'Inputs', 'Fondo de los campos donde se escribe.'],
                         ['registrationConfig.theme.borderColor', 'Bordes', 'Color del borde de los campos.'],
                         ['registrationConfig.theme.formBackgroundColor', 'Fondo formulario', 'Fondo de la tarjeta que contiene el formulario.'],
+                        ['registrationConfig.theme.dietModalColor', 'Modal restricción', 'Fondo del modal para elegir la restricción alimentaria (plantilla Gala).'],
                       ] as const).map(([name, label, desc]) => (
                         <div key={name} className="flex items-start gap-2.5 text-sm text-gray-600">
                           <input type="color" {...register(name as any)} className="h-9 w-10 rounded border border-gray-200 cursor-pointer bg-white p-0.5 flex-shrink-0" />

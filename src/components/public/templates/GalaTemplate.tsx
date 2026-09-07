@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Calendar, MapPin, ArrowRight, CheckCircle2, Clock, Loader2, Info, Mail } from 'lucide-react';
+import { Calendar, MapPin, ArrowRight, CheckCircle2, Clock, Loader2, Info, Mail, ChevronDown } from 'lucide-react';
 import { isValidRut } from '@/utils/validators/rut';
 import { sendConfirmationEmail } from '@/lib/emailjs';
 import { buildGuestSummary } from '@/utils/guests';
@@ -65,6 +65,19 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
   // Preguntas configurables del evento (Sí/No + lista, ej. transporte + recorrido).
   const customQuestions = getCustomQuestions(event.registrationConfig);
   const [customAnswers, setCustomAnswers] = useState<CustomAnswers>(() => initCustomAnswers(customQuestions));
+  // Preferencia alimenticia: en Gala se elige con un modal (botón con apariencia de
+  // select que abre la lista de opciones). `dietTemp` es la selección provisional
+  // dentro del modal hasta que se pulsa "Aceptar".
+  const [dietModalOpen, setDietModalOpen] = useState(false);
+  const [dietTemp, setDietTemp] = useState<string>('NONE');
+  // El botón-select muestra "Escoger opción" hasta que el asistente confirma una
+  // opción (incluida "Ninguna"); a partir de ahí muestra la elegida.
+  const [dietChosen, setDietChosen] = useState(false);
+  const dietModalColor = theme.dietModalColor || '#0b1220';
+  const dietLabelOf = (val: string) => {
+    const found = ensureDietOption(dietOpts, val).find((o) => o.value === val);
+    return found ? found.label : val;
+  };
 
   const [step, setStep] = useState<'welcome' | 'rut' | 'fecha' | 'form' | 'already'>('welcome');
   const [allowMultiple, setAllowMultiple] = useState<boolean>(!!event.allowMultipleSchedules);
@@ -141,6 +154,7 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
       setForm((f) => ({ ...f, firstName: p.firstName || '', lastName: p.lastName || '', email: p.email || '', phone: p.phone || '', documentNumber: p.documentNumber || rutInput, dietaryPreference: p.dietaryPreference || 'NONE', dietaryComments: p.dietaryComments || '' }));
       setCargas((data.guests || []).map((g: any) => ({ id: g.id, firstName: g.firstName, lastName: g.lastName, guestType: g.guestType, dietaryPreference: g.dietaryPreference || null, selected: false })));
       setCustomAnswers(initCustomAnswers(customQuestions, p.customData));
+      setDietChosen((p.dietaryPreference || 'NONE') !== 'NONE');
       const regIds: string[] = data.registeredScheduleIds || [];
       setAllowMultiple(!!data.allowMultiple);
       setRegisteredScheduleIds(regIds);
@@ -338,29 +352,52 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
     // sin importar cuántas fechas haya; el contenedor las reparte y centra la última
     // fila incompleta (5 fechas → 3 arriba y 2 centradas). Con 4 fechas, el contenedor
     // se estrecha (abajo) para que queden 2 y 2 SIN ensancharse.
+    // Etiqueta de estado (reutilizada en ambos diseños).
+    const badge = already ? (
+      <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-green-500/30 text-green-100 whitespace-nowrap">Ya inscrito</span>
+    ) : full ? (
+      <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-red-500/40 text-red-50 whitespace-nowrap">Capacidad máxima</span>
+    ) : blockTypeLabel(s.blockType) ? (
+      <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-white/20 whitespace-nowrap">{blockTypeLabel(s.blockType)}</span>
+    ) : null;
+
+    // Partes de la fecha para el diseño tipográfico SIN imagen.
+    const d = new Date(s.startDateTime);
+    const validDate = !isNaN(d.getTime());
+    const dayNum = validDate ? d.getDate() : '';
+    const weekdayName = validDate ? d.toLocaleDateString('es-CL', { weekday: 'long' }) : '';
+    const monthName = validDate ? d.toLocaleDateString('es-CL', { month: 'long' }) : '';
+
     return (
       <button key={s.id} type="button" disabled={blocked} onClick={() => { if (!blocked) setSelectedScheduleId(s.id); }} className="w-full sm:w-[18rem] text-left rounded-2xl overflow-hidden transition shadow-lg disabled:cursor-not-allowed" style={{ outline: selected ? `3px solid ${primary}` : '3px solid transparent', backgroundColor: 'rgba(0,0,0,0.5)', border: '1px solid rgba(255,255,255,0.15)', opacity: blocked ? 0.55 : 1 }}>
         {s.imageUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={s.imageUrl} alt={s.scheduleName} className="w-full h-32 object-cover" />
+          <>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={s.imageUrl} alt={s.scheduleName} className="w-full h-32 object-cover" />
+            <div className="p-4 text-white">
+              <div className="flex items-start justify-between gap-2">
+                <p className="font-bold">{s.label || s.scheduleName}</p>
+                {badge}
+              </div>
+              <p className="text-sm text-white/85 capitalize flex items-center gap-1 mt-1"><Calendar className="h-3.5 w-3.5" /> {fmtDate(s.startDateTime)}</p>
+              <p className="text-sm text-white/70 flex items-center gap-1 mt-0.5"><Clock className="h-3.5 w-3.5" /> {fmtTime(s.startDateTime)} – {fmtTime(s.endDateTime)}</p>
+              {s.location && <p className="text-sm text-white/70 flex items-center gap-1 mt-0.5"><MapPin className="h-3.5 w-3.5" /> {s.location}</p>}
+            </div>
+          </>
         ) : (
-          <div className="w-full h-32 flex items-center justify-center" style={{ backgroundColor: primary }}><Calendar className="h-10 w-10 text-white/80" /></div>
-        )}
-        <div className="p-4 text-white">
-          <div className="flex items-start justify-between gap-2">
-            <p className="font-bold">{s.label || s.scheduleName}</p>
-            {already ? (
-              <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-green-500/30 text-green-100 whitespace-nowrap">Ya inscrito</span>
-            ) : full ? (
-              <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-red-500/40 text-red-50 whitespace-nowrap">Capacidad máxima</span>
-            ) : blockTypeLabel(s.blockType) ? (
-              <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-white/20 whitespace-nowrap">{blockTypeLabel(s.blockType)}</span>
-            ) : null}
+          // Diseño SIN imagen: tipográfico, sin íconos. Día grande y liviano, con
+          // día de la semana y mes en mayúsculas espaciadas y una fina línea de acento.
+          <div className="px-6 py-8 text-white flex flex-col items-center text-center" style={{ minHeight: '13rem', justifyContent: 'center' }}>
+            {badge && <div className="mb-3">{badge}</div>}
+            <p className="text-[11px] uppercase tracking-[0.3em] text-white/50 capitalize">{weekdayName}</p>
+            <p className="text-6xl font-light leading-none my-1.5" style={{ fontFamily: titleFont.stack }}>{dayNum}</p>
+            <p className="text-sm uppercase tracking-[0.3em] text-white/75 capitalize">{monthName}</p>
+            <div className="h-px w-8 my-4" style={{ backgroundColor: primary }} />
+            <p className="font-semibold">{s.label || s.scheduleName}</p>
+            <p className="text-sm text-white/70 mt-1">{fmtTime(s.startDateTime)} – {fmtTime(s.endDateTime)}</p>
+            {s.location && <p className="text-xs text-white/50 mt-1.5 uppercase tracking-wide">{s.location}</p>}
           </div>
-          <p className="text-sm text-white/85 capitalize flex items-center gap-1 mt-1"><Calendar className="h-3.5 w-3.5" /> {fmtDate(s.startDateTime)}</p>
-          <p className="text-sm text-white/70 flex items-center gap-1 mt-0.5"><Clock className="h-3.5 w-3.5" /> {fmtTime(s.startDateTime)} – {fmtTime(s.endDateTime)}</p>
-          {s.location && <p className="text-sm text-white/70 flex items-center gap-1 mt-0.5"><MapPin className="h-3.5 w-3.5" /> {s.location}</p>}
-        </div>
+        )}
       </button>
     );
   };
@@ -596,9 +633,10 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
                 {ff.dietary.enabled && (
                   <div className="md:col-span-2">
                     <label className="block text-white/80 text-sm mb-1">Preferencia alimenticia{ff.dietary.required ? ' *' : ''}</label>
-                    <select className={inputClass} style={inputStyle} value={form.dietaryPreference} onChange={(e) => setField('dietaryPreference', e.target.value)}>
-                      {ensureDietOption(dietOpts, form.dietaryPreference).map((o) => <option key={o.value} value={o.value} style={{ color: '#111' }}>{o.label}</option>)}
-                    </select>
+                    <button type="button" onClick={() => { setDietTemp(form.dietaryPreference); setDietModalOpen(true); }} className={`${inputClass} flex items-center justify-between`} style={inputStyle}>
+                      <span className={dietChosen ? '' : 'text-white/50'}>{dietChosen ? dietLabelOf(form.dietaryPreference) : 'Escoger opción'}</span>
+                      <ChevronDown className="h-5 w-5 text-white/60 flex-shrink-0" />
+                    </button>
                     {isFreeTextDiet(form.dietaryPreference) && (
                       <input className={`${inputClass} mt-2`} style={inputStyle} maxLength={DIET_COMMENTS_MAX} placeholder={String(form.dietaryPreference).toUpperCase().includes('ALERG') ? 'Especifica tu alergia' : 'Especifica tu requerimiento'} value={form.dietaryComments} onChange={(e) => setField('dietaryComments', e.target.value)} />
                     )}
@@ -672,9 +710,10 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
                 {ff.dietary.enabled && (
                   <div className="md:col-span-2">
                     <label className="block text-white/80 text-sm mb-1">Preferencia alimenticia{ff.dietary.required ? ' *' : ''}</label>
-                    <select className={inputClass} style={inputStyle} value={form.dietaryPreference} onChange={(e) => setField('dietaryPreference', e.target.value)}>
-                      {ensureDietOption(dietOpts, form.dietaryPreference).map((o) => <option key={o.value} value={o.value} style={{ color: '#111' }}>{o.label}</option>)}
-                    </select>
+                    <button type="button" onClick={() => { setDietTemp(form.dietaryPreference); setDietModalOpen(true); }} className={`${inputClass} flex items-center justify-between`} style={inputStyle}>
+                      <span className={dietChosen ? '' : 'text-white/50'}>{dietChosen ? dietLabelOf(form.dietaryPreference) : 'Escoger opción'}</span>
+                      <ChevronDown className="h-5 w-5 text-white/60 flex-shrink-0" />
+                    </button>
                     {isFreeTextDiet(form.dietaryPreference) && (
                       <input
                         className={`${inputClass} mt-2`}
@@ -783,6 +822,40 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
             ¿Dudas o cambios en tu inscripción? Escríbenos a{' '}
             <a href={`mailto:${CONTACT_EMAIL}`} className="underline">{CONTACT_EMAIL}</a>
           </p>
+
+          {/* Modal de preferencia alimenticia (se abre desde el botón-select). */}
+          {dietModalOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: 'rgba(0,0,0,0.35)' }} onClick={() => setDietModalOpen(false)}>
+              <div className="w-full max-w-md sm:max-w-lg rounded-3xl p-8 shadow-2xl" style={{ backgroundColor: hexToRgba(dietModalColor, 0.6), backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)', border: '1px solid rgba(255,255,255,0.18)' }} onClick={(e) => e.stopPropagation()}>
+                <h3 className="text-lg font-bold text-center mb-5">
+                  <span className="text-white">Elige una </span>
+                  <span style={{ color: primary }}>restricción alimentaria</span>
+                </h3>
+                <div className="space-y-2.5 max-h-[55vh] overflow-y-auto w-full max-w-[13rem] mx-auto">
+                  {ensureDietOption(dietOpts, dietTemp).map((o) => {
+                    const active = o.value === dietTemp;
+                    return (
+                      <button
+                        key={o.value}
+                        type="button"
+                        onClick={() => setDietTemp(o.value)}
+                        className="w-full rounded-full px-5 py-3 text-sm font-medium border transition text-center"
+                        style={active
+                          ? { backgroundColor: buttonColor, color: '#fff', borderColor: buttonColor }
+                          : { backgroundColor: 'rgba(255,255,255,0.06)', color: '#fff', borderColor: 'rgba(255,255,255,0.25)' }}
+                      >
+                        {o.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="mt-5 flex justify-center gap-3">
+                  <button type="button" onClick={() => setDietModalOpen(false)} className="px-5 py-2.5 rounded-full text-sm text-white/80 border" style={{ borderColor: 'rgba(255,255,255,0.25)' }}>Cancelar</button>
+                  <button type="button" onClick={() => { setField('dietaryPreference', dietTemp); setDietChosen(true); setDietModalOpen(false); }} className="px-8 py-2.5 rounded-full text-sm font-semibold text-white transition" style={{ backgroundColor: buttonColor }}>Aceptar</button>
+                </div>
+              </div>
+            </div>
+          )}
         </form>
       </div>
     </div>

@@ -71,6 +71,8 @@ export const themeConfigSchema = z.object({
   inputColor: z.string().optional(),
   borderColor: z.string().optional(),
   formBackgroundColor: z.string().optional(),
+  // Fondo del modal de restricción alimentaria (Gala).
+  dietModalColor: z.string().optional(),
   overlayColor: z.string().optional(),
   overlayOpacity: z.number().min(0).max(1).optional(),
   titleFont: z.string().optional(),
