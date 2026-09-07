@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useCallback, useEffect } from 'react';
-import { Search, X } from 'lucide-react';
+import { Search, X, ChevronRight } from 'lucide-react';
 import { debounce } from 'lodash';
 import useParticipantStore from '@/store/participantStore';
 import Participant from '@/models/Participant';
@@ -79,12 +79,15 @@ const SearchParticipant: React.FC<SearchParticipantProps> = ({ eventId, onSelect
             <li
               key={person.id}
               onClick={() => handleSelect(person)}
-              className="px-4 py-3 hover:bg-gray-100 active:bg-gray-100 cursor-pointer border-b last:border-b-0"
+              className="flex items-center gap-3 px-4 py-3.5 hover:bg-gray-100 active:bg-indigo-50 cursor-pointer border-b last:border-b-0"
             >
-              <p className="font-medium text-base">{`${(person as any).firstName} ${(person as any).lastName}`}</p>
-              <p className="text-sm text-gray-500">
-                {[(person as any).documentNumber, (person as any).email].filter(Boolean).join(' · ') || 'Sin RUT ni correo'}
-              </p>
+              <div className="min-w-0 flex-1">
+                <p className="font-medium text-base truncate">{`${(person as any).firstName} ${(person as any).lastName}`}</p>
+                <p className="text-sm text-gray-500 truncate">
+                  {[(person as any).documentNumber, (person as any).email].filter(Boolean).join(' · ') || 'Sin RUT ni correo'}
+                </p>
+              </div>
+              <ChevronRight size={20} className="text-gray-300 flex-shrink-0" />
             </li>
           ))}
         </ul>

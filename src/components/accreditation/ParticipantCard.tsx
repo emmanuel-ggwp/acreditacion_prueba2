@@ -8,6 +8,7 @@ import useAuthStore from '@/store/authStore';
 import { Check, X, User, Users, Award, Mail, FileText, Loader2, CalendarClock, Utensils, RotateCcw } from 'lucide-react';
 import { dietaryFull, dietaryLabel } from '@/utils/dietary';
 import { describeStoredAnswers } from '@/utils/customQuestions';
+import { showToast } from '@/components/ui/Toast';
 
 interface ParticipantCardProps {
   person: Participant | Guest;
@@ -116,9 +117,10 @@ const ParticipantCard: React.FC<ParticipantCardProps> = ({ person, type, schedul
       setNotes('');
       setGuestsToAccredit([]);
       onAccredited?.();
+      showToast.success(`${name.trim()} acreditado ✓${guestsToAccredit.length ? ` (+${guestsToAccredit.length} invitado${guestsToAccredit.length === 1 ? '' : 's'})` : ''}`);
     } catch (e) {
       console.error(e);
-      alert('Error al acreditar: ' + (e as Error).message);
+      showToast.error('Error al acreditar: ' + (e as Error).message);
     }
   };
 
@@ -129,8 +131,9 @@ const ParticipantCard: React.FC<ParticipantCardProps> = ({ person, type, schedul
       await unaccredit('participant', person.id, scheduleId);
       await reloadStatus();
       onAccredited?.();
+      showToast.success(`Se quitó la acreditación de ${name.trim()}`);
     } catch (e) {
-      alert('Error al des-acreditar: ' + (e as Error).message);
+      showToast.error('Error al des-acreditar: ' + (e as Error).message);
     }
   };
 
@@ -371,8 +374,8 @@ const ParticipantCard: React.FC<ParticipantCardProps> = ({ person, type, schedul
       )}
 
       {!accreditationStatus.isAccredited && (
-        <div className="p-4 sm:p-6 bg-gray-50 border-t">
-          <div className="mb-4">
+        <>
+          <div className="px-4 sm:px-6 pt-4">
             <label htmlFor="notes" className="block text-sm font-medium text-gray-700 mb-1">
               Notas (opcional)
             </label>
@@ -385,17 +388,21 @@ const ParticipantCard: React.FC<ParticipantCardProps> = ({ person, type, schedul
               placeholder="Agrega aquí cualquier nota relevante..."
             />
           </div>
-          <div className="flex justify-end">
-            <button
-              onClick={handleAccredit}
-              disabled={loading}
-              className="w-full sm:w-auto bg-indigo-600 text-white font-bold py-3 px-6 sm:px-8 rounded-lg hover:bg-indigo-700 transition duration-300 text-base sm:text-lg flex items-center justify-center disabled:bg-indigo-400"
-            >
-              {loading && <Loader2 className="mr-2 h-5 w-5 animate-spin" />}
-              ACREDITAR {guestsToAccredit.length > 0 ? `(+ ${guestsToAccredit.length} Invitados)` : ''}
-            </button>
+          {/* Barra de acción: fija abajo en celular (siempre al alcance del pulgar). */}
+          <div className="p-3 sm:p-6 bg-white/95 backdrop-blur border-t sticky bottom-0 z-10 shadow-[0_-6px_16px_rgba(0,0,0,0.08)] sm:static sm:bg-gray-50 sm:shadow-none">
+            <div className="sm:flex sm:justify-end">
+              <button
+                onClick={handleAccredit}
+                disabled={loading}
+                className="w-full sm:w-auto bg-green-600 text-white font-bold py-3.5 px-6 sm:px-8 rounded-xl hover:bg-green-700 active:bg-green-800 transition text-lg flex items-center justify-center gap-2 disabled:bg-green-400 shadow-lg shadow-green-600/20"
+              >
+                {loading && <Loader2 className="h-5 w-5 animate-spin" />}
+                <Check size={22} />
+                ACREDITAR{guestsToAccredit.length > 0 ? ` (+${guestsToAccredit.length})` : ''}
+              </button>
+            </div>
           </div>
-        </div>
+        </>
       )}
     </div>
   );
