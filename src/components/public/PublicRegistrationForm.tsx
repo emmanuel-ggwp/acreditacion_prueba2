@@ -91,7 +91,7 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
   // `id` presente = carga PRECARGADA por el organizador, traída por el lookup. Se envía
   // por id para confirmarla, nunca como invitado nuevo: sin el id, el servidor creaba un
   // DUPLICADO en cada inscripción (D1.4). El tope solo lo consumen los que no tienen id.
-  const [openGuests, setOpenGuests] = useState<{ id?: string; firstName: string; lastName: string; dietaryPreference?: string; dietaryComments?: string }[]>([]);
+  const [openGuests, setOpenGuests] = useState<{ id?: string; firstName: string; lastName: string; dietaryPreference?: string; dietaryComments?: string; selected?: boolean }[]>([]);
   const newGuestCount = openGuests.filter((g) => !g.id).length;
   const addGuest = () => setOpenGuests((g) => (g.filter((x) => !x.id).length < maxGuests ? [...g, { firstName: '', lastName: '', dietaryPreference: 'NONE', dietaryComments: '' }] : g));
   const removeGuest = (i: number) => setOpenGuests((g) => g.filter((_, idx) => idx !== i));
@@ -145,6 +145,8 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
           lastName: g.lastName || '',
           dietaryPreference: g.dietaryPreference || 'NONE',
           dietaryComments: '',
+          // Cargas precargadas: MARCADAS por defecto; el asistente puede desmarcar.
+          selected: true,
         })));
       }
       // Invitados en modos numéricos (count / companion).
@@ -199,7 +201,8 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
           guestData.guestCount = Math.min(total, maxGuests);
         } else {
           guests = openGuests
-            .filter((g) => g.id || g.firstName.trim())
+            // Precargadas: solo las MARCADAS. Invitados nuevos: los que tengan nombre.
+            .filter((g) => (g.id ? g.selected !== false : g.firstName.trim()))
             .map((g) => {
               // Carga precargada: se confirma por id. Reenviarla como invitado nuevo era
               // lo que la duplicaba en cada inscripción (D1.4).
@@ -244,7 +247,8 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
           // El array `guests` ya no sirve para esto: las cargas viajan solo con su id.
           const createdGuests = Number.isFinite(Number(result?.guestsCreated)) ? Number(result.guestsCreated) : Number.MAX_SAFE_INTEGER;
           const serverCap = Number.isFinite(Number(result?.guestCap)) ? Number(result.guestCap) : maxGuests;
-          const shown = openGuests.filter((g) => g.id || g.firstName.trim());
+          // Solo cargas precargadas MARCADAS + invitados nuevos que cupieron.
+          const shown = openGuests.filter((g) => (g.id ? g.selected !== false : g.firstName.trim()));
           const names = [
             ...shown.filter((g) => g.id).map((g) => `${g.firstName} ${g.lastName || ''}`.trim()),
             ...shown.filter((g) => !g.id).slice(0, createdGuests).map((g) => `${g.firstName} ${g.lastName || ''}`.trim()),
@@ -599,32 +603,47 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
           <div className="space-y-2">
             {openGuests.map((g, i) => (
               <div key={g.id || i} className="border border-gray-200 rounded-md p-2 space-y-2">
-                {/* Carga precargada: se muestra para confirmarla, no para editarla. El
-                    servidor solo la enlaza por id, así que un campo editable prometería
-                    un cambio que nunca se guarda. */}
-                {g.id && <p className="text-xs text-gray-500">Registrado por el organizador</p>}
-                <div className="flex gap-2">
-                  <input value={g.firstName} readOnly={!!g.id} onChange={(e) => updateGuest(i, 'firstName', e.target.value)} placeholder={`Nombre del invitado ${i + 1}`} className={`flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 ${g.id ? 'bg-gray-50 text-gray-600' : ''}`} />
-                  <input value={g.lastName} readOnly={!!g.id} onChange={(e) => updateGuest(i, 'lastName', e.target.value)} placeholder="Apellido" className={`flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 ${g.id ? 'bg-gray-50 text-gray-600' : ''}`} />
-                  <button type="button" onClick={() => removeGuest(i)} title="Quitar" className="px-3 text-gray-400 hover:text-red-600 border border-gray-300 rounded-md flex-shrink-0">✕</button>
-                </div>
-                {guestDiet && !g.id && (
-                  <select value={g.dietaryPreference || 'NONE'} onChange={(e) => updateGuest(i, 'dietaryPreference', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white">
-                    {ensureDietOption(dietOpts, g.dietaryPreference).map((o) => <option key={o.value} value={o.value}>Preferencia alimenticia: {o.label}</option>)}
-                  </select>
-                )}
-                {guestDiet && !g.id && isFreeTextDiet(g.dietaryPreference) && (
-                  <input
-                    value={g.dietaryComments || ''}
-                    onChange={(e) => updateGuest(i, 'dietaryComments', e.target.value)}
-                    // Más corto que el del participante a propósito: este detalle NO va
-                    // a una columna propia, se compone como «<etiqueta>: <detalle>» y
-                    // viaja dentro de `dietaryPreference`. El margen es para la etiqueta,
-                    // que cada evento configura y puede ser larga.
-                    maxLength={GUEST_DIET_DETAIL_MAX}
-                    placeholder={String(g.dietaryPreference).toUpperCase().includes('ALERG') ? 'Especifica la alergia' : 'Especifica el requerimiento'}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                  />
+                {g.id ? (
+                  // Carga precargada por el organizador: viene MARCADA por defecto; el
+                  // asistente puede desmarcarla si esa persona no asistirá.
+                  <label className="flex items-center gap-2 cursor-pointer py-1">
+                    <input
+                      type="checkbox"
+                      checked={g.selected !== false}
+                      onChange={(e) => setOpenGuests((arr) => arr.map((x, idx) => (idx === i ? { ...x, selected: e.target.checked } : x)))}
+                      className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                    />
+                    <span className="text-sm text-gray-700">
+                      {`${g.firstName} ${g.lastName || ''}`.trim()}
+                      <span className="text-xs text-gray-400"> · Registrado por el organizador</span>
+                    </span>
+                  </label>
+                ) : (
+                  <>
+                    <div className="flex gap-2">
+                      <input value={g.firstName} onChange={(e) => updateGuest(i, 'firstName', e.target.value)} placeholder={`Nombre del invitado ${i + 1}`} className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" />
+                      <input value={g.lastName} onChange={(e) => updateGuest(i, 'lastName', e.target.value)} placeholder="Apellido" className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" />
+                      <button type="button" onClick={() => removeGuest(i)} title="Quitar" className="px-3 text-gray-400 hover:text-red-600 border border-gray-300 rounded-md flex-shrink-0">✕</button>
+                    </div>
+                    {guestDiet && (
+                      <select value={g.dietaryPreference || 'NONE'} onChange={(e) => updateGuest(i, 'dietaryPreference', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white">
+                        {ensureDietOption(dietOpts, g.dietaryPreference).map((o) => <option key={o.value} value={o.value}>Preferencia alimenticia: {o.label}</option>)}
+                      </select>
+                    )}
+                    {guestDiet && isFreeTextDiet(g.dietaryPreference) && (
+                      <input
+                        value={g.dietaryComments || ''}
+                        onChange={(e) => updateGuest(i, 'dietaryComments', e.target.value)}
+                        // Más corto que el del participante a propósito: este detalle NO va
+                        // a una columna propia, se compone como «<etiqueta>: <detalle>» y
+                        // viaja dentro de `dietaryPreference`. El margen es para la etiqueta,
+                        // que cada evento configura y puede ser larga.
+                        maxLength={GUEST_DIET_DETAIL_MAX}
+                        placeholder={String(g.dietaryPreference).toUpperCase().includes('ALERG') ? 'Especifica la alergia' : 'Especifica el requerimiento'}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                      />
+                    )}
+                  </>
                 )}
               </div>
             ))}

@@ -157,7 +157,9 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
       const p = data.participant;
       setParticipantId(p.id);
       setForm((f) => ({ ...f, firstName: p.firstName || '', lastName: p.lastName || '', email: p.email || '', phone: p.phone || '', documentNumber: p.documentNumber || rutInput, dietaryPreference: p.dietaryPreference || 'NONE', dietaryComments: p.dietaryComments || '' }));
-      setCargas((data.guests || []).map((g: any) => ({ id: g.id, firstName: g.firstName, lastName: g.lastName, guestType: g.guestType, dietaryPreference: g.dietaryPreference || null, selected: false })));
+      // Cargas precargadas por el organizador: vienen MARCADAS por defecto (el
+      // asistente puede desmarcar las que no asistirán).
+      setCargas((data.guests || []).map((g: any) => ({ id: g.id, firstName: g.firstName, lastName: g.lastName, guestType: g.guestType, dietaryPreference: g.dietaryPreference || null, selected: true })));
       setCustomAnswers(initCustomAnswers(customQuestions, p.customData));
       setDietChosen((p.dietaryPreference || 'NONE') !== 'NONE');
       const regIds: string[] = data.registeredScheduleIds || [];
