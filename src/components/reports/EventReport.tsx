@@ -26,6 +26,9 @@ interface ReportData {
     startDateTime: string;
     endDateTime: string;
     capacity: number;
+    registered: number;
+    registeredParticipants: number;
+    registeredGuests: number;
     accreditedTotal: number;
     accreditedParticipants: number;
     accreditedGuests: number;
@@ -45,6 +48,14 @@ interface ReportData {
 const fmtCheckIn = (d?: string | null) => {
   if (!d) return '';
   try { return new Date(d).toLocaleString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }); } catch { return ''; }
+};
+const fmtDate = (d?: string | null) => {
+  if (!d) return '';
+  try { return new Date(d).toLocaleDateString('es-CL', { weekday: 'short', day: '2-digit', month: 'short' }); } catch { return ''; }
+};
+const fmtDateShort = (d?: string | null) => {
+  if (!d) return '';
+  try { return new Date(d).toLocaleDateString('es-CL', { day: '2-digit', month: 'short' }); } catch { return ''; }
 };
 
 const EventReport: React.FC<EventReportProps> = ({ eventId }) => {
@@ -89,6 +100,13 @@ const EventReport: React.FC<EventReportProps> = ({ eventId }) => {
     for (const g of (p?.guests || [])) add(g?.dietaryPreference);
   }
   const dietEntries = Object.entries(dietCounts).sort((a, b) => b[1] - a[1]);
+
+  // Datos para el gráfico por fecha: etiqueta con nombre + fecha, inscritos vs acreditados.
+  const scheduleChart = data.scheduleStats.map((s) => ({
+    label: `${s.scheduleName} · ${fmtDateShort(s.startDateTime)}`,
+    Inscritos: s.registered || 0,
+    Acreditados: s.accreditedTotal || 0,
+  }));
 
   // Exportar a Excel: una fila por persona (participante e invitado), con su preferencia alimenticia.
   const exportAttendees = () => {
@@ -240,26 +258,26 @@ const EventReport: React.FC<EventReportProps> = ({ eventId }) => {
           </div>
         </div>
 
-        {/* Schedule Performance */}
+        {/* Asistencia por fecha: inscritos vs acreditados */}
         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-          <h3 className="text-lg font-semibold text-gray-800 mb-4">Asistencia por horario</h3>
+          <h3 className="text-lg font-semibold text-gray-800 mb-4">Asistencia por fecha</h3>
           <div className="h-80">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={data.scheduleStats} layout="vertical">
+              <BarChart data={scheduleChart} layout="vertical">
                 <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} />
-                <XAxis type="number" stroke="#9CA3AF" fontSize={12} />
-                <YAxis 
-                    dataKey="scheduleName" 
-                    type="category" 
-                    width={100} 
-                    stroke="#9CA3AF" 
-                    fontSize={12}
-                    tickFormatter={(value) => value.length > 15 ? `${value.substring(0, 15)}...` : value}
+                <XAxis type="number" stroke="#9CA3AF" fontSize={12} allowDecimals={false} />
+                <YAxis
+                    dataKey="label"
+                    type="category"
+                    width={130}
+                    stroke="#9CA3AF"
+                    fontSize={11}
+                    tickFormatter={(value) => value.length > 22 ? `${value.substring(0, 22)}…` : value}
                 />
                 <Tooltip cursor={{ fill: '#F3F4F6' }} />
                 <Legend />
-                <Bar dataKey="accreditedTotal" name="Acreditados" fill="#4F46E5" radius={[0, 4, 4, 0]} barSize={20} />
-                <Bar dataKey="capacity" name="Capacidad" fill="#E5E7EB" radius={[0, 4, 4, 0]} barSize={20} />
+                <Bar dataKey="Inscritos" fill="#E5E7EB" radius={[0, 4, 4, 0]} barSize={16} />
+                <Bar dataKey="Acreditados" fill="#4F46E5" radius={[0, 4, 4, 0]} barSize={16} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -269,15 +287,17 @@ const EventReport: React.FC<EventReportProps> = ({ eventId }) => {
       {/* Detailed Schedule Table */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="p-6 border-b border-gray-100">
-          <h3 className="text-lg font-semibold text-gray-800">Detalles del horario</h3>
+          <h3 className="text-lg font-semibold text-gray-800">Detalle por fecha</h3>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm text-gray-600">
             <thead className="bg-gray-50 text-xs uppercase font-medium text-gray-500">
               <tr>
-                <th className="px-6 py-4">Nombre del horario</th>
+                <th className="px-6 py-4">Fecha</th>
+                <th className="px-6 py-4">Nombre</th>
                 <th className="px-6 py-4">Hora</th>
-                <th className="px-6 py-4 text-center">Capacidad</th>
+                <th className="px-6 py-4 text-center">Cupo</th>
+                <th className="px-6 py-4 text-center">Inscritos</th>
                 <th className="px-6 py-4 text-center">Acreditados</th>
                 <th className="px-6 py-4 text-center">Uso</th>
               </tr>
@@ -285,22 +305,27 @@ const EventReport: React.FC<EventReportProps> = ({ eventId }) => {
             <tbody className="divide-y divide-gray-100">
               {data.scheduleStats.map((schedule, index) => (
                 <tr key={index} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-6 py-4 font-medium text-gray-900">{schedule.scheduleName}</td>
-                  <td className="px-6 py-4">
-                    {new Date(schedule.startDateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - 
-                    {new Date(schedule.endDateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  <td className="px-6 py-4 font-medium text-gray-900 capitalize whitespace-nowrap">{fmtDate(schedule.startDateTime)}</td>
+                  <td className="px-6 py-4">{schedule.scheduleName}</td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    {new Date(schedule.startDateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} – {new Date(schedule.endDateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </td>
                   <td className="px-6 py-4 text-center">{schedule.capacity > 0 ? schedule.capacity : 'Ilimitado'}</td>
                   <td className="px-6 py-4 text-center">
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700" title={`${schedule.registeredParticipants} participantes · ${schedule.registeredGuests} invitados`}>
+                      {schedule.registered}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 text-center">
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800" title={`${schedule.accreditedParticipants} participantes · ${schedule.accreditedGuests} invitados`}>
                       {schedule.accreditedTotal}
                     </span>
                   </td>
                   <td className="px-6 py-4 text-center">
                     <div className="flex items-center justify-center gap-2">
                         <div className="w-16 bg-gray-200 rounded-full h-1.5">
-                            <div 
-                                className={`h-1.5 rounded-full ${schedule.capacityUsedPercentage > 90 ? 'bg-red-500' : 'bg-green-500'}`} 
+                            <div
+                                className={`h-1.5 rounded-full ${schedule.capacityUsedPercentage > 90 ? 'bg-red-500' : 'bg-green-500'}`}
                                 style={{ width: `${Math.min(schedule.capacityUsedPercentage, 100)}%` }}
                             ></div>
                         </div>
