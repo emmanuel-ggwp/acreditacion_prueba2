@@ -12,6 +12,7 @@ export interface TitleFont {
 
 export const TITLE_FONTS: TitleFont[] = [
   { key: 'mont', label: 'Mont — moderna (sans)', family: 'Mont', stack: `'Mont', sans-serif`, selfHosted: true },
+  { key: 'graphik', label: 'Graphik — moderna (sans)', family: 'Graphik', stack: `'Graphik', sans-serif`, selfHosted: true },
   { key: 'playfair', label: 'Playfair Display — elegante (serif)', family: 'Playfair Display', stack: `'Playfair Display', serif`, weights: '600;700;800' },
   { key: 'cormorant', label: 'Cormorant Garamond — clásica (serif)', family: 'Cormorant Garamond', stack: `'Cormorant Garamond', serif`, weights: '600;700' },
   { key: 'lora', label: 'Lora — serif suave', family: 'Lora', stack: `'Lora', serif`, weights: '600;700' },
