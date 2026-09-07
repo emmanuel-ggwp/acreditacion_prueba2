@@ -441,7 +441,7 @@ export class ParticipantService {
     return participant;
   }
 
-  async listParticipants(eventId: string, filters: { name?: string, email?: string, accredited?: boolean, withAward?: boolean, awarded?: boolean }, pagination: { page: number, limit: number }) {
+  async listParticipants(eventId: string, filters: { name?: string, email?: string, accredited?: boolean, withAward?: boolean, awarded?: boolean, registered?: boolean }, pagination: { page: number, limit: number }) {
     const { page = 1, limit = 10 } = pagination;
     
     // Participantes del evento (incluye precargados sin horario) vía eventId.
@@ -486,22 +486,23 @@ export class ParticipantService {
     // Note: Accredited logic might need to change if accreditation is per schedule. 
     // Assuming accreditation is still global or we check if they have ANY accreditation?
     // The previous logic checked "accreditations" table. If that table has participantId, it's fine.
+    // Condiciones EXISTS/NOT EXISTS combinables: antes cada bloque asignaba where[Op.and]
+    // y pisaba al anterior (p. ej. accredited + withAward juntos). Se acumulan en un array.
+    const andConds: any[] = [];
     if (filters.accredited !== undefined) {
         const subQuery = `(SELECT 1 FROM "accreditations" WHERE "accreditations"."participant_id" = "Participant"."id" LIMIT 1)`;
-        if(filters.accredited) {
-            where[Op.and] = (sequelize.literal(`EXISTS ${subQuery}`));
-        } else {
-            where[Op.and] = (sequelize.literal(`NOT EXISTS ${subQuery}`));
-        }
+        andConds.push(sequelize.literal(`${filters.accredited ? 'EXISTS' : 'NOT EXISTS'} ${subQuery}`));
     }
     if (filters.withAward !== undefined) {
         const subQuery = `(SELECT 1 FROM "participant_awards" WHERE "participant_awards"."participant_id" = "Participant"."id" LIMIT 1)`;
-        if(filters.withAward) {
-            where[Op.and] = (sequelize.literal(`EXISTS ${subQuery}`));
-        } else {
-            where[Op.and] = (sequelize.literal(`NOT EXISTS ${subQuery}`));
-        }
+        andConds.push(sequelize.literal(`${filters.withAward ? 'EXISTS' : 'NOT EXISTS'} ${subQuery}`));
     }
+    // Estado de inscripción: registered=true → ya inscrito (tiene fecha); false → precargado.
+    if (filters.registered !== undefined) {
+        const subQuery = `(SELECT 1 FROM "participant_schedules" ps WHERE ps."participant_id" = "Participant"."id" LIMIT 1)`;
+        andConds.push(sequelize.literal(`${filters.registered ? 'EXISTS' : 'NOT EXISTS'} ${subQuery}`));
+    }
+    if (andConds.length) where[Op.and] = andConds;
 
     const findOptions: any = {
       where,

@@ -28,9 +28,15 @@ interface ParticipantFormProps {
   eventId: string;
   participant?: Participant;
   onClose?: () => void;
+  // Modo "Inscribir": convierte un precargado en inscrito. Exige los campos
+  // obligatorios del evento y al menos una fecha antes de guardar.
+  inscribir?: boolean;
 }
 
-const ParticipantForm: React.FC<ParticipantFormProps> = ({ eventId, participant, onClose }) => {
+// Etiquetas de los campos configurables (para avisar cuáles faltan al inscribir).
+const FIELD_LABELS: Record<string, string> = { email: 'Correo', phone: 'Teléfono', documentNumber: 'RUT / Documento', company: 'Empresa', position: 'Cargo', numeroSap: 'Código SAP', dietary: 'Preferencia alimenticia' };
+
+const ParticipantForm: React.FC<ParticipantFormProps> = ({ eventId, participant, onClose, inscribir = false }) => {
   const { createParticipant, updateParticipant, fetchParticipantById, currentParticipant, searchParticipants } = useParticipantStore();
   const { EventSchedules, fetchSchedulesForEvent, events, currentEvent, fetchEventById } = useEventStore();
   const isEditMode = !!participant;
@@ -177,6 +183,27 @@ const ParticipantForm: React.FC<ParticipantFormProps> = ({ eventId, participant,
 
   const onSubmit: SubmitHandler<ParticipantFormData> = async (data) => {
     try {
+      // Modo "Inscribir": el precargado pasa a inscrito, así que debe cumplir lo mismo
+      // que exige el formulario público (campos obligatorios del evento) + una fecha.
+      if (inscribir) {
+        const missing: string[] = [];
+        if (!String((data as any).firstName || '').trim()) missing.push('Nombre');
+        if (!String((data as any).lastName || '').trim()) missing.push('Apellido');
+        for (const key of Object.keys(ff)) {
+          if (!(ff as any)[key]?.enabled || !(ff as any)[key]?.required) continue;
+          const val = key === 'dietary' ? (data as any).dietaryPreference : (data as any)[key];
+          if (!val || val === '' || (key === 'dietary' && val === 'NONE')) missing.push(FIELD_LABELS[key] || key);
+        }
+        if (missing.length) {
+          showToast.error('Faltan campos obligatorios: ' + missing.join(', ') + '.');
+          return;
+        }
+        if (!Array.isArray((data as any).scheduleIds) || (data as any).scheduleIds.length === 0) {
+          showToast.error('Elige al menos una fecha para inscribir al participante.');
+          return;
+        }
+      }
+
       // Remove eventId injection
       const participantData: any = { ...data };
       // Respuestas a las preguntas configurables (Sí/No + lista).
@@ -197,7 +224,7 @@ const ParticipantForm: React.FC<ParticipantFormProps> = ({ eventId, participant,
         if (id) {
           const submissionData = updateParticipantSchema.parse(participantData);
           await updateParticipant(id, submissionData);
-          showToast.success('Participante actualizado correctamente');
+          showToast.success(inscribir ? 'Participante inscrito correctamente ✓' : 'Participante actualizado correctamente');
         } else {
           throw new Error('Participant ID is required for update.');
         }
@@ -219,7 +246,16 @@ const ParticipantForm: React.FC<ParticipantFormProps> = ({ eventId, participant,
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 flex justify-center items-center">
       <div className="bg-white p-8 rounded-lg shadow-xl z-50 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-        <h2 className="text-2xl font-bold mb-6">{isEffectiveEditMode ? 'Editar participante' : 'Crear nuevo participante'}</h2>
+        <h2 className="text-2xl font-bold mb-6">{inscribir ? 'Inscribir participante' : (isEffectiveEditMode ? 'Editar participante' : 'Crear nuevo participante')}</h2>
+        {inscribir && (
+          <div className="mb-6 -mt-2 rounded-lg border border-indigo-200 bg-indigo-50 p-4 text-sm text-indigo-900">
+            <p className="font-semibold">De precargado a inscrito</p>
+            <p className="mt-0.5">
+              Completa los <b>campos obligatorios</b> del evento y elige <b>al menos una fecha</b> más abajo.
+              Al guardar, la persona quedará <b>inscrita</b> en esa fecha (deja de estar solo precargada).
+            </p>
+          </div>
+        )}
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {ff.documentNumber.enabled && (
@@ -325,7 +361,7 @@ const ParticipantForm: React.FC<ParticipantFormProps> = ({ eventId, participant,
           )}
 
           <div className="col-span-2">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Horarios</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Fecha(s){inscribir ? ' *' : ''}</label>
             <p className="text-xs text-gray-500 mb-2">Sin horario seleccionado = participante <b>precargado</b> (podrá inscribirse luego por la landing). Marca uno o más para <b>inscribirlo</b> directamente.</p>
             <div className="border rounded-md p-2 max-h-40 overflow-y-auto">
               {EventSchedules.length > 0 ? (
@@ -378,7 +414,7 @@ const ParticipantForm: React.FC<ParticipantFormProps> = ({ eventId, participant,
               className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 disabled:opacity-50"
               disabled={isSubmitting}
             >
-              {isSubmitting ? 'Guardando...' : (isEffectiveEditMode ? 'Guardar cambios' : 'Crear participante')}
+              {isSubmitting ? 'Guardando...' : (inscribir ? 'Inscribir participante' : (isEffectiveEditMode ? 'Guardar cambios' : 'Crear participante'))}
             </button>
           </div>
         </form>

@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import useParticipantStore from '@/store/participantStore';
 import useEventStore from '@/store/eventStore';
 import useAuthStore from '@/store/authStore';
-import { PlusCircle, FileDown, FileUp, Edit, Trash2, Award, X, CheckCircle2, Clock, Search, ChevronLeft, ChevronRight } from 'lucide-react';
+import { PlusCircle, FileDown, FileUp, Edit, Trash2, Award, X, CheckCircle2, Clock, Search, ChevronLeft, ChevronRight, UserCheck } from 'lucide-react';
 import Participant from '@/models/Participant';
 import ParticipantForm from './ParticipantForm';
 import ParticipantImport from './ParticipantImport';
@@ -41,7 +41,11 @@ const ParticipantList = ({ eventId }: { eventId: string }) => {
   const { user } = useAuthStore();
   const [filter, setFilter] = useState('');
   const [showOnlyAwarded, setShowOnlyAwarded] = useState(false);
+  // Filtro por estado de inscripción: todos / solo inscritos / solo precargados.
+  const [statusFilter, setStatusFilter] = useState<'all' | 'registered' | 'preloaded'>('all');
   const [isFormOpen, setIsFormOpen] = useState(false);
+  // Modo "Inscribir" del form: convierte un precargado en inscrito (exige obligatorios + fecha).
+  const [formInscribir, setFormInscribir] = useState(false);
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [selectedParticipant, setSelectedParticipant] = useState<Participant | undefined>(undefined);
   const [awarding, setAwarding] = useState<any | null>(null);
@@ -72,15 +76,17 @@ const ParticipantList = ({ eventId }: { eventId: string }) => {
     const f: Record<string, string> = {};
     if (filter.trim()) f.name = filter.trim();
     if (showOnlyAwarded) f.awarded = 'true';
+    if (statusFilter === 'registered') f.registered = 'true';
+    else if (statusFilter === 'preloaded') f.registered = 'false';
     return f;
-  }, [filter, showOnlyAwarded]);
+  }, [filter, showOnlyAwarded, statusFilter]);
 
   const reload = useCallback(() => {
     fetchParticipantsByEvent(eventId, page, PAGE_SIZE, currentFilters);
   }, [eventId, page, currentFilters, fetchParticipantsByEvent]);
 
   // Cambiar la búsqueda o el filtro vuelve a la página 1.
-  useEffect(() => { setPage(1); }, [filter, showOnlyAwarded]);
+  useEffect(() => { setPage(1); }, [filter, showOnlyAwarded, statusFilter]);
 
   // Carga de la tabla (con debounce mientras se escribe en el buscador).
   useEffect(() => {
@@ -103,6 +109,14 @@ const ParticipantList = ({ eventId }: { eventId: string }) => {
 
   const handleEdit = (participant: Participant) => {
     setSelectedParticipant(participant);
+    setFormInscribir(false);
+    setIsFormOpen(true);
+  };
+
+  // Abre el form en modo "Inscribir": precargado → inscrito (exige obligatorios + fecha).
+  const handleInscribir = (participant: Participant) => {
+    setSelectedParticipant(participant);
+    setFormInscribir(true);
     setIsFormOpen(true);
   };
 
@@ -120,6 +134,7 @@ const ParticipantList = ({ eventId }: { eventId: string }) => {
   const handleCloseForm = () => {
     setIsFormOpen(false);
     setSelectedParticipant(undefined);
+    setFormInscribir(false);
     reload();
   };
 
@@ -192,7 +207,7 @@ const ParticipantList = ({ eventId }: { eventId: string }) => {
         </h2>
         <div className="flex items-center gap-2">
           <button 
-            onClick={() => { setSelectedParticipant(undefined); setIsFormOpen(true); }}
+            onClick={() => { setSelectedParticipant(undefined); setFormInscribir(false); setIsFormOpen(true); }}
             disabled={isEventFull}
             className={`px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-medium transition-colors ${
               isEventFull 
@@ -267,6 +282,23 @@ const ParticipantList = ({ eventId }: { eventId: string }) => {
             </button>
           )}
         </div>
+        {/* Filtro por estado de inscripción. Corre en el servidor (todos los del evento). */}
+        <div className="inline-flex rounded-lg border border-gray-300 bg-white p-0.5 self-start">
+          {([
+            { key: 'all', label: 'Todos' },
+            { key: 'registered', label: 'Inscritos' },
+            { key: 'preloaded', label: 'Precargados' },
+          ] as const).map((opt) => (
+            <button
+              key={opt.key}
+              type="button"
+              onClick={() => setStatusFilter(opt.key)}
+              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors whitespace-nowrap ${statusFilter === opt.key ? 'bg-indigo-600 text-white' : 'text-gray-600 hover:bg-gray-100'}`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
         <button
           type="button"
           onClick={() => setShowOnlyAwarded((v) => !v)}
@@ -340,6 +372,15 @@ const ParticipantList = ({ eventId }: { eventId: string }) => {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     <div className="flex justify-end space-x-2">
+                      {!(participant as any).registered && (
+                        <button
+                          onClick={() => handleInscribir(participant as any)}
+                          className="text-green-600 hover:text-green-800 p-1 hover:bg-green-50 rounded"
+                          title="Inscribir (pasar de precargado a inscrito)"
+                        >
+                          <UserCheck size={16} />
+                        </button>
+                      )}
                       <button
                         onClick={() => openAward(participant as any)}
                         className={`p-1 rounded hover:bg-amber-50 ${(participant as any).isAwarded ? 'text-amber-600' : 'text-gray-400 hover:text-amber-600'}`}
@@ -366,8 +407,8 @@ const ParticipantList = ({ eventId }: { eventId: string }) => {
             ) : (
               <tr>
                 <td colSpan={8} className="px-6 py-10 text-center text-gray-500">
-                  {filter.trim() || showOnlyAwarded
-                    ? <>No se encontraron participantes para esta búsqueda{filter.trim() ? <>: <b>&quot;{filter.trim()}&quot;</b></> : ''}.</>
+                  {filter.trim() || showOnlyAwarded || statusFilter !== 'all'
+                    ? <>No se encontraron participantes{statusFilter === 'preloaded' ? ' precargados' : statusFilter === 'registered' ? ' inscritos' : ''} para este filtro{filter.trim() ? <>: <b>&quot;{filter.trim()}&quot;</b></> : ''}.</>
                     : 'No se encontraron participantes. Agrega uno para comenzar.'}
                 </td>
               </tr>
@@ -408,6 +449,7 @@ const ParticipantList = ({ eventId }: { eventId: string }) => {
         <ParticipantForm
           eventId={eventId}
           participant={selectedParticipant}
+          inscribir={formInscribir}
           onClose={handleCloseForm}
         />
       )}
