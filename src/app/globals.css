@@ -1,5 +1,37 @@
 @import "tailwindcss";
 
+/* Tipografía Mont (auto-hospedada, no está en Google Fonts). Los .ttf viven en
+   public/fonts/. Un mismo family con varios pesos: el navegador elige el peso
+   según font-weight. */
+@font-face {
+  font-family: 'Mont';
+  src: url('/fonts/mont-thin.ttf') format('truetype');
+  font-weight: 100 300;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Mont';
+  src: url('/fonts/mont-regular.ttf') format('truetype');
+  font-weight: 400 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Mont';
+  src: url('/fonts/mont-semibold.ttf') format('truetype');
+  font-weight: 600 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Mont';
+  src: url('/fonts/mont-heavy.ttf') format('truetype');
+  font-weight: 800 900;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
   --foreground-rgb: 33, 33, 33;
   --background-start-rgb: 214, 219, 220;

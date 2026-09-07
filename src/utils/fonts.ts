@@ -7,9 +7,11 @@ export interface TitleFont {
   family: string;   // nombre en Google Fonts ('' = tipografía del sistema)
   stack: string;    // font-family CSS
   weights?: string; // pesos a cargar (ej. '600;700;800')
+  selfHosted?: boolean; // true = auto-hospedada (@font-face en globals.css, no Google)
 }
 
 export const TITLE_FONTS: TitleFont[] = [
+  { key: 'mont', label: 'Mont — moderna (sans)', family: 'Mont', stack: `'Mont', sans-serif`, selfHosted: true },
   { key: 'playfair', label: 'Playfair Display — elegante (serif)', family: 'Playfair Display', stack: `'Playfair Display', serif`, weights: '600;700;800' },
   { key: 'cormorant', label: 'Cormorant Garamond — clásica (serif)', family: 'Cormorant Garamond', stack: `'Cormorant Garamond', serif`, weights: '600;700' },
   { key: 'lora', label: 'Lora — serif suave', family: 'Lora', stack: `'Lora', serif`, weights: '600;700' },
@@ -39,9 +41,9 @@ export function getTitleFont(registrationConfig: any, template?: string): TitleF
   return TITLE_FONTS.find((f) => f.key === defKey) || TITLE_FONTS[0];
 }
 
-/** URL de Google Fonts para cargar la fuente (null para la del sistema). */
+/** URL de Google Fonts para cargar la fuente (null para la del sistema o auto-hospedadas). */
 export function googleFontHref(font: TitleFont): string | null {
-  if (!font.family) return null;
+  if (!font.family || font.selfHosted) return null;
   const fam = font.family.replace(/ /g, '+');
   const w = font.weights ? `:wght@${font.weights}` : '';
   return `https://fonts.googleapis.com/css2?family=${fam}${w}&display=swap`;
