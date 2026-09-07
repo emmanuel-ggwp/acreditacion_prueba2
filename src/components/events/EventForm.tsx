@@ -138,7 +138,7 @@ const TEMPLATE_PALETTES: Record<string, Record<string, string | number>> = {
   // Gala: teal sobre fondo oscuro inmersivo.
   gala: {
     primaryColor: '#008a98', secondaryColor: '#00b4c8', buttonColor: '#008a98',
-    textColor: '#ffffff', inputColor: '#0b1220', borderColor: '#334155',
+    textColor: '#ffffff', titleColor: '#ffffff', inputColor: '#0b1220', borderColor: '#334155',
     formBackgroundColor: '#0b1220', overlayColor: '#000000', overlayOpacity: 0.55, titleFont: 'playfair',
   },
 };
@@ -183,6 +183,9 @@ const EventForm: React.FC<EventFormProps> = ({ event, onClose, onSuccess }) => {
           primaryColor: '#1e293b',
           secondaryColor: '#334155',
           buttonColor: '#1e293b',
+          titleColor: '#ffffff',
+          titleSize: 'lg',
+          titleShadow: 'none',
           textColor: '#111827',
           inputColor: '#f8fafc',
           borderColor: '#e2e8f0',
@@ -555,6 +558,7 @@ const EventForm: React.FC<EventFormProps> = ({ event, onClose, onSuccess }) => {
                         ['registrationConfig.theme.primaryColor', 'Principal', 'Acentos: barra superior, íconos y detalles.'],
                         ['registrationConfig.theme.secondaryColor', 'Secundario', 'Acento complementario (degradados y detalles).'],
                         ['registrationConfig.theme.buttonColor', 'Botones', 'Color del botón de registro.'],
+                        ['registrationConfig.theme.titleColor', 'Título', 'Color del nombre del evento (título) en la landing Gala.'],
                         ['registrationConfig.theme.textColor', 'Texto', 'Color del texto y las etiquetas del formulario.'],
                         ['registrationConfig.theme.inputColor', 'Inputs', 'Fondo de los campos donde se escribe.'],
                         ['registrationConfig.theme.borderColor', 'Bordes', 'Color del borde de los campos.'],
@@ -606,6 +610,41 @@ const EventForm: React.FC<EventFormProps> = ({ event, onClose, onSuccess }) => {
                         </>
                       );
                     })()}
+                  </div>
+
+                  {/* Tamaño del título (nombre del evento) cuando no hay imagen destacada */}
+                  <div>
+                    <label className="text-sm font-semibold text-gray-700 mb-1 flex items-center">
+                      Tamaño del título (nombre del evento)
+                      <InfoTooltip text="Tamaño del nombre del evento en el inicio de la landing Gala cuando NO se subió una imagen destacada. Si hay imagen destacada, el nombre va más pequeño debajo." />
+                    </label>
+                    <select
+                      {...register('registrationConfig.theme.titleSize' as any)}
+                      className="block w-full rounded-xl border-gray-200 bg-gray-50 px-4 py-3 text-gray-900 focus:border-indigo-500 focus:bg-white focus:ring-2 focus:ring-indigo-500/20 transition-all duration-200 sm:text-sm"
+                    >
+                      <option value="sm">Pequeño</option>
+                      <option value="md">Mediano</option>
+                      <option value="lg">Grande (recomendado)</option>
+                      <option value="xl">Muy grande</option>
+                      <option value="xxl">Enorme</option>
+                    </select>
+                    <p className="mt-1 text-xs text-gray-500">✅ Recomendado: <b>Grande</b> — se ve bien en computadora y celular sin desbordar.</p>
+                  </div>
+
+                  {/* Sombra del título */}
+                  <div>
+                    <label className="text-sm font-semibold text-gray-700 mb-1 flex items-center">
+                      Sombra del título
+                      <InfoTooltip text="Agrega una sombra al nombre del evento para que resalte sobre el fondo (útil con imágenes de fondo claras o con mucho detalle)." />
+                    </label>
+                    <select
+                      {...register('registrationConfig.theme.titleShadow' as any)}
+                      className="block w-full rounded-xl border-gray-200 bg-gray-50 px-4 py-3 text-gray-900 focus:border-indigo-500 focus:bg-white focus:ring-2 focus:ring-indigo-500/20 transition-all duration-200 sm:text-sm"
+                    >
+                      <option value="none">Sin sombra</option>
+                      <option value="soft">Suave</option>
+                      <option value="strong">Fuerte</option>
+                    </select>
                   </div>
 
                   <div>
@@ -909,7 +948,7 @@ const EventForm: React.FC<EventFormProps> = ({ event, onClose, onSuccess }) => {
                                 className="mt-2 w-full rounded-lg border-gray-200 bg-white px-3 py-2 text-gray-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 sm:text-sm"
                               />
                               <div className="mt-3">
-                                <p className="text-xs font-medium text-gray-600 mb-1">Opciones de la lista</p>
+                                <p className="text-xs font-medium text-gray-600 mb-1">Opciones de la lista <span className="font-normal text-gray-400">(déjalas vacías para una pregunta solo Sí/No)</span></p>
                                 <div className="space-y-2">
                                   {((q.options as string[]) || []).map((opt: string, oi: number) => (
                                     <div key={oi} className="flex gap-2">
@@ -929,13 +968,17 @@ const EventForm: React.FC<EventFormProps> = ({ event, onClose, onSuccess }) => {
                                 <input type="checkbox" checked={!!q.required} onChange={(e) => patch(i, 'required', e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
                                 Si elige "Sí", es obligatorio escoger una opción
                               </label>
+                              <label className="mt-2 flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                                <input type="checkbox" checked={q.showOnAccreditation !== false} onChange={(e) => patch(i, 'showOnAccreditation', e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
+                                Mostrar la respuesta al acreditar
+                              </label>
                             </div>
                           ))}
                         </div>
 
                         <button
                           type="button"
-                          onClick={() => update([...questions, { key: `q_${Math.random().toString(36).slice(2, 9)}`, label: '', selectLabel: '', options: [''], required: false, active: true }])}
+                          onClick={() => update([...questions, { key: `q_${Math.random().toString(36).slice(2, 9)}`, label: '', selectLabel: '', options: [''], required: false, active: true, showOnAccreditation: true }])}
                           className="mt-3 text-sm font-medium text-indigo-600 hover:text-indigo-700"
                         >
                           + Agregar pregunta

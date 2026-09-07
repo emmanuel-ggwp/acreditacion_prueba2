@@ -60,6 +60,24 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
   const successUrlMobile = event.registrationConfig?.images?.successUrlMobile || '';
   const overlay = typeof theme.overlayOpacity === 'number' ? theme.overlayOpacity : 0.55;
   const overlayColor = theme.overlayColor || '#000000';
+  const titleColor = theme.titleColor || '#ffffff';
+  // Tamaño del título (nombre del evento) en el inicio SIN imagen destacada.
+  // Clases literales para que Tailwind las incluya; 'lg' es el recomendado.
+  const TITLE_SIZES: Record<string, string> = {
+    sm: 'text-2xl md:text-3xl',
+    md: 'text-3xl md:text-4xl',
+    lg: 'text-3xl md:text-5xl',
+    xl: 'text-4xl md:text-6xl',
+    xxl: 'text-5xl md:text-7xl',
+  };
+  const titleSizeClass = TITLE_SIZES[theme.titleSize as string] || TITLE_SIZES.lg;
+  // Sombra del título (para que resalte sobre el fondo).
+  const TITLE_SHADOWS: Record<string, string> = {
+    none: 'none',
+    soft: '0 2px 8px rgba(0,0,0,0.45)',
+    strong: '0 3px 16px rgba(0,0,0,0.75)',
+  };
+  const titleShadow = TITLE_SHADOWS[theme.titleShadow as string] || 'none';
   const titleFont = getTitleFont(event.registrationConfig, 'gala');
   const fontHref = googleFontHref(titleFont);
   // Fechas ordenadas cronológicamente (orden defensivo por si llegan sin ordenar).
@@ -536,7 +554,7 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
     return (
       <div className="relative min-h-screen flex flex-col items-center justify-center px-4 py-12 text-center" style={pageStyle}>
         {fontHref && <link rel="stylesheet" href={fontHref} />}
-        <div className="absolute inset-0" style={{ backgroundColor: hexToRgba(overlayColor, Math.max(overlay, 0.4)) }} aria-hidden="true" />
+        <div className="absolute inset-0" style={{ backgroundColor: hexToRgba(overlayColor, overlay) }} aria-hidden="true" />
         <div className="relative flex flex-col items-center w-full max-w-2xl">
           {/* Logo arriba, centrado */}
           {event.logoUrl && (
@@ -548,13 +566,13 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
             <>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={heroUrl} alt={event.name} className="w-full max-w-xs sm:max-w-md md:max-w-lg h-auto mb-6 drop-shadow-2xl" />
-              <p className="text-white/85 text-lg md:text-xl mb-1" style={{ fontFamily: titleFont.stack }}>Bienvenidos</p>
-              <h1 className="text-2xl md:text-3xl font-semibold text-white mb-8 break-words max-w-full" style={{ fontFamily: titleFont.stack }}>{event.name}</h1>
+              <p className="text-lg md:text-xl mb-1" style={{ fontFamily: titleFont.stack, color: titleColor, opacity: 0.85, textShadow: titleShadow }}>Bienvenidos</p>
+              <h1 className="text-2xl md:text-3xl font-semibold mb-8 break-words max-w-full" style={{ fontFamily: titleFont.stack, color: titleColor, textShadow: titleShadow }}>{event.name}</h1>
             </>
           ) : (
             <>
-              <p className="text-white/85 text-lg md:text-xl mb-2" style={{ fontFamily: titleFont.stack }}>Bienvenidos</p>
-              <h1 className="text-3xl md:text-5xl font-bold text-white mb-8 break-words max-w-full" style={{ fontFamily: titleFont.stack }}>{event.name}</h1>
+              <p className="text-lg md:text-xl mb-2" style={{ fontFamily: titleFont.stack, color: titleColor, opacity: 0.85, textShadow: titleShadow }}>Bienvenidos</p>
+              <h1 className={`${titleSizeClass} font-bold mb-8 break-words max-w-full`} style={{ fontFamily: titleFont.stack, color: titleColor, textShadow: titleShadow }}>{event.name}</h1>
             </>
           )}
           <button onClick={() => setStep(mode === 'rut' ? 'rut' : (schedules.length ? 'fecha' : 'form'))} className="inline-flex items-center gap-2 rounded-full px-8 py-3 text-white font-semibold shadow-lg hover:brightness-110 transition" style={{ backgroundColor: buttonColor }}>
@@ -618,7 +636,11 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
             {error && <p className="mt-3 text-sm text-red-300">{error}</p>}
           </header>
 
-          <div className={`flex flex-wrap justify-center gap-4 mx-auto ${schedules.length === 4 ? 'max-w-[40rem]' : ''}`}>
+          <div className={`flex flex-wrap justify-center gap-4 mx-auto ${
+            schedules.length === 1 ? 'max-w-[20rem]'
+            : (schedules.length === 2 || schedules.length === 4) ? 'max-w-[40rem]'
+            : ''
+          }`}>
             {schedules.map(renderDateCard)}
           </div>
 
@@ -642,7 +664,7 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
             // eslint-disable-next-line @next/next/no-img-element
             <img src={event.logoUrl} alt={event.name} className="h-16 w-auto mx-auto mb-4 drop-shadow" />
           )}
-          <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-white break-words">{event.name}</h1>
+          <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold break-words" style={{ fontFamily: titleFont.stack, color: titleColor, textShadow: titleShadow }}>{event.name}</h1>
           <p className="text-white/80 mt-2">Completa la información para registrarte en el evento.</p>
         </header>
 

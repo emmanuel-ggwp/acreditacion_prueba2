@@ -57,9 +57,10 @@ export const customQuestionSchema = z.object({
   key: z.string(),                 // id estable (ej. 'q_transporte')
   label: z.string(),               // título visible (ej. "¿Necesitas transporte?")
   selectLabel: z.string().optional(), // etiqueta del desplegable (ej. "Recorrido")
-  options: z.array(z.string()).default([]), // opciones del desplegable
+  options: z.array(z.string()).default([]), // opciones; vacío = pregunta solo Sí/No
   required: z.boolean().default(false),     // si elige Sí, debe escoger una opción
   active: z.boolean().default(true),
+  showOnAccreditation: z.boolean().default(true), // mostrar la respuesta al acreditar
 });
 
 /** Configuración de colores / tema visual de la landing. */
@@ -68,6 +69,13 @@ export const themeConfigSchema = z.object({
   secondaryColor: z.string().optional(),
   buttonColor: z.string().optional(),
   textColor: z.string().optional(),
+  // Color del título (nombre del evento) en la landing.
+  titleColor: z.string().optional(),
+  // Tamaño del título (nombre del evento) en el inicio de Gala cuando no hay imagen
+  // destacada: 'sm' | 'md' | 'lg' (recomendado) | 'xl' | 'xxl'.
+  titleSize: z.string().optional(),
+  // Sombra del título: 'none' | 'soft' | 'strong'.
+  titleShadow: z.string().optional(),
   inputColor: z.string().optional(),
   borderColor: z.string().optional(),
   formBackgroundColor: z.string().optional(),

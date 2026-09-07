@@ -238,13 +238,14 @@ const ParticipantCard: React.FC<ParticipantCardProps> = ({ person, type, schedul
           <div className="space-y-2 text-gray-700">
             <p className="flex items-center"><Mail size={16} className="mr-2" /> {email}</p>
             <p className="flex items-center"><FileText size={16} className="mr-2" /> {documentNumber || 'No proporcionado'}</p>
+            <p className="flex items-center"><Utensils size={16} className="mr-2" /> <span className="text-gray-500 mr-1">Preferencia:</span> {dietaryText || 'Ninguna'}</p>
             {isParticipant && describeStoredAnswers((participant as any)?.customData).map((a) => (
               <p key={a.key} className="text-sm"><span className="text-gray-500">{a.label}:</span> <span className="font-medium">{a.text}</span></p>
             ))}
           </div>
         </div>
-        {/* Sin premio no aporta nada en celular: se oculta para acercar el botón ACREDITAR. */}
-        <div className={isParticipant && (participant as any)?.isAwarded ? '' : 'hidden md:block'}>
+        {/* Premiación siempre visible (premiado y motivo deben verse al acreditar). */}
+        <div>
           <h3 className="font-semibold text-lg mb-3">Premiación</h3>
           {isParticipant && (participant as any)?.isAwarded ? (
             <div className="flex items-start gap-2">

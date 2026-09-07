@@ -7,9 +7,10 @@ export interface CustomQuestion {
   key: string;
   label: string;
   selectLabel?: string;
-  options: string[];
+  options: string[];       // vacío = pregunta solo Sí/No (sin desplegable)
   required: boolean;
   active: boolean;
+  showOnAccreditation: boolean; // ¿mostrar la respuesta en la vista de acreditación?
 }
 
 /** Respuesta guardada: incluye el label para poder mostrarla sin la config. */
@@ -17,6 +18,7 @@ export interface CustomAnswer {
   label: string;
   enabled: boolean;       // Sí = true, No = false
   value: string | null;   // opción elegida (solo si enabled)
+  showOnAccreditation?: boolean; // se guarda para filtrar en acreditación sin la config
 }
 
 export type CustomAnswers = Record<string, CustomAnswer>;
@@ -34,6 +36,7 @@ export function getCustomQuestions(registrationConfig: any): CustomQuestion[] {
       options: Array.isArray(q.options) ? q.options.map((o: any) => String(o)).filter(Boolean) : [],
       required: !!q.required,
       active: q.active !== false,
+      showOnAccreditation: q.showOnAccreditation !== false, // por defecto sí
     }));
 }
 
@@ -44,7 +47,7 @@ export function initCustomAnswers(questions: CustomQuestion[], existing?: any): 
     const prev = existing?.[q.key];
     const enabled = !!prev?.enabled;
     const value = enabled && prev?.value && q.options.includes(String(prev.value)) ? String(prev.value) : null;
-    out[q.key] = { label: q.label, enabled, value };
+    out[q.key] = { label: q.label, enabled, value, showOnAccreditation: q.showOnAccreditation };
   }
   return out;
 }
@@ -55,8 +58,9 @@ export function missingRequiredCustom(questions: CustomQuestion[], answers: Cust
   for (const q of questions) {
     if (!q.required) continue;
     const a = answers[q.key];
-    // Obligatoria e "Sí" sin opción elegida → falta. ("No" es una respuesta válida.)
-    if (a?.enabled && !a.value) missing.push(q.label);
+    // Obligatoria e "Sí" sin opción elegida → falta. Solo aplica si la pregunta TIENE
+    // lista de opciones; una pregunta solo Sí/No se cumple con elegir Sí. ("No" es válido.)
+    if (q.options.length > 0 && a?.enabled && !a.value) missing.push(q.label);
   }
   return missing;
 }
@@ -69,7 +73,7 @@ export function sanitizeCustomAnswers(questions: CustomQuestion[], raw: any): Cu
     const a = src[q.key];
     const enabled = !!a?.enabled;
     const value = enabled && a?.value && q.options.includes(String(a.value)) ? String(a.value) : null;
-    out[q.key] = { label: q.label, enabled, value };
+    out[q.key] = { label: q.label, enabled, value, showOnAccreditation: q.showOnAccreditation };
   }
   return out;
 }
@@ -89,6 +93,8 @@ export function describeStoredAnswers(customData: any): { key: string; label: st
   const out: { key: string; label: string; text: string }[] = [];
   for (const [key, a] of Object.entries<any>(customData)) {
     if (!a || typeof a !== 'object' || !('enabled' in a)) continue;
+    // Respeta el toggle "Mostrar al acreditar" guardado en la respuesta (default sí).
+    if (a.showOnAccreditation === false) continue;
     out.push({ key, label: a.label || key, text: answerText(a as CustomAnswer) });
   }
   return out;

@@ -70,21 +70,24 @@ export default function CustomQuestionFields({ questions, answers, onChange, ton
                 </button>
               ))}
             </div>
-            <div className="mt-2">
-              {q.selectLabel && <label className={subCls}>{q.selectLabel}</label>}
-              <select
-                value={a.enabled ? (a.value || '') : ''}
-                disabled={!a.enabled}
-                onChange={(e) => setVal(q.key, q.label, e.target.value)}
-                className={selectCls}
-                style={selectStyle}
-              >
-                <option value="" style={optStyle}>{a.enabled ? 'Selecciona…' : '—'}</option>
-                {q.options.map((o) => (
-                  <option key={o} value={o} style={optStyle}>{o}</option>
-                ))}
-              </select>
-            </div>
+            {/* Desplegable solo si la pregunta tiene opciones; si no, es solo Sí/No. */}
+            {q.options.length > 0 && (
+              <div className="mt-2">
+                {q.selectLabel && <label className={subCls}>{q.selectLabel}</label>}
+                <select
+                  value={a.enabled ? (a.value || '') : ''}
+                  disabled={!a.enabled}
+                  onChange={(e) => setVal(q.key, q.label, e.target.value)}
+                  className={selectCls}
+                  style={selectStyle}
+                >
+                  <option value="" style={optStyle}>{a.enabled ? 'Selecciona…' : '—'}</option>
+                  {q.options.map((o) => (
+                    <option key={o} value={o} style={optStyle}>{o}</option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
         );
       })}
