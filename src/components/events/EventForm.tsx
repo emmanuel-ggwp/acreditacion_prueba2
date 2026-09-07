@@ -211,10 +211,15 @@ const EventForm: React.FC<EventFormProps> = ({ event, onClose, onSuccess }) => {
     },
   });
 
-  const [uploading, setUploading] = useState<{ logo?: boolean; bg?: boolean; hero?: boolean }>({});
+  const [uploading, setUploading] = useState<{ logo?: boolean; bg?: boolean; hero?: boolean; successD?: boolean; successM?: boolean }>({});
   const logoUrl = watch('logoUrl');
   const backgroundImageUrl = watch('backgroundImageUrl');
   const heroUrl = watch('registrationConfig.images.heroUrl' as any);
+  const successUrl = watch('registrationConfig.images.successUrl' as any);
+  const successUrlMobile = watch('registrationConfig.images.successUrlMobile' as any);
+  // Si hay plantilla de correo, el Correo del asistente es imprescindible (para poder
+  // enviárselo): se bloquea activado + obligatorio.
+  const emailOn = !!watch('emailTemplateId');
 
   const [emailTemplates, setEmailTemplates] = useState<{ id: string; name: string }[]>([]);
   useEffect(() => {
@@ -236,17 +241,18 @@ const EventForm: React.FC<EventFormProps> = ({ event, onClose, onSuccess }) => {
     }
   };
 
-  const handleHeroUpload = async (file?: File) => {
+  // Sube una imagen y la guarda en una ruta de registrationConfig.images.
+  const uploadConfigImage = async (path: string, key: 'hero' | 'successD' | 'successM', file?: File) => {
     if (!file) return;
-    setUploading((u) => ({ ...u, hero: true }));
+    setUploading((u) => ({ ...u, [key]: true }));
     try {
       const url = await uploadImage(file);
-      setValue('registrationConfig.images.heroUrl' as any, url, { shouldDirty: true });
+      setValue(path as any, url, { shouldDirty: true });
       toast.success('Imagen subida');
     } catch (e: any) {
       toast.error(e.message || 'Error al subir la imagen');
     } finally {
-      setUploading((u) => ({ ...u, hero: false }));
+      setUploading((u) => ({ ...u, [key]: false }));
     }
   };
 
@@ -261,6 +267,12 @@ const EventForm: React.FC<EventFormProps> = ({ event, onClose, onSuccess }) => {
   const onSubmit: SubmitHandler<EventFormInputs> = async (data) => {
     try {
       (data as any).emailTemplateId = data.emailTemplateId || null;
+      // Si se envía correo de confirmación, el correo del asistente es imprescindible:
+      // se fuerza activado y obligatorio (no se puede desmarcar en la interfaz).
+      if ((data as any).emailTemplateId) {
+        const rc: any = (data as any).registrationConfig || ((data as any).registrationConfig = {});
+        rc.formFields = { ...(rc.formFields || {}), email: { enabled: true, required: true } };
+      }
       let resultEvent;
       if (isEditMode && event) {
         // Use updateEventSchema for submission
@@ -485,8 +497,22 @@ const EventForm: React.FC<EventFormProps> = ({ event, onClose, onSuccess }) => {
                     label="Imagen del evento (destacada)"
                     value={heroUrl}
                     uploading={!!uploading.hero}
-                    onSelect={(f) => handleHeroUpload(f)}
+                    onSelect={(f) => uploadConfigImage('registrationConfig.images.heroUrl', 'hero', f)}
                     onClear={() => setValue('registrationConfig.images.heroUrl' as any, '', { shouldDirty: true })}
+                  />
+                  <ImageUploadField
+                    label="Imagen de éxito — escritorio (Gala: pantalla completa al inscribirse)"
+                    value={successUrl}
+                    uploading={!!uploading.successD}
+                    onSelect={(f) => uploadConfigImage('registrationConfig.images.successUrl', 'successD', f)}
+                    onClear={() => setValue('registrationConfig.images.successUrl' as any, '', { shouldDirty: true })}
+                  />
+                  <ImageUploadField
+                    label="Imagen de éxito — celular (opcional; si falta se usa la de escritorio)"
+                    value={successUrlMobile}
+                    uploading={!!uploading.successM}
+                    onSelect={(f) => uploadConfigImage('registrationConfig.images.successUrlMobile', 'successM', f)}
+                    onClear={() => setValue('registrationConfig.images.successUrlMobile' as any, '', { shouldDirty: true })}
                   />
 
                   <div>
@@ -730,17 +756,30 @@ const EventForm: React.FC<EventFormProps> = ({ event, onClose, onSuccess }) => {
                     <div className="rounded-xl border border-gray-200 divide-y">
                       {CONFIGURABLE_FIELDS.map((f) => {
                         const enabled = watch(`registrationConfig.formFields.${f.key}.enabled` as any);
+                        // Correo bloqueado (activado + obligatorio) cuando hay plantilla de correo.
+                        const locked = f.key === 'email' && emailOn;
                         return (
                           <div key={f.key} className="flex items-center justify-between gap-3 px-3 py-2.5">
-                            <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-                              <input type="checkbox" {...register(`registrationConfig.formFields.${f.key}.enabled` as any)} className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
+                            <label className={`flex items-center gap-2 text-sm text-gray-700 ${locked ? '' : 'cursor-pointer'}`}>
+                              {locked ? (
+                                <input type="checkbox" checked disabled className="h-4 w-4 rounded border-gray-300 text-indigo-600" />
+                              ) : (
+                                <input type="checkbox" {...register(`registrationConfig.formFields.${f.key}.enabled` as any)} className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
+                              )}
                               {f.label}
                             </label>
-                            {enabled && (
-                              <label className="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer">
-                                <input type="checkbox" {...register(`registrationConfig.formFields.${f.key}.required` as any)} className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
-                                Obligatorio
-                              </label>
+                            {(enabled || locked) && (
+                              locked ? (
+                                <label className="flex items-center gap-1.5 text-xs text-gray-400">
+                                  <input type="checkbox" checked disabled className="h-4 w-4 rounded border-gray-300 text-indigo-600" />
+                                  Obligatorio
+                                </label>
+                              ) : (
+                                <label className="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer">
+                                  <input type="checkbox" {...register(`registrationConfig.formFields.${f.key}.required` as any)} className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
+                                  Obligatorio
+                                </label>
+                              )
                             )}
                           </div>
                         );
@@ -750,7 +789,12 @@ const EventForm: React.FC<EventFormProps> = ({ event, onClose, onSuccess }) => {
                         Preguntar preferencia alimenticia a cada invitado
                       </label>
                     </div>
-                    <p className="mt-1 text-xs text-gray-500">Nombre, Apellido y Correo siempre se piden.</p>
+                    <p className="mt-1 text-xs text-gray-500">Nombre y Apellido siempre se piden.</p>
+                    {emailOn && (
+                      <div className="mt-2 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-800">
+                        ⚠️ Este evento envía <b>correo de confirmación</b>, así que el <b>Correo</b> queda activado y obligatorio (no se puede desmarcar): sin correo no habría a dónde enviarlo. Si quieres poder desmarcarlo, primero quita la plantilla de correo más abajo.
+                      </div>
+                    )}
                   </div>
 
                   {/* Opciones de preferencia alimenticia (cuando la dieta está activa) */}

@@ -175,7 +175,7 @@ export async function POST(
           {
             firstName: data.firstName,
             lastName: data.lastName,
-            email: data.email,
+            email: (data as any).email || null,
             phone: (data as any).phone ?? null,
             documentNumber: (data as any).documentNumber ?? null,
             company: (data as any).company ?? null,

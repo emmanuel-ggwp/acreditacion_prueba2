@@ -113,6 +113,9 @@ export const publicRegistrationSchema = participantSchema.omit({
   updatedAt: true
 }).extend({
   scheduleIds: z.array(z.string().uuid()).min(1, "Se requiere al menos un horario"),
+  // Correo opcional a nivel de esquema: su obligatoriedad la controla cada evento
+  // (formFields.email) y la refuerza el formulario. Acepta correo válido, vacío o ausente.
+  email: z.union([z.string().trim().max(200).email('Correo electrónico inválido'), z.literal(''), z.null()]).optional(),
   // En el registro público no exigimos formato estricto: se aceptan tal cual.
   // El RUT (documentNumber) es OBLIGATORIO: identifica a la persona y evita duplicados.
   phone: z.string().optional().nullable(),

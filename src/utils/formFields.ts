@@ -4,6 +4,7 @@
 export interface FieldDef { key: string; label: string }
 
 export const CONFIGURABLE_FIELDS: FieldDef[] = [
+  { key: 'email', label: 'Correo' },
   { key: 'phone', label: 'Teléfono' },
   { key: 'documentNumber', label: 'RUT / Documento' },
   { key: 'company', label: 'Empresa' },
@@ -16,7 +17,10 @@ export interface FieldConfig { enabled: boolean; required: boolean }
 export type FormFieldsConfig = Record<string, FieldConfig>;
 
 // Defaults: para no romper eventos existentes, Teléfono y RUT visibles (opcionales).
+// Correo: activado y OBLIGATORIO por defecto (comportamiento de siempre); cada evento
+// puede hacerlo opcional o quitarlo.
 const DEFAULTS: FormFieldsConfig = {
+  email: { enabled: true, required: true },
   phone: { enabled: true, required: false },
   documentNumber: { enabled: true, required: false },
   company: { enabled: false, required: false },

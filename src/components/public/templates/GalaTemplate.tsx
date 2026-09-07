@@ -13,7 +13,7 @@ import { hexToRgba } from '@/utils/color';
 import { CONTACT_EMAIL } from '@/utils/contact';
 import { getTitleFont, googleFontHref } from '@/utils/fonts';
 
-const GALA_LABELS: Record<string, string> = { phone: 'Teléfono', documentNumber: 'RUT / Documento', company: 'Empresa', position: 'Cargo', numeroSap: 'Código SAP', dietary: 'Preferencia alimenticia' };
+const GALA_LABELS: Record<string, string> = { email: 'Correo electrónico', phone: 'Teléfono', documentNumber: 'RUT / Documento', company: 'Empresa', position: 'Cargo', numeroSap: 'Código SAP', dietary: 'Preferencia alimenticia' };
 
 interface TemplateProps {
   event: any;
@@ -55,6 +55,9 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
   // Imagen destacada del evento (ej. "AURORA"): separada del fondo para que escale
   // bien en móvil. Se muestra en el inicio; si no hay, se usa el nombre como título.
   const heroUrl = event.registrationConfig?.images?.heroUrl || '';
+  // Imágenes a pantalla completa tras inscripción exitosa (escritorio / celular).
+  const successUrl = event.registrationConfig?.images?.successUrl || '';
+  const successUrlMobile = event.registrationConfig?.images?.successUrlMobile || '';
   const overlay = typeof theme.overlayOpacity === 'number' ? theme.overlayOpacity : 0.55;
   const overlayColor = theme.overlayColor || '#000000';
   const titleFont = getTitleFont(event.registrationConfig, 'gala');
@@ -92,6 +95,7 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
+  const [showSuccessImg, setShowSuccessImg] = useState(true);
   // Invitados que el servidor no pudo guardar por falta de cupo. Se enseñan: descartarlos
   // en silencio con un 201 es lo que hacía que el asistente creyera traer acompañante.
   const [guestsSkipped, setGuestsSkipped] = useState(0);
@@ -190,7 +194,7 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
       const missing: string[] = [];
       if (!form.firstName.trim()) missing.push('Nombre');
       if (!form.lastName.trim()) missing.push('Apellido');
-      if (!form.email.trim()) missing.push('Correo electrónico');
+      // El correo (si el evento lo exige) se valida en el bucle de campos configurables.
       for (const key of Object.keys(ff)) {
         if (!ff[key].enabled || !ff[key].required) continue;
         const val = key === 'dietary' ? form.dietaryPreference : (form as any)[key];
@@ -207,7 +211,7 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
       ];
       payload = {
         participantId,
-        firstName: form.firstName.trim(), lastName: form.lastName.trim(), email: form.email.trim(),
+        firstName: form.firstName.trim(), lastName: form.lastName.trim(), email: form.email.trim() || undefined,
         phone: form.phone.trim() || undefined, company: form.company.trim() || undefined,
         position: form.position.trim() || undefined, numeroSap: form.numeroSap.trim() || undefined,
         ...(ff.dietary.enabled ? { dietaryPreference: form.dietaryPreference, dietaryComments: form.dietaryComments.trim() || undefined } : {}),
@@ -217,7 +221,8 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
       };
     } else {
       if (!form.firstName.trim() || !form.lastName.trim()) { setError('Ingresa tu nombre y apellido.'); return; }
-      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(form.email.trim())) { setError('Ingresa un correo electrónico válido.'); return; }
+      // Formato de correo solo si hay algo escrito; su obligatoriedad la controla el evento.
+      if (form.email.trim() && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(form.email.trim())) { setError('Ingresa un correo electrónico válido.'); return; }
       if (ff.documentNumber.enabled && form.documentNumber && !isValidRut(form.documentNumber)) { setError('El RUT ingresado no es válido.'); return; }
       // Validar campos obligatorios configurados por el evento.
       const missing: string[] = [];
@@ -258,7 +263,7 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
         }
       }
       payload = {
-        firstName: form.firstName.trim(), lastName: form.lastName.trim(), email: form.email.trim(),
+        firstName: form.firstName.trim(), lastName: form.lastName.trim(), email: form.email.trim() || undefined,
         phone: form.phone.trim() || undefined, documentNumber: form.documentNumber.trim() || undefined,
         company: form.company.trim() || undefined, position: form.position.trim() || undefined,
         numeroSap: form.numeroSap.trim() || undefined,
@@ -303,7 +308,7 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
       // Correo de confirmación con EmailJS — la inscripción ya quedó guardada, así que
       // un fallo de correo NO debe romper el éxito.
       try {
-        const templateId = event.emailTemplate?.templateId;
+        const templateId = form.email.trim() ? event.emailTemplate?.templateId : null;
         if (templateId) {
           const schedule = schedules.find((s) => s.id === selectedScheduleId);
           // Solo se nombran los invitados que el servidor CONFIRMÓ. Los que ya existían
@@ -415,6 +420,9 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
 
   // ---- Éxito ----
   if (success) {
+    // Imagen a pantalla completa (una por escritorio/celular; si falta una, se usa la otra).
+    const successImgD = successUrl || successUrlMobile;
+    const successImgM = successUrlMobile || successUrl;
     return (
       <div className="relative min-h-screen flex items-center justify-center px-4 py-12" style={pageStyle}>
         {overlayNode}
@@ -430,7 +438,29 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
               {' '}Si necesitas ese cupo, escribe a <b>{CONTACT_EMAIL}</b>.
             </p>
           )}
+          {/* Botón para volver a ver la imagen si la cerraron. */}
+          {(successImgD || successImgM) && !showSuccessImg && (
+            <button type="button" onClick={() => setShowSuccessImg(true)} className="mt-6 text-sm underline text-white/80 hover:text-white">Ver imagen del evento</button>
+          )}
         </div>
+
+        {/* Imagen a pantalla completa que cubre todo tras inscribirse. */}
+        {(successImgD || successImgM) && showSuccessImg && (
+          <div className="fixed inset-0 z-50 bg-black">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={successImgD} alt="" className="hidden sm:block w-full h-full object-cover" />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={successImgM} alt="" className="sm:hidden w-full h-full object-cover" />
+            <button
+              type="button"
+              onClick={() => setShowSuccessImg(false)}
+              aria-label="Cerrar"
+              className="absolute top-4 right-4 h-10 w-10 flex items-center justify-center rounded-full bg-black/50 text-white text-lg hover:bg-black/70 transition"
+            >
+              ✕
+            </button>
+          </div>
+        )}
       </div>
     );
   }
@@ -654,7 +684,9 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
                 {ff.position.enabled && (
                   <input className={inputClass} style={inputStyle} placeholder={`Cargo${ff.position.required ? ' *' : ''}`} value={form.position} onChange={(e) => setField('position', e.target.value)} />
                 )}
-                <input className={`${inputClass} md:col-span-2`} style={inputStyle} type="email" placeholder="Correo electrónico *" value={form.email} onChange={(e) => setField('email', e.target.value)} />
+                {ff.email.enabled && (
+                  <input className={`${inputClass} md:col-span-2`} style={inputStyle} type="email" placeholder={`Correo electrónico${ff.email.required ? ' *' : ''}`} value={form.email} onChange={(e) => setField('email', e.target.value)} />
+                )}
                 {ff.dietary.enabled && (
                   <div className="md:col-span-2">
                     <label className="block text-white/80 text-sm mb-1">Preferencia alimenticia{ff.dietary.required ? ' *' : ''}</label>
@@ -731,7 +763,9 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
                 {ff.position.enabled && (
                   <input className={inputClass} style={inputStyle} placeholder={`Cargo${ff.position.required ? ' *' : ''}`} value={form.position} onChange={(e) => setField('position', e.target.value)} />
                 )}
-                <input className={`${inputClass} md:col-span-2`} style={inputStyle} type="email" placeholder="Correo electrónico *" value={form.email} onChange={(e) => setField('email', e.target.value)} />
+                {ff.email.enabled && (
+                  <input className={`${inputClass} md:col-span-2`} style={inputStyle} type="email" placeholder={`Correo electrónico${ff.email.required ? ' *' : ''}`} value={form.email} onChange={(e) => setField('email', e.target.value)} />
+                )}
                 {ff.dietary.enabled && (
                   <div className="md:col-span-2">
                     <label className="block text-white/80 text-sm mb-1">Preferencia alimenticia{ff.dietary.required ? ' *' : ''}</label>

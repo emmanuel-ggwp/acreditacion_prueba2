@@ -15,7 +15,7 @@ import { getCustomQuestions, initCustomAnswers, missingRequiredCustom, type Cust
 import { CONTACT_EMAIL } from '@/utils/contact';
 import { Loader2, CheckCircle, AlertCircle, Calendar, ChevronDown, ShieldCheck } from 'lucide-react';
 
-const FIELD_LABELS: Record<string, string> = { phone: 'Teléfono', documentNumber: 'RUT / Documento', company: 'Empresa', position: 'Cargo', numeroSap: 'Código SAP', dietary: 'Preferencia alimenticia' };
+const FIELD_LABELS: Record<string, string> = { email: 'Correo electrónico', phone: 'Teléfono', documentNumber: 'RUT / Documento', company: 'Empresa', position: 'Cargo', numeroSap: 'Código SAP', dietary: 'Preferencia alimenticia' };
 import { useRouter } from 'next/navigation';
 
 type PublicRegistrationFormData = z.infer<typeof publicRegistrationSchema>;
@@ -238,7 +238,7 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
       // guardada, así que un fallo de correo NO debe romper el éxito.
       try {
         const templateId = (event as any).emailTemplate?.templateId;
-        if (templateId) {
+        if (templateId && data.email) {
           const schedule = ((event as any).schedules || []).find((s: any) => s.id === (data.scheduleIds || [])[0]);
           const nombre = `${data.firstName} ${data.lastName}`.trim();
           // Invitados según el modo del evento (un solo texto sirve para los 3 modos).
@@ -445,9 +445,10 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
           </div>
         </div>
 
+        {ff.email.enabled && (
         <div className="sm:col-span-2">
           <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-            Correo electrónico *
+            Correo electrónico{ff.email.required ? ' *' : ''}
           </label>
           <div className="mt-1">
             <input
@@ -461,6 +462,7 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
             )}
           </div>
         </div>
+        )}
 
         {ff.phone.enabled && (
         <div>

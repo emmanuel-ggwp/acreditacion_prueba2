@@ -85,6 +85,11 @@ export const imagesConfigSchema = z.object({
   // Imagen destacada del evento (ej. el título "AURORA"): se muestra en el inicio
   // de la landing Gala, separada del fondo para que escale bien en móvil.
   heroUrl: z.string().optional().nullable(),
+  // Imagen a pantalla completa que aparece tras una inscripción exitosa (Gala).
+  // Separada para escritorio y celular (proporciones distintas); si solo hay una,
+  // se usa para ambos.
+  successUrl: z.string().optional().nullable(),
+  successUrlMobile: z.string().optional().nullable(),
 });
 
 /** Forma canónica de Event.registrationConfig. */
