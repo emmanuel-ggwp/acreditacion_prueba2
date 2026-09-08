@@ -191,8 +191,11 @@ const ParticipantForm: React.FC<ParticipantFormProps> = ({ eventId, participant,
         if (!String((data as any).lastName || '').trim()) missing.push('Apellido');
         for (const key of Object.keys(ff)) {
           if (!(ff as any)[key]?.enabled || !(ff as any)[key]?.required) continue;
-          const val = key === 'dietary' ? (data as any).dietaryPreference : (data as any)[key];
-          if (!val || val === '' || (key === 'dietary' && val === 'NONE')) missing.push(FIELD_LABELS[key] || key);
+          // "Ninguna" (NONE) ES una respuesta válida para la preferencia alimenticia:
+          // no bloquea el envío (igual que la landing y el servidor).
+          if (key === 'dietary') continue;
+          const val = (data as any)[key];
+          if (!val || val === '') missing.push(FIELD_LABELS[key] || key);
         }
         if (missing.length) {
           showToast.error('Faltan campos obligatorios: ' + missing.join(', ') + '.');
