@@ -348,6 +348,69 @@ export class ParticipantService {
     return participant;
   }
 
+  /**
+   * Vuelve un participante INSCRITO a estado "precargado" sin borrarlo. Deja el padrón
+   * como lo dejó el organizador: sin fecha, sin acreditación y con las cargas precargadas
+   * en estado precargado. Los acompañantes que la persona agregó al inscribirse
+   * (registrationSource PUBLIC_FORM) se eliminan, porque no eran parte de la precarga.
+   */
+  async revertToPreloaded(participantId: string, userId?: string) {
+    const participant = await Participant.findByPk(participantId);
+    if (!participant) {
+      throw new Error('Participant not found');
+    }
+
+    const tx = await sequelize.transaction();
+    try {
+      const guests = await Guest.findAll({ where: { participantId }, attributes: ['id'], transaction: tx });
+      const guestIds = guests.map((g: any) => g.id);
+
+      // 1. Quitar acreditaciones del participante y de sus invitados (todas las fechas).
+      await Accreditation.destroy({
+        where: {
+          [Op.or]: [
+            { participantId },
+            ...(guestIds.length ? [{ guestId: { [Op.in]: guestIds } }] : []),
+          ],
+        },
+        transaction: tx,
+      });
+
+      // 2. Eliminar los invitados que la persona sumó al inscribirse (no eran precarga).
+      await Guest.destroy({
+        where: { participantId, registrationSource: 'PUBLIC_FORM' },
+        transaction: tx,
+      });
+
+      // 3. Las cargas precargadas (IMPORT) y las agregadas por admin (MANUAL) vuelven a
+      //    estado precargado: sin confirmar y sin fecha.
+      await Guest.update(
+        { confirmed: false, scheduleId: null },
+        { where: { participantId, registrationSource: { [Op.in]: ['IMPORT', 'MANUAL'] } }, transaction: tx }
+      );
+
+      // 4. Quitar la inscripción: desasociar todas las fechas.
+      await (participant as any).setSchedules([], { transaction: tx });
+
+      await tx.commit();
+    } catch (e) {
+      await tx.rollback();
+      throw e;
+    }
+
+    if (userId) {
+      await auditLogService.log({
+        userId,
+        action: 'UPDATE',
+        entity: 'Participant',
+        entityId: participantId,
+        details: { name: `${(participant as any).firstName} ${(participant as any).lastName}`.trim(), action: 'revert_to_preloaded' },
+      });
+    }
+
+    return { message: 'Participant reverted to preloaded' };
+  }
+
   async deleteParticipant(participantId: string, userId?: string, reason?: string) {
     const accreditationCount = await Accreditation.count({ where: { participantId } });
     if (accreditationCount > 0) {

@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import useParticipantStore from '@/store/participantStore';
 import useEventStore from '@/store/eventStore';
 import useAuthStore from '@/store/authStore';
-import { PlusCircle, FileDown, FileUp, Edit, Trash2, Award, X, CheckCircle2, Clock, Search, ChevronLeft, ChevronRight, UserCheck } from 'lucide-react';
+import { PlusCircle, FileDown, FileUp, Edit, Trash2, Award, X, CheckCircle2, Clock, Search, ChevronLeft, ChevronRight, UserCheck, Undo2 } from 'lucide-react';
 import Participant from '@/models/Participant';
 import ParticipantForm from './ParticipantForm';
 import ParticipantImport from './ParticipantImport';
@@ -34,6 +34,7 @@ const ParticipantList = ({ eventId }: { eventId: string }) => {
     total,
     fetchParticipantsByEvent,
     deleteParticipant,
+    revertToPreloaded,
     bulkDeleteParticipants,
     updateParticipant
   } = useParticipantStore();
@@ -118,6 +119,20 @@ const ParticipantList = ({ eventId }: { eventId: string }) => {
     setSelectedParticipant(participant);
     setFormInscribir(true);
     setIsFormOpen(true);
+  };
+
+  // Vuelve un inscrito a "precargado" sin borrarlo (quita inscripción y acreditación,
+  // resetea las cargas y elimina los acompañantes que agregó la persona).
+  const handleRevert = async (participant: any) => {
+    const name = `${participant.firstName} ${participant.lastName}`.trim();
+    if (!window.confirm(`¿Volver a "${name}" al estado precargado?\n\nSe quitará su inscripción y su acreditación (si la tiene), y los acompañantes que agregó al inscribirse. Sus datos y sus cargas precargadas se conservan. Podrás volver a inscribirlo cuando quieras.`)) return;
+    try {
+      await revertToPreloaded(participant.id);
+      showToast.success(`${name} volvió a precargado`);
+      reload();
+    } catch (e: any) {
+      showToast.error(e.message || 'No se pudo volver a precargado');
+    }
   };
 
   const handleDelete = (id: string) => {
@@ -372,13 +387,21 @@ const ParticipantList = ({ eventId }: { eventId: string }) => {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     <div className="flex justify-end space-x-2">
-                      {!(participant as any).registered && (
+                      {!(participant as any).registered ? (
                         <button
                           onClick={() => handleInscribir(participant as any)}
                           className="text-green-600 hover:text-green-800 p-1 hover:bg-green-50 rounded"
                           title="Inscribir (pasar de precargado a inscrito)"
                         >
                           <UserCheck size={16} />
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handleRevert(participant as any)}
+                          className="text-amber-600 hover:text-amber-800 p-1 hover:bg-amber-50 rounded"
+                          title="Volver a precargado (quitar inscripción sin borrar)"
+                        >
+                          <Undo2 size={16} />
                         </button>
                       )}
                       <button

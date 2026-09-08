@@ -23,6 +23,7 @@ interface ParticipantState {
   createParticipant: (participantData: z.infer<typeof createParticipantSchema>) => Promise<void>;
   updateParticipant: (id: string, participantData: z.infer<typeof updateParticipantSchema>) => Promise<void>;
   deleteParticipant: (id: string, reason?: string) => Promise<void>;
+  revertToPreloaded: (id: string) => Promise<void>;
   bulkDeleteParticipants: (eventId: string, opts: { ids?: string[]; all?: boolean }) => Promise<{ deleted: number; guestsDeleted: number }>;
   setCurrentParticipant: (participant: ParticipantWithAccreditation | null) => void;
 }
@@ -135,6 +136,17 @@ const useParticipantStore = create<ParticipantState>()(
           }));
         } catch (error: any) {
           set({ error: error.message, loading: false });
+        }
+      },
+
+      revertToPreloaded: async (id) => {
+        set({ loading: true, error: null });
+        try {
+          await apiClient.post(`/api/participants/${id}/revert`, {});
+          set({ loading: false });
+        } catch (error: any) {
+          set({ error: error.message, loading: false });
+          throw error;
         }
       },
 
