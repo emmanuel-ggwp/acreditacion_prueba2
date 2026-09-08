@@ -184,8 +184,11 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
       const missing: string[] = [];
       for (const key of Object.keys(ff)) {
         if (!ff[key].enabled || !ff[key].required) continue;
-        const val = key === 'dietary' ? (data as any).dietaryPreference : (data as any)[key];
-        if (!val || val === '' || (key === 'dietary' && val === 'NONE')) missing.push(FIELD_LABELS[key]);
+        // "Ninguna" (NONE) ES una respuesta válida para la preferencia alimenticia:
+        // no bloquea el envío (igual que Gala y que el servidor).
+        if (key === 'dietary') continue;
+        const val = (data as any)[key];
+        if (!val || val === '') missing.push(FIELD_LABELS[key]);
       }
       // Preguntas configurables obligatorias (Sí + sin opción elegida).
       missing.push(...missingRequiredCustom(customQuestions, customAnswers));
@@ -227,7 +230,10 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ ...data, ...guestData, guests, customData: customAnswers, ...(registrationMode === 'rut' && rutParticipantId ? { participantId: rutParticipantId } : {}) }),
+        // Correo vacío → undefined: el esquema del modo RUT valida formato de email y
+        // rechaza "" (optional/nullable no eximen a la cadena vacía), lo que bloqueaba a
+        // un precargado sin correo. Enviar undefined es válido en ambos modos.
+        body: JSON.stringify({ ...data, email: String((data as any).email ?? '').trim() || undefined, ...guestData, guests, customData: customAnswers, ...(registrationMode === 'rut' && rutParticipantId ? { participantId: rutParticipantId } : {}) }),
       });
 
       const result = await response.json();
