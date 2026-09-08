@@ -567,7 +567,7 @@ const ParticipantList = ({ eventId }: { eventId: string }) => {
                 <span className="flex-shrink-0 mt-0.5 h-8 w-8 rounded-lg bg-red-50 text-red-600 flex items-center justify-center"><Trash2 size={16} /></span>
                 <div>
                   <p className="font-semibold text-gray-900">Eliminar</p>
-                  <p className="text-gray-600">Borra a la persona <b>por completo</b>, incluida la precarga y sus invitados. <b>No se puede deshacer.</b> Si solo querés quitar la inscripción, usá <span className="inline-flex items-center gap-1 align-middle text-amber-700"><Undo2 size={12} /> Volver a precargado</span>.</p>
+                  <p className="text-gray-600">Borra a la persona <b>por completo</b>, incluida la precarga y sus invitados. <b>No se puede deshacer.</b> Si solo quieres quitar la inscripción, usá <span className="inline-flex items-center gap-1 align-middle text-amber-700"><Undo2 size={12} /> Volver a precargado</span>.</p>
                 </div>
               </div>
             </div>
