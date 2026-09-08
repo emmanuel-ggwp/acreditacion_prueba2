@@ -410,7 +410,14 @@ async function applyGuests(
         transaction: t,
       });
       if (guest) {
-        await guest.update({ confirmed: true, scheduleId: primaryScheduleId }, { transaction: t });
+        // Marca confirmada para esta fecha. Si el evento pide preferencia alimenticia
+        // a los invitados, el asistente puede corregir la de una carga precargada:
+        // solo se actualiza cuando la petición trae un valor (no se borra si no viene).
+        const upd: Record<string, unknown> = { confirmed: true, scheduleId: primaryScheduleId };
+        if (typeof g.dietaryPreference === 'string' && g.dietaryPreference.trim()) {
+          upd.dietaryPreference = g.dietaryPreference.trim();
+        }
+        await guest.update(upd, { transaction: t });
       }
     } else if (g.firstName) {
       // Invitado nuevo (ej. acompañante). Solo mientras queden plazas: agotado el

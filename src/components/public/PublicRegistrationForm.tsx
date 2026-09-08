@@ -134,6 +134,9 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
       setValue('email', p.email || '');
       setValue('phone', p.phone || '');
       setValue('documentNumber', p.documentNumber || rutInput);
+      setValue('company', p.company || '');
+      setValue('position', p.position || '');
+      setValue('numeroSap', p.numeroSap || '');
       // Precargar dieta e invitados registrados en la precarga.
       setValue('dietaryPreference', p.dietaryPreference || 'NONE');
       setValue('dietaryComments', p.dietaryComments || '');

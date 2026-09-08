@@ -49,8 +49,13 @@ export async function GET(
         email: p.email,
         phone: p.phone,
         documentNumber: p.documentNumber,
+        // Datos precargados por el organizador que también deben autocompletarse.
+        company: p.company,
+        position: p.position,
+        numeroSap: p.numeroSap,
         dietaryPreference: p.dietaryPreference,
         dietaryComments: p.dietaryComments,
+        customData: p.customData,
         guestCount: p.guestCount,
         guestCompanion: p.guestCompanion,
         guestLoads: p.guestLoads,

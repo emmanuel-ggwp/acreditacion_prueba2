@@ -191,6 +191,12 @@ const EventForm: React.FC<EventFormProps> = ({ event, onClose, onSuccess }) => {
           borderColor: '#e2e8f0',
           formBackgroundColor: '#ffffff',
           dietModalColor: '#0b1220',
+          dateCardColor: '#000000',
+          dateCardOpacity: 0.5,
+          buttonTextColor: '#ffffff',
+          datesTitleColor: '#ffffff',
+          datesSubtitleColor: '#ffffff',
+          galaFormOffset: 0,
           overlayColor: '#0f172a',
           overlayOpacity: 0.55,
           titleFont: 'montserrat',
@@ -571,8 +577,11 @@ const EventForm: React.FC<EventFormProps> = ({ event, onClose, onSuccess }) => {
                       {([
                         ['registrationConfig.theme.primaryColor', 'Principal', 'Acentos: barra superior, íconos y detalles.'],
                         ['registrationConfig.theme.secondaryColor', 'Secundario', 'Acento complementario (degradados y detalles).'],
-                        ['registrationConfig.theme.buttonColor', 'Botones', 'Color del botón de registro.'],
+                        ['registrationConfig.theme.buttonColor', 'Botones', 'Color de fondo del botón de registro.'],
+                        ['registrationConfig.theme.buttonTextColor', 'Texto de botones · solo Gala', 'Color de la LETRA dentro de los botones (Entrar, Continuar, Registrarse). Útil si el color del botón es claro.'],
                         ['registrationConfig.theme.titleColor', 'Título · solo Gala', 'Color del nombre del evento (título) en la landing Gala.'],
+                        ['registrationConfig.theme.datesTitleColor', 'Título fechas · solo Gala', 'Color del texto “Elige una fecha de asistencia”.'],
+                        ['registrationConfig.theme.datesSubtitleColor', 'Subtítulo fechas · solo Gala', 'Color del texto “Selecciona la fecha y lugar al que asistirás”.'],
                         ['registrationConfig.theme.textColor', 'Texto', 'Color del texto y las etiquetas del formulario.'],
                         ['registrationConfig.theme.inputColor', 'Inputs', 'Fondo de los campos donde se escribe.'],
                         ['registrationConfig.theme.borderColor', 'Bordes', 'Color del borde de los campos.'],
@@ -683,6 +692,80 @@ const EventForm: React.FC<EventFormProps> = ({ event, onClose, onSuccess }) => {
                       {...register('registrationConfig.theme.overlayOpacity', { setValueAs: (v) => (v === '' || v === null || v === undefined ? undefined : parseFloat(v)) })}
                       className="w-full"
                     />
+                  </div>
+
+                  {/* Tarjetas de fecha SIN foto: color de fondo + transparencia (Gala). */}
+                  <div>
+                    <label className="text-sm font-semibold text-gray-700 mb-1 flex items-center">
+                      Fondo de las tarjetas de fecha (sin foto) <span className="ml-1 text-xs font-normal text-amber-600">· solo Gala</span>
+                      <InfoTooltip text="Color de fondo y transparencia de las tarjetas de fecha cuando NO tienen foto. Las fechas que sí tienen foto conservan su imagen. Sugerencia: un color oscuro con algo de transparencia se ve elegante sobre el fondo." />
+                    </label>
+                    <div className="flex items-center gap-2 mb-4">
+                      <input type="color" {...register('registrationConfig.theme.dateCardColor' as any)} className="h-9 w-10 rounded border border-gray-200 cursor-pointer bg-white p-0.5" />
+                      <input type="text" {...register('registrationConfig.theme.dateCardColor' as any)} placeholder="#RRGGBB" maxLength={7} className="w-24 rounded border border-gray-200 px-2 py-1 text-xs font-mono uppercase outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/30" />
+                    </div>
+                    <label htmlFor="dateCardOpacity" className="text-sm font-semibold text-gray-700 mb-1 flex items-center">
+                      Transparencia de las tarjetas
+                      <InfoTooltip text="Qué tan sólido es el fondo de las tarjetas de fecha sin foto. 0 = totalmente transparente (se ve el fondo del evento), 1 = color sólido." />
+                    </label>
+                    <input
+                      id="dateCardOpacity"
+                      type="range"
+                      min="0"
+                      max="1"
+                      step="0.05"
+                      {...register('registrationConfig.theme.dateCardOpacity', { setValueAs: (v) => (v === '' || v === null || v === undefined ? undefined : parseFloat(v)) })}
+                      className="w-full"
+                    />
+                    {/* Vista previa del fondo elegido (sobre un tono oscuro tipo Gala). */}
+                    {(() => {
+                      const c = watch('registrationConfig.theme.dateCardColor' as any) || '#000000';
+                      const o = watch('registrationConfig.theme.dateCardOpacity' as any);
+                      const op = typeof o === 'number' ? o : 0.5;
+                      const toRgba = (hex: string, a: number) => {
+                        const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(String(hex).trim());
+                        if (!m) return `rgba(0,0,0,${a})`;
+                        return `rgba(${parseInt(m[1], 16)},${parseInt(m[2], 16)},${parseInt(m[3], 16)},${a})`;
+                      };
+                      return (
+                        <div className="mt-3 rounded-lg p-3" style={{ background: 'linear-gradient(135deg,#1e293b,#0b1220)' }}>
+                          <div className="mx-auto w-40 rounded-xl px-4 py-5 text-center text-white" style={{ backgroundColor: toRgba(c, op), border: '1px solid rgba(255,255,255,0.15)' }}>
+                            <p className="text-3xl font-light leading-none">12</p>
+                            <p className="text-[11px] uppercase tracking-widest text-white/75 mt-1">Septiembre</p>
+                            <p className="text-xs mt-2 font-semibold">Cena de gala</p>
+                          </div>
+                          <p className="text-center text-[11px] text-gray-400 mt-2">Vista previa de una tarjeta sin foto</p>
+                        </div>
+                      );
+                    })()}
+                  </div>
+
+                  {/* Posición vertical del bloque del formulario (Gala · solo escritorio). */}
+                  <div>
+                    <label htmlFor="galaFormOffset" className="text-sm font-semibold text-gray-700 mb-1 flex items-center">
+                      Posición del formulario (subir / bajar) <span className="ml-1 text-xs font-normal text-amber-600">· solo Gala · escritorio</span>
+                      <InfoTooltip text="Sube o baja TODO el bloque del formulario (título 'Completa la información…' + los campos) en la vista de computadora. Útil cuando el fondo tiene elementos arriba o abajo y quieres acomodar el formulario. En celular no cambia nada." />
+                    </label>
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs text-gray-400 whitespace-nowrap">Más arriba</span>
+                      <input
+                        id="galaFormOffset"
+                        type="range"
+                        min="-200"
+                        max="300"
+                        step="10"
+                        {...register('registrationConfig.theme.galaFormOffset', { setValueAs: (v) => (v === '' || v === null || v === undefined ? undefined : parseInt(v, 10)) })}
+                        className="w-full"
+                      />
+                      <span className="text-xs text-gray-400 whitespace-nowrap">Más abajo</span>
+                    </div>
+                    <p className="mt-1 text-xs text-gray-500 text-center">
+                      {(() => {
+                        const v = watch('registrationConfig.theme.galaFormOffset' as any);
+                        const n = typeof v === 'number' ? v : 0;
+                        return n === 0 ? 'Posición normal' : (n < 0 ? `${Math.abs(n)}px más arriba` : `${n}px más abajo`);
+                      })()}
+                    </p>
                   </div>
                 </div>
               </div>

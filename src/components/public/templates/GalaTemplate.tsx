@@ -51,6 +51,9 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
   const theme = (event.registrationConfig && event.registrationConfig.theme) || {};
   const primary = theme.primaryColor || '#008a98';
   const buttonColor = theme.buttonColor || primary;
+  // Color del texto DENTRO de los botones (Entrar, Continuar, Registrarse…). Útil
+  // cuando el color del botón es claro y el texto blanco no se lee bien.
+  const buttonTextColor = theme.buttonTextColor || '#ffffff';
   const hasBg = !!event.backgroundImageUrl;
   // Imagen destacada del evento (ej. "AURORA"): separada del fondo para que escale
   // bien en móvil. Se muestra en el inicio; si no hay, se usa el nombre como título.
@@ -61,6 +64,16 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
   const overlay = typeof theme.overlayOpacity === 'number' ? theme.overlayOpacity : 0.55;
   const overlayColor = theme.overlayColor || '#000000';
   const titleColor = theme.titleColor || '#ffffff';
+  // Fondo y transparencia de las tarjetas de fecha SIN foto (el default replica el
+  // aspecto actual: negro al 50%). Las tarjetas CON foto conservan su fondo.
+  const dateCardColor = theme.dateCardColor || '#000000';
+  const dateCardOpacity = typeof theme.dateCardOpacity === 'number' ? theme.dateCardOpacity : 0.5;
+  // Colores de los textos de la pantalla de selección de fecha.
+  const datesTitleColor = theme.datesTitleColor || '#ffffff';       // "Elige una fecha de asistencia"
+  const datesSubtitleColor = theme.datesSubtitleColor || '#ffffff'; // "Selecciona la fecha y lugar…"
+  // Desplazamiento vertical del bloque del formulario en escritorio (negativo = más
+  // arriba, positivo = más abajo). Default 0 = sin cambios (los eventos actuales no se mueven).
+  const galaFormOffset = typeof theme.galaFormOffset === 'number' ? theme.galaFormOffset : 0;
   // Tamaño del título (nombre del evento) en el inicio SIN imagen destacada.
   // Clases literales para que Tailwind las incluya; 'lg' es el recomendado.
   const TITLE_SIZES: Record<string, string> = {
@@ -125,7 +138,7 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
   const [participantId, setParticipantId] = useState<string | null>(null);
   const [cargas, setCargas] = useState<Carga[]>([]);
   const [acompEnabled, setAcompEnabled] = useState(false);
-  const [acomp, setAcomp] = useState({ firstName: '', lastName: '' });
+  const [acomp, setAcomp] = useState({ firstName: '', lastName: '', dietaryPreference: 'NONE', dietaryComments: '' });
 
   // Cupo de invitados. Se calcula IGUAL que en el servidor
   // (`api/public/events/[slug]/register/route.ts`): `registrationConfig.guests.max` solo
@@ -178,7 +191,7 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
       }
       const p = data.participant;
       setParticipantId(p.id);
-      setForm((f) => ({ ...f, firstName: p.firstName || '', lastName: p.lastName || '', email: p.email || '', phone: p.phone || '', documentNumber: p.documentNumber || rutInput, dietaryPreference: p.dietaryPreference || 'NONE', dietaryComments: p.dietaryComments || '' }));
+      setForm((f) => ({ ...f, firstName: p.firstName || '', lastName: p.lastName || '', email: p.email || '', phone: p.phone || '', documentNumber: p.documentNumber || rutInput, company: p.company || '', position: p.position || '', numeroSap: p.numeroSap || '', dietaryPreference: p.dietaryPreference || 'NONE', dietaryComments: p.dietaryComments || '' }));
       // Cargas precargadas por el organizador: vienen MARCADAS por defecto (el
       // asistente puede desmarcar las que no asistirán).
       setCargas((data.guests || []).map((g: any) => ({ id: g.id, firstName: g.firstName, lastName: g.lastName, guestType: g.guestType, dietaryPreference: g.dietaryPreference || null, selected: true })));
@@ -223,9 +236,21 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
       if (form.email.trim() && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(form.email.trim())) { setError('Ingresa un correo electrónico válido.'); return; }
       missing.push(...missingRequiredCustom(customQuestions, customAnswers));
       if (missing.length) { setError('Completa los campos obligatorios: ' + missing.join(', ') + '.'); return; }
+      // Acompañante nuevo (flujo RUT): incluye su preferencia alimenticia si el evento
+      // la pide. El invitado no tiene columna de comentarios: el detalle (alergia/otro)
+      // se compone dentro de dietaryPreference ("Alergia: maní"), igual que en el flujo abierto.
+      let acompObj: any = null;
+      if (acompEnabled && acomp.firstName.trim()) {
+        acompObj = { firstName: acomp.firstName.trim(), lastName: acomp.lastName.trim() || undefined, guestType: 'ACOMPANANTE' };
+        if (guestDiet) {
+          acompObj.dietaryPreference = isFreeTextDiet(acomp.dietaryPreference) && acomp.dietaryComments.trim()
+            ? dietaryFull(acomp.dietaryPreference, acomp.dietaryComments)
+            : (acomp.dietaryPreference || 'NONE');
+        }
+      }
       const guests = [
-        ...cargas.filter((c) => c.selected).map((c) => ({ id: c.id })),
-        ...(acompEnabled && acomp.firstName.trim() ? [{ firstName: acomp.firstName.trim(), lastName: acomp.lastName.trim() || undefined, guestType: 'ACOMPANANTE' }] : []),
+        ...cargas.filter((c) => c.selected).map((c) => (guestDiet ? { id: c.id, dietaryPreference: c.dietaryPreference || 'NONE' } : { id: c.id })),
+        ...(acompObj ? [acompObj] : []),
       ];
       payload = {
         participantId,
@@ -403,7 +428,7 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
     const monthName = validDate ? d.toLocaleDateString('es-CL', { month: 'long' }) : '';
 
     return (
-      <button key={s.id} type="button" disabled={blocked} onClick={() => { if (!blocked) setSelectedScheduleId(s.id); }} className="w-full sm:w-[18rem] text-left rounded-2xl overflow-hidden transition shadow-lg disabled:cursor-not-allowed" style={{ outline: selected ? `3px solid ${primary}` : '3px solid transparent', backgroundColor: 'rgba(0,0,0,0.5)', border: '1px solid rgba(255,255,255,0.15)', opacity: blocked ? 0.55 : 1 }}>
+      <button key={s.id} type="button" disabled={blocked} onClick={() => { if (!blocked) setSelectedScheduleId(s.id); }} className="w-full sm:w-[18rem] text-left rounded-2xl overflow-hidden transition shadow-lg disabled:cursor-not-allowed" style={{ outline: selected ? `3px solid ${primary}` : '3px solid transparent', backgroundColor: s.imageUrl ? 'rgba(0,0,0,0.5)' : hexToRgba(dateCardColor, dateCardOpacity), border: '1px solid rgba(255,255,255,0.15)', opacity: blocked ? 0.55 : 1 }}>
         {s.imageUrl ? (
           <>
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -442,7 +467,7 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
     const successImgD = successUrl || successUrlMobile;
     const successImgM = successUrlMobile || successUrl;
     return (
-      <div className="relative min-h-screen flex items-center justify-center px-4 py-12" style={pageStyle}>
+      <div className="relative min-h-screen flex items-center justify-center px-4 py-12 md:bg-fixed" style={pageStyle}>
         {overlayNode}
         <div className="relative w-full max-w-md text-center rounded-3xl p-10 shadow-2xl" style={{ backgroundColor: 'rgba(0,0,0,0.6)', border: '1px solid rgba(255,255,255,0.15)' }}>
           <CheckCircle2 className="h-16 w-16 mx-auto mb-4" style={{ color: primary }} />
@@ -487,7 +512,7 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
   if (step === 'already') {
     const regs = schedules.filter((s) => registeredScheduleIds.includes(s.id));
     return (
-      <div className="relative min-h-screen flex items-center justify-center px-4 py-12" style={pageStyle}>
+      <div className="relative min-h-screen flex items-center justify-center px-4 py-12 md:bg-fixed" style={pageStyle}>
         {overlayNode}
         <div className="relative w-full max-w-md text-center rounded-3xl p-8 md:p-10 shadow-2xl" style={{ backgroundColor: 'rgba(0,0,0,0.6)', border: '1px solid rgba(255,255,255,0.15)' }}>
           {event.logoUrl && (
@@ -552,7 +577,7 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
   // ---- Bienvenida ----
   if (step === 'welcome') {
     return (
-      <div className="relative min-h-screen flex flex-col items-center justify-center px-4 py-12 text-center" style={pageStyle}>
+      <div className="relative min-h-screen flex flex-col items-center justify-center px-4 py-12 text-center md:bg-fixed" style={pageStyle}>
         {fontHref && <link rel="stylesheet" href={fontHref} />}
         <div className="absolute inset-0" style={{ backgroundColor: hexToRgba(overlayColor, overlay) }} aria-hidden="true" />
         <div className="relative flex flex-col items-center w-full max-w-2xl">
@@ -575,7 +600,7 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
               <h1 className={`${titleSizeClass} font-bold mb-8 break-words max-w-full`} style={{ fontFamily: titleFont.stack, color: titleColor, textShadow: titleShadow }}>{event.name}</h1>
             </>
           )}
-          <button onClick={() => setStep(mode === 'rut' ? 'rut' : (schedules.length ? 'fecha' : 'form'))} className="inline-flex items-center gap-2 rounded-full px-8 py-3 text-white font-semibold shadow-lg hover:brightness-110 transition" style={{ backgroundColor: buttonColor }}>
+          <button onClick={() => setStep(mode === 'rut' ? 'rut' : (schedules.length ? 'fecha' : 'form'))} className="inline-flex items-center gap-2 rounded-full px-8 py-3 text-white font-semibold shadow-lg hover:brightness-110 transition" style={{ backgroundColor: buttonColor, color: buttonTextColor }}>
             Entrar <ArrowRight className="h-5 w-5" />
           </button>
           {event.description && <p className="mt-6 text-sm text-white/70 max-w-xl">{event.description}</p>}
@@ -591,7 +616,7 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
   // ---- Paso RUT (modo rut) ----
   if (step === 'rut') {
     return (
-      <div className="relative min-h-screen flex items-center justify-center px-4 py-12" style={pageStyle}>
+      <div className="relative min-h-screen flex items-center justify-center px-4 py-12 md:bg-fixed" style={pageStyle}>
         {overlayNode}
         <div className="relative w-full max-w-md rounded-3xl p-8 shadow-2xl text-center" style={{ backgroundColor: 'rgba(0,0,0,0.5)', border: '1px solid rgba(255,255,255,0.15)' }}>
           {event.logoUrl && (
@@ -608,7 +633,7 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
             className="w-full rounded-full px-5 py-3 text-center text-gray-900 bg-white placeholder-gray-400 border border-white/60 focus:outline-none"
           />
           {lookupError && <p className="mt-3 text-sm text-red-300">{lookupError}</p>}
-          <button onClick={doLookup} disabled={lookupLoading} className="mt-5 w-full inline-flex items-center justify-center gap-2 rounded-full px-6 py-3 text-white font-semibold shadow-lg hover:brightness-110 transition disabled:opacity-60" style={{ backgroundColor: buttonColor }}>
+          <button onClick={doLookup} disabled={lookupLoading} className="mt-5 w-full inline-flex items-center justify-center gap-2 rounded-full px-6 py-3 text-white font-semibold shadow-lg hover:brightness-110 transition disabled:opacity-60" style={{ backgroundColor: buttonColor, color: buttonTextColor }}>
             {lookupLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <ArrowRight className="h-5 w-5" />}
             {lookupLoading ? 'Validando…' : 'Continuar'}
           </button>
@@ -620,16 +645,16 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
   // ---- Paso: selección de fecha (pantalla propia, antes del formulario) ----
   if (step === 'fecha') {
     return (
-      <div className="relative min-h-screen px-4 py-10 md:py-14" style={pageStyle}>
+      <div className="relative min-h-screen px-4 py-10 md:py-14 md:bg-fixed" style={pageStyle}>
         {overlayNode}
         <div className="relative max-w-4xl mx-auto">
-          <header className="text-center mb-8">
+          <header className="text-center mb-8 md:mt-16">
             {event.logoUrl && (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={event.logoUrl} alt={event.name} className="h-16 w-auto mx-auto mb-4 drop-shadow" />
             )}
-            <h1 className="text-2xl sm:text-3xl font-bold text-white break-words">Elige una fecha de asistencia</h1>
-            <p className="text-white/80 mt-2">Selecciona la fecha y lugar al que asistirás.</p>
+            <h1 className="text-2xl sm:text-3xl font-bold break-words" style={{ color: datesTitleColor }}>Elige una fecha de asistencia</h1>
+            <p className="mt-2" style={{ color: hexToRgba(datesSubtitleColor, 0.8) }}>Selecciona la fecha y lugar al que asistirás.</p>
             {allowMultiple && registeredScheduleIds.length > 0 && (
               <p className="text-emerald-200/90 mt-2 text-sm">Ya estás inscrito en {registeredScheduleIds.length} fecha(s). Puedes elegir una nueva — las que ya tienes aparecen marcadas.</p>
             )}
@@ -645,7 +670,7 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
           </div>
 
           <div className="mt-8 flex justify-center">
-            <button type="button" disabled={!selectedScheduleId} onClick={() => setStep('form')} className="inline-flex items-center gap-2 rounded-full px-8 py-3 text-white font-semibold shadow-lg hover:brightness-110 transition disabled:opacity-50" style={{ backgroundColor: buttonColor }}>
+            <button type="button" disabled={!selectedScheduleId} onClick={() => setStep('form')} className="inline-flex items-center gap-2 rounded-full px-8 py-3 text-white font-semibold shadow-lg hover:brightness-110 transition disabled:opacity-50" style={{ backgroundColor: buttonColor, color: buttonTextColor }}>
               Continuar <ArrowRight className="h-5 w-5" />
             </button>
           </div>
@@ -656,9 +681,10 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
 
   // ---- Formulario ----
   return (
-    <div className="relative min-h-screen px-4 py-10 md:py-14" style={pageStyle}>
+    <div className="relative min-h-screen px-4 py-10 md:py-14 md:bg-fixed" style={pageStyle}>
       {overlayNode}
-      <div className="relative max-w-2xl mx-auto">
+      <style>{`@media (min-width:768px){.gala-form-block{margin-top:${galaFormOffset}px}}`}</style>
+      <div className="relative max-w-2xl mx-auto gala-form-block">
         <header className="text-center mb-6">
           {event.logoUrl && (
             // eslint-disable-next-line @next/next/no-img-element
@@ -735,15 +761,24 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
                   <p className="text-white font-semibold mb-2">Cargas</p>
                   <div className="space-y-2">
                     {cargas.map((c, idx) => (
-                      <label key={c.id} className="flex items-center gap-3 p-3 rounded-xl cursor-pointer border" style={{ backgroundColor: 'rgba(255,255,255,0.06)', borderColor: 'rgba(255,255,255,0.2)' }}>
-                        <input type="checkbox" checked={c.selected} onChange={(e) => setCargas((arr) => arr.map((x, i) => (i === idx ? { ...x, selected: e.target.checked } : x)))} className="w-5 h-5" style={{ accentColor: primary }} />
-                        <span className="text-white">
-                          {c.firstName} {c.lastName || ''}
-                          {c.dietaryPreference && dietaryLabel(c.dietaryPreference) !== 'Ninguna' && (
-                            <span className="text-white/60 text-xs ml-2">· {dietaryLabel(c.dietaryPreference)}</span>
-                          )}
-                        </span>
-                      </label>
+                      <div key={c.id} className="p-3 rounded-xl border" style={{ backgroundColor: 'rgba(255,255,255,0.06)', borderColor: 'rgba(255,255,255,0.2)' }}>
+                        <label className="flex items-center gap-3 cursor-pointer">
+                          <input type="checkbox" checked={c.selected} onChange={(e) => setCargas((arr) => arr.map((x, i) => (i === idx ? { ...x, selected: e.target.checked } : x)))} className="w-5 h-5" style={{ accentColor: primary }} />
+                          <span className="text-white">
+                            {c.firstName} {c.lastName || ''}
+                            {/* Sin edición de dieta: se muestra la preferencia precargada como etiqueta. */}
+                            {!guestDiet && c.dietaryPreference && dietaryLabel(c.dietaryPreference) !== 'Ninguna' && (
+                              <span className="text-white/60 text-xs ml-2">· {dietaryLabel(c.dietaryPreference)}</span>
+                            )}
+                          </span>
+                        </label>
+                        {/* Con dieta de invitados activa, el asistente puede corregir la de la carga precargada. */}
+                        {guestDiet && c.selected && (
+                          <select className={`${inputClass} mt-2`} style={inputStyle} value={c.dietaryPreference || 'NONE'} onChange={(e) => setCargas((arr) => arr.map((x, i) => (i === idx ? { ...x, dietaryPreference: e.target.value } : x)))}>
+                            {ensureDietOption(dietOpts, c.dietaryPreference).map((o) => <option key={o.value} value={o.value} style={{ color: '#111' }}>{`Preferencia alimenticia: ${o.label}`}</option>)}
+                          </select>
+                        )}
+                      </div>
                     ))}
                   </div>
                 </div>
@@ -757,9 +792,28 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
                     ¿Asistes con acompañante?
                   </label>
                   {acompEnabled && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
-                      <input className={inputClass} style={inputStyle} placeholder="Nombre del acompañante" value={acomp.firstName} onChange={(e) => setAcomp((a) => ({ ...a, firstName: e.target.value }))} />
-                      <input className={inputClass} style={inputStyle} placeholder="Apellido del acompañante" value={acomp.lastName} onChange={(e) => setAcomp((a) => ({ ...a, lastName: e.target.value }))} />
+                    <div className="mt-3 space-y-3">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <input className={inputClass} style={inputStyle} placeholder="Nombre del acompañante" value={acomp.firstName} onChange={(e) => setAcomp((a) => ({ ...a, firstName: e.target.value }))} />
+                        <input className={inputClass} style={inputStyle} placeholder="Apellido del acompañante" value={acomp.lastName} onChange={(e) => setAcomp((a) => ({ ...a, lastName: e.target.value }))} />
+                      </div>
+                      {guestDiet && (
+                        <>
+                          <select className={inputClass} style={inputStyle} value={acomp.dietaryPreference} onChange={(e) => setAcomp((a) => ({ ...a, dietaryPreference: e.target.value }))}>
+                            {ensureDietOption(dietOpts, acomp.dietaryPreference).map((o) => <option key={o.value} value={o.value} style={{ color: '#111' }}>{`Preferencia alimenticia: ${o.label}`}</option>)}
+                          </select>
+                          {isFreeTextDiet(acomp.dietaryPreference) && (
+                            <input
+                              className={inputClass}
+                              style={inputStyle}
+                              maxLength={GUEST_DIET_DETAIL_MAX}
+                              placeholder={String(acomp.dietaryPreference).toUpperCase().includes('ALERG') ? 'Especifica la alergia' : 'Especifica el requerimiento'}
+                              value={acomp.dietaryComments}
+                              onChange={(e) => setAcomp((a) => ({ ...a, dietaryComments: e.target.value }))}
+                            />
+                          )}
+                        </>
+                      )}
                     </div>
                   )}
                 </div>
@@ -895,7 +949,7 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
             </div>
           )}
 
-          <button type="submit" disabled={submitting} className="mt-6 w-full md:w-auto inline-flex items-center justify-center gap-2 rounded-full px-8 py-3 text-white font-semibold shadow-lg hover:brightness-110 transition disabled:opacity-60" style={{ backgroundColor: buttonColor }}>
+          <button type="submit" disabled={submitting} className="mt-6 w-full md:w-auto inline-flex items-center justify-center gap-2 rounded-full px-8 py-3 text-white font-semibold shadow-lg hover:brightness-110 transition disabled:opacity-60" style={{ backgroundColor: buttonColor, color: buttonTextColor }}>
             {submitting ? 'Enviando…' : 'Registrarse'} <ArrowRight className="h-5 w-5" />
           </button>
 
@@ -922,7 +976,7 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
                         onClick={() => setDietTemp(o.value)}
                         className="w-full rounded-full px-5 py-3 text-sm font-medium border transition text-center"
                         style={active
-                          ? { backgroundColor: buttonColor, color: '#fff', borderColor: buttonColor }
+                          ? { backgroundColor: buttonColor, color: buttonTextColor, borderColor: buttonColor }
                           : { backgroundColor: 'rgba(255,255,255,0.06)', color: '#fff', borderColor: 'rgba(255,255,255,0.25)' }}
                       >
                         {o.label}
@@ -932,7 +986,7 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
                 </div>
                 <div className="mt-5 flex justify-center gap-3">
                   <button type="button" onClick={() => setDietModalOpen(false)} className="px-5 py-2.5 rounded-full text-sm text-white/80 border" style={{ borderColor: 'rgba(255,255,255,0.25)' }}>Cancelar</button>
-                  <button type="button" onClick={() => { setField('dietaryPreference', dietTemp); setDietChosen(true); setDietModalOpen(false); }} className="px-8 py-2.5 rounded-full text-sm font-semibold text-white transition" style={{ backgroundColor: buttonColor }}>Aceptar</button>
+                  <button type="button" onClick={() => { setField('dietaryPreference', dietTemp); setDietChosen(true); setDietModalOpen(false); }} className="px-8 py-2.5 rounded-full text-sm font-semibold text-white transition" style={{ backgroundColor: buttonColor, color: buttonTextColor }}>Aceptar</button>
                 </div>
               </div>
             </div>
