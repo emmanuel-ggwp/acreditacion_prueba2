@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import useParticipantStore from '@/store/participantStore';
 import useEventStore from '@/store/eventStore';
 import useAuthStore from '@/store/authStore';
-import { PlusCircle, FileDown, FileUp, Edit, Trash2, Award, X, CheckCircle2, Clock, Search, ChevronLeft, ChevronRight, UserCheck, Undo2 } from 'lucide-react';
+import { PlusCircle, FileDown, FileUp, Edit, Trash2, Award, X, CheckCircle2, Clock, Search, ChevronLeft, ChevronRight, UserCheck, Undo2, HelpCircle } from 'lucide-react';
 import Participant from '@/models/Participant';
 import ParticipantForm from './ParticipantForm';
 import ParticipantImport from './ParticipantImport';
@@ -56,6 +56,7 @@ const ParticipantList = ({ eventId }: { eventId: string }) => {
   const [savingAward, setSavingAward] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Participant | null>(null);
+  const [showHelp, setShowHelp] = useState(false);
 
   const handleExport = async () => {
     setExporting(true);
@@ -217,9 +218,19 @@ const ParticipantList = ({ eventId }: { eventId: string }) => {
         </div>
       )}
       <div className="flex justify-between items-center mb-6">
-        <h2 className="text-xl font-bold text-gray-900">
-          Participantes
-        </h2>
+        <div className="flex items-center gap-3">
+          <h2 className="text-xl font-bold text-gray-900">
+            Participantes
+          </h2>
+          <button
+            type="button"
+            onClick={() => setShowHelp(true)}
+            title="¿Qué hace cada botón?"
+            className="inline-flex items-center gap-1 text-sm text-indigo-600 hover:text-indigo-800 font-medium"
+          >
+            <HelpCircle size={16} /> ¿Qué hace cada botón?
+          </button>
+        </div>
         <div className="flex items-center gap-2">
           <button 
             onClick={() => { setSelectedParticipant(undefined); setFormInscribir(false); setIsFormOpen(true); }}
@@ -494,6 +505,77 @@ const ParticipantList = ({ eventId }: { eventId: string }) => {
           onConfirm={confirmDelete}
           onClose={() => setDeleteTarget(null)}
         />
+      )}
+
+      {/* Modal de ayuda: explica qué hace cada botón/acción de la tabla. */}
+      {showHelp && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowHelp(false)}>
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-4 border-b sticky top-0 bg-white">
+              <h3 className="text-lg font-bold flex items-center gap-2"><HelpCircle size={18} className="text-indigo-600" /> ¿Qué hace cada botón?</h3>
+              <button onClick={() => setShowHelp(false)} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
+            </div>
+            <div className="p-5 space-y-4 text-sm text-gray-700">
+              {/* Estado */}
+              <div>
+                <p className="font-semibold text-gray-900 mb-1">Estado de cada persona</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700"><CheckCircle2 size={12} /> Inscrito</span>
+                  <span className="text-gray-500">ya tiene fecha asignada.</span>
+                </div>
+                <div className="flex flex-wrap items-center gap-2 mt-1">
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700"><Clock size={12} /> Precargado</span>
+                  <span className="text-gray-500">aún no se inscribe; solo tiene acceso al formulario con su RUT.</span>
+                </div>
+              </div>
+
+              <div className="border-t border-gray-100" />
+
+              <div className="flex items-start gap-3">
+                <span className="flex-shrink-0 mt-0.5 h-8 w-8 rounded-lg bg-green-50 text-green-600 flex items-center justify-center"><UserCheck size={16} /></span>
+                <div>
+                  <p className="font-semibold text-gray-900">Inscribir <span className="text-xs font-normal text-gray-400">· solo en Precargado</span></p>
+                  <p className="text-gray-600">Pasa a la persona de precargado a <b>inscrito</b>. Abre el formulario: pide elegir <b>al menos una fecha</b> y completar los <b>campos obligatorios</b> del evento (correo, etc.).</p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-3">
+                <span className="flex-shrink-0 mt-0.5 h-8 w-8 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center"><Undo2 size={16} /></span>
+                <div>
+                  <p className="font-semibold text-gray-900">Volver a precargado <span className="text-xs font-normal text-gray-400">· solo en Inscrito</span></p>
+                  <p className="text-gray-600">Quita la inscripción y la acreditación (si la tiene), resetea las cargas y elimina los acompañantes que la persona agregó al inscribirse. <b>Conserva</b> a la persona y sus cargas precargadas. Es reversible: podés volver a inscribirla.</p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-3">
+                <span className="flex-shrink-0 mt-0.5 h-8 w-8 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center"><Award size={16} /></span>
+                <div>
+                  <p className="font-semibold text-gray-900">Premiación</p>
+                  <p className="text-gray-600">Marca o quita el premio de la persona y su motivo. No afecta su inscripción ni su acreditación.</p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-3">
+                <span className="flex-shrink-0 mt-0.5 h-8 w-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center"><Edit size={16} /></span>
+                <div>
+                  <p className="font-semibold text-gray-900">Editar</p>
+                  <p className="text-gray-600">Modifica los datos de la persona (nombre, correo, etc.), sus invitados y sus fechas.</p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-3">
+                <span className="flex-shrink-0 mt-0.5 h-8 w-8 rounded-lg bg-red-50 text-red-600 flex items-center justify-center"><Trash2 size={16} /></span>
+                <div>
+                  <p className="font-semibold text-gray-900">Eliminar</p>
+                  <p className="text-gray-600">Borra a la persona <b>por completo</b>, incluida la precarga y sus invitados. <b>No se puede deshacer.</b> Si solo querés quitar la inscripción, usá <span className="inline-flex items-center gap-1 align-middle text-amber-700"><Undo2 size={12} /> Volver a precargado</span>.</p>
+                </div>
+              </div>
+            </div>
+            <div className="flex justify-end px-5 py-4 border-t bg-gray-50">
+              <button onClick={() => setShowHelp(false)} className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 text-sm">Entendido</button>
+            </div>
+          </div>
+        </div>
       )}
 
       {awarding && (
