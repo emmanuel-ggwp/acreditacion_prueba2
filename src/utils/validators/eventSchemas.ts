@@ -92,6 +92,10 @@ export const themeConfigSchema = z.object({
   // Desplazamiento vertical (px) del bloque del formulario en escritorio (Gala).
   // Negativo = más arriba, positivo = más abajo. 0 = posición normal.
   galaFormOffset: z.number().min(-400).max(600).optional(),
+  // Opt-in: si es true, la plantilla Gala respeta los colores del tema en el
+  // formulario (Fondo formulario / Inputs / Bordes / Texto). Por defecto (false/ausente)
+  // Gala usa su estilo oscuro fijo, para que los eventos existentes no cambien.
+  galaCustomFormColors: z.boolean().optional(),
   overlayColor: z.string().optional(),
   overlayOpacity: z.number().min(0).max(1).optional(),
   titleFont: z.string().optional(),

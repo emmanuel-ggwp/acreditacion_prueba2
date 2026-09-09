@@ -172,8 +172,14 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
   const pageStyle: React.CSSProperties = hasBg
     ? { backgroundImage: `url(${event.backgroundImageUrl})`, backgroundSize: 'cover', backgroundPosition: 'center' }
     : { backgroundColor: '#0b1220' };
-  const inputStyle: React.CSSProperties = { backgroundColor: 'rgba(0,0,0,0.55)', borderColor: 'rgba(255,255,255,0.4)' };
-  const inputClass = 'w-full rounded-full px-4 py-3 text-white placeholder-white/50 border focus:outline-none focus:border-white transition';
+  // Colores del formulario: por defecto Gala usa su estilo oscuro fijo (inmersivo).
+  // Solo si el evento activó "personalizar colores del formulario" se aplican los del
+  // tema (Fondo formulario / Inputs / Bordes / Texto). Así los eventos existentes NO cambian.
+  const galaCustomForm = !!theme.galaCustomFormColors;
+  const inputStyle: React.CSSProperties = galaCustomForm
+    ? { backgroundColor: theme.inputColor || '#0b1220', borderColor: theme.borderColor || 'rgba(255,255,255,0.4)', color: theme.textColor || '#ffffff' }
+    : { backgroundColor: 'rgba(0,0,0,0.55)', borderColor: 'rgba(255,255,255,0.4)', color: '#ffffff' };
+  const inputClass = 'w-full rounded-full px-4 py-3 placeholder-white/50 border focus:outline-none focus:border-white transition';
 
   // ---- Lookup por RUT ----
   const doLookup = async () => {
@@ -708,7 +714,7 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="rounded-3xl p-6 md:p-8 shadow-2xl" style={{ backgroundColor: 'rgba(0,0,0,0.45)', border: '1px solid rgba(255,255,255,0.12)' }}>
+        <form onSubmit={handleSubmit} className="rounded-3xl p-6 md:p-8 shadow-2xl" style={{ backgroundColor: galaCustomForm ? (theme.formBackgroundColor || '#0b1220') : 'rgba(0,0,0,0.45)', border: '1px solid rgba(255,255,255,0.12)' }}>
           {mode === 'rut' ? (
             <>
               {/* Identificado con RUT + completar datos que falten */}

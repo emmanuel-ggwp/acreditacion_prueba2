@@ -197,6 +197,7 @@ const EventForm: React.FC<EventFormProps> = ({ event, onClose, onSuccess }) => {
           datesTitleColor: '#ffffff',
           datesSubtitleColor: '#ffffff',
           galaFormOffset: 0,
+          galaCustomFormColors: false,
           overlayColor: '#0f172a',
           overlayOpacity: 0.55,
           titleFont: 'montserrat',
@@ -605,6 +606,21 @@ const EventForm: React.FC<EventFormProps> = ({ event, onClose, onSuccess }) => {
                       ))}
                     </div>
                   </div>
+
+                  {/* Opt-in: aplicar los colores de arriba al formulario en la plantilla Gala. */}
+                  {isGala && (
+                    <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+                      <label className="flex items-start gap-2 text-sm text-gray-800 cursor-pointer">
+                        <input type="checkbox" {...register('registrationConfig.theme.galaCustomFormColors' as any)} className="h-4 w-4 mt-0.5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
+                        <span>
+                          <b>Personalizar colores del formulario</b> <span className="text-xs font-normal text-amber-600">· solo Gala</span>
+                          <span className="block text-xs text-gray-600 mt-0.5">
+                            Si lo activas, la plantilla Gala usa los colores <b>Fondo formulario</b>, <b>Inputs</b>, <b>Bordes</b> y <b>Texto</b> de arriba. Si lo dejas <b>apagado</b> (por defecto), Gala mantiene su estilo oscuro y <b>los eventos actuales no cambian</b>.
+                          </span>
+                        </span>
+                      </label>
+                    </div>
+                  )}
 
                   {/* Tipografía del nombre del evento */}
                   <div>
