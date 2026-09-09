@@ -20,7 +20,8 @@ export const GET = withAuth(async (req: AuthenticatedRequest, { params }: Params
     const stats = await reportService.getRealTimeStats(eventId);
     return NextResponse.json(stats);
   } catch (error: any) {
+    // El detalle solo al log del servidor; al cliente un mensaje genérico (no filtrar internals).
     console.error('Error generating real-time stats:', error);
-    return NextResponse.json({ message: 'Error generating real-time stats', error: error.message }, { status: 500 });
+    return NextResponse.json({ message: 'Error generating real-time stats' }, { status: 500 });
   }
 }, [ADMIN, OPERATOR, GUARD]);

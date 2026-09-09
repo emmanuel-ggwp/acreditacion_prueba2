@@ -14,7 +14,6 @@ interface Params {
 
 export const GET = withAuth(async (req: AuthenticatedRequest, { params }: Params) => {
   try {
-    console.log('Fetching event with ID:', {params});
     const resolvedParams = await params;
     const eventId = resolvedParams.eventId;
     
