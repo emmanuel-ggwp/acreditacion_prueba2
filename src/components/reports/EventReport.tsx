@@ -302,9 +302,8 @@ const EventReport: React.FC<EventReportProps> = ({ eventId }) => {
                 <th className="px-6 py-4">Nombre</th>
                 <th className="px-6 py-4">Hora</th>
                 <th className="px-6 py-4 text-center">Cupo</th>
-                <th className="px-6 py-4 text-center">Inscritos</th>
-                <th className="px-6 py-4 text-center">Acreditados</th>
-                <th className="px-6 py-4 text-center">Uso</th>
+                <th className="px-6 py-4 text-center">Inscritos <span className="normal-case font-normal text-gray-400">(% del cupo)</span></th>
+                <th className="px-6 py-4 text-center">Acreditados <span className="normal-case font-normal text-gray-400">(% del cupo)</span></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -320,22 +319,33 @@ const EventReport: React.FC<EventReportProps> = ({ eventId }) => {
                     <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700" title={`${schedule.registeredParticipants} participantes · ${schedule.registeredGuests} invitados`}>
                       {schedule.registered}
                     </span>
+                    {schedule.capacity > 0 && (() => {
+                      const pct = (schedule.registered / schedule.capacity) * 100;
+                      return (
+                        <div className="flex items-center justify-center gap-1.5 mt-1.5" title={`${schedule.registered} de ${schedule.capacity} del cupo`}>
+                          <div className="w-12 bg-gray-200 rounded-full h-1">
+                            <div className={`h-1 rounded-full ${pct > 90 ? 'bg-red-500' : 'bg-gray-500'}`} style={{ width: `${Math.min(pct, 100)}%` }}></div>
+                          </div>
+                          <span className="text-[10px] text-gray-400">{Math.round(pct)}%</span>
+                        </div>
+                      );
+                    })()}
                   </td>
                   <td className="px-6 py-4 text-center">
                     <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800" title={`${schedule.accreditedParticipants} participantes · ${schedule.accreditedGuests} invitados`}>
                       {schedule.accreditedTotal}
                     </span>
-                  </td>
-                  <td className="px-6 py-4 text-center">
-                    <div className="flex items-center justify-center gap-2">
-                        <div className="w-16 bg-gray-200 rounded-full h-1.5">
-                            <div
-                                className={`h-1.5 rounded-full ${schedule.capacityUsedPercentage > 90 ? 'bg-red-500' : 'bg-green-500'}`}
-                                style={{ width: `${Math.min(schedule.capacityUsedPercentage, 100)}%` }}
-                            ></div>
+                    {schedule.capacity > 0 && (() => {
+                      const pct = (schedule.accreditedTotal / schedule.capacity) * 100;
+                      return (
+                        <div className="flex items-center justify-center gap-1.5 mt-1.5" title={`${schedule.accreditedTotal} de ${schedule.capacity} del cupo`}>
+                          <div className="w-12 bg-gray-200 rounded-full h-1">
+                            <div className="h-1 rounded-full bg-green-500" style={{ width: `${Math.min(pct, 100)}%` }}></div>
+                          </div>
+                          <span className="text-[10px] text-gray-400">{Math.round(pct)}%</span>
                         </div>
-                        <span className="text-xs">{schedule.capacityUsedPercentage.toFixed(0)}%</span>
-                    </div>
+                      );
+                    })()}
                   </td>
                 </tr>
               ))}
