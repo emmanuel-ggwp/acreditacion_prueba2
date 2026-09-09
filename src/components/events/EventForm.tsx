@@ -137,7 +137,7 @@ const TEMPLATE_PALETTES: Record<string, Record<string, string | number>> = {
   },
   // Gala: teal sobre fondo oscuro inmersivo.
   gala: {
-    primaryColor: '#008a98', secondaryColor: '#00b4c8', buttonColor: '#008a98',
+    primaryColor: '#008a98', secondaryColor: '#00b4c8', buttonColor: '#008a98', dateSelectedColor: '#008a98',
     textColor: '#ffffff', titleColor: '#ffffff', inputColor: '#0b1220', borderColor: '#334155',
     formBackgroundColor: '#0b1220', overlayColor: '#000000', overlayOpacity: 0.55, titleFont: 'playfair',
   },
@@ -193,6 +193,9 @@ const EventForm: React.FC<EventFormProps> = ({ event, onClose, onSuccess }) => {
           dietModalColor: '#0b1220',
           dateCardColor: '#000000',
           dateCardOpacity: 0.5,
+          // Default = Principal del evento, así el borde de la fecha seleccionada se ve
+          // igual que antes hasta que el usuario elija otro color.
+          dateSelectedColor: event?.registrationConfig?.theme?.primaryColor || '#1e293b',
           buttonTextColor: '#ffffff',
           datesTitleColor: '#ffffff',
           datesSubtitleColor: '#ffffff',
@@ -583,6 +586,7 @@ const EventForm: React.FC<EventFormProps> = ({ event, onClose, onSuccess }) => {
                         ['registrationConfig.theme.titleColor', 'Título · solo Gala', 'Color del nombre del evento (título) en la landing Gala.'],
                         ['registrationConfig.theme.datesTitleColor', 'Título fechas · solo Gala', 'Color del texto “Elige una fecha de asistencia”.'],
                         ['registrationConfig.theme.datesSubtitleColor', 'Subtítulo fechas · solo Gala', 'Color del texto “Selecciona la fecha y lugar al que asistirás”.'],
+                        ['registrationConfig.theme.dateSelectedColor', 'Borde fecha seleccionada · solo Gala', 'Color del borde que resalta la fecha cuando el asistente la selecciona.'],
                         ['registrationConfig.theme.textColor', 'Texto', 'Color del texto y las etiquetas del formulario.'],
                         ['registrationConfig.theme.inputColor', 'Inputs', 'Fondo de los campos donde se escribe.'],
                         ['registrationConfig.theme.borderColor', 'Bordes', 'Color del borde de los campos.'],

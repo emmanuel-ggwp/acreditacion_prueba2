@@ -84,6 +84,8 @@ export const themeConfigSchema = z.object({
   // Color de fondo y transparencia de las tarjetas de fecha SIN foto (Gala).
   dateCardColor: z.string().optional(),
   dateCardOpacity: z.number().min(0).max(1).optional(),
+  // Color del borde que resalta la fecha SELECCIONADA (Gala). Si no se define, usa el Principal.
+  dateSelectedColor: z.string().optional(),
   // Color del texto dentro de los botones (Entrar, Continuar, Registrarse…) — Gala.
   buttonTextColor: z.string().optional(),
   // Colores de los textos de la pantalla de selección de fecha (Gala).

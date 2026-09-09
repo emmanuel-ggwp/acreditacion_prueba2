@@ -68,6 +68,9 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
   // aspecto actual: negro al 50%). Las tarjetas CON foto conservan su fondo.
   const dateCardColor = theme.dateCardColor || '#000000';
   const dateCardOpacity = typeof theme.dateCardOpacity === 'number' ? theme.dateCardOpacity : 0.5;
+  // Color del borde que resalta la fecha seleccionada. Default = Principal (así los
+  // eventos existentes, que no lo tienen definido, se ven igual que antes).
+  const dateSelectedColor = theme.dateSelectedColor || primary;
   // Colores de los textos de la pantalla de selección de fecha.
   const datesTitleColor = theme.datesTitleColor || '#ffffff';       // "Elige una fecha de asistencia"
   const datesSubtitleColor = theme.datesSubtitleColor || '#ffffff'; // "Selecciona la fecha y lugar…"
@@ -434,7 +437,7 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
     const monthName = validDate ? d.toLocaleDateString('es-CL', { month: 'long' }) : '';
 
     return (
-      <button key={s.id} type="button" disabled={blocked} onClick={() => { if (!blocked) setSelectedScheduleId(s.id); }} className="w-full sm:w-[18rem] text-left rounded-2xl overflow-hidden transition shadow-lg disabled:cursor-not-allowed" style={{ outline: selected ? `3px solid ${primary}` : '3px solid transparent', backgroundColor: s.imageUrl ? 'rgba(0,0,0,0.5)' : hexToRgba(dateCardColor, dateCardOpacity), border: '1px solid rgba(255,255,255,0.15)', opacity: blocked ? 0.55 : 1 }}>
+      <button key={s.id} type="button" disabled={blocked} onClick={() => { if (!blocked) setSelectedScheduleId(s.id); }} className="w-full sm:w-[18rem] text-left rounded-2xl overflow-hidden transition shadow-lg disabled:cursor-not-allowed" style={{ outline: selected ? `3px solid ${dateSelectedColor}` : '3px solid transparent', backgroundColor: s.imageUrl ? 'rgba(0,0,0,0.5)' : hexToRgba(dateCardColor, dateCardOpacity), border: '1px solid rgba(255,255,255,0.15)', opacity: blocked ? 0.55 : 1 }}>
         {s.imageUrl ? (
           <>
             {/* eslint-disable-next-line @next/next/no-img-element */}
