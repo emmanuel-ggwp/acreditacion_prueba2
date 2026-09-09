@@ -37,7 +37,7 @@ export class ReportService {
     if (scheduleIds.length === 0) {
         return {
             eventInfo: event,
-            participantStats: { registered: 0, totalAccredited: 0, accredited: 0, accreditedGuests: 0, attendanceRate: 0 },
+            participantStats: { registered: 0, registeredGuests: 0, totalRegistered: 0, totalAccredited: 0, accredited: 0, accreditedGuests: 0, attendanceRate: 0 },
             scheduleStats: [],
             awardStats: { assigned: 0, delivered: 0, deliveryRate: 0, pending: 0 },
             accreditationTimeline: []
