@@ -76,13 +76,18 @@ export class ReportService {
 
     const regMap = new Map(registrationCounts.map(r => [r.scheduleId, r.count]));
 
-    // 3b. Batch: Get Registered Guests per schedule
+    // 3b. Batch: Get Registered Guests per schedule.
+    // Se cuenta por la FECHA del invitado (guest.schedule_id), que es la que queda al
+    // confirmar una carga o crear un acompañante. La versión anterior unía por
+    // participant_id y contaba TODOS los invitados del participante en CADA fecha en la
+    // que estuviera inscrito (los duplicaba en multi-fecha e incluía cargas sin confirmar
+    // y borrados). `deleted_at IS NULL` porque `guests` usa borrado lógico (paranoid) y
+    // esta consulta es SQL cruda (Sequelize no agrega ese filtro solo).
     const guestRegistrationQuery = `
-        SELECT ps.schedule_id as "scheduleId", COUNT(g.id)::int as count
-        FROM participant_schedules ps
-        INNER JOIN guests g ON ps.participant_id = g.participant_id
-        WHERE ps.schedule_id IN (:scheduleIds)
-        GROUP BY ps.schedule_id
+        SELECT g.schedule_id as "scheduleId", COUNT(g.id)::int as count
+        FROM guests g
+        WHERE g.schedule_id IN (:scheduleIds) AND g.deleted_at IS NULL
+        GROUP BY g.schedule_id
     `;
 
     const guestRegistrationCounts = await sequelize.query<{ scheduleId: string; count: number }>(guestRegistrationQuery, {
@@ -150,6 +155,19 @@ export class ReportService {
         col: 'id'
     });
 
+    // Invitados inscritos en el evento (contados por su fecha), para que "Total
+    // registrados" sea comparable con "Total acreditados": ambos son PERSONAS
+    // (participantes + invitados). Sin esto, registrados excluía invitados y podía
+    // verse "acreditados > registrados".
+    const guestEventRows = await sequelize.query<{ count: number }>(
+        `SELECT COUNT(g.id)::int as count
+           FROM guests g
+           INNER JOIN event_schedules es ON g.schedule_id = es.id
+          WHERE es.event_id = :eventId AND g.deleted_at IS NULL`,
+        { replacements: { eventId }, type: QueryTypes.SELECT }
+    );
+    const totalRegisteredGuests = Number(guestEventRows[0]?.count) || 0;
+
     // Efficiently get unique accredited participants and guests across the entire event
     const uniqueEventStats = await Accreditation.findOne({
         attributes: [
@@ -205,10 +223,15 @@ export class ReportService {
       eventInfo: event,
       participantStats: {
         registered: totalParticipants,
+        registeredGuests: totalRegisteredGuests,
+        totalRegistered: totalParticipants + totalRegisteredGuests,
         totalAccredited: totalAccreditedParticipants + totalAccreditedGuests,
         accredited: totalAccreditedParticipants,
         accreditedGuests: totalAccreditedGuests,
-        attendanceRate: totalParticipants > 0 ? (totalAccreditedParticipants / totalParticipants) * 100 : 0,
+        // Tasa sobre PERSONAS (participantes + invitados), coherente con registrados/acreditados.
+        attendanceRate: (totalParticipants + totalRegisteredGuests) > 0
+          ? ((totalAccreditedParticipants + totalAccreditedGuests) / (totalParticipants + totalRegisteredGuests)) * 100
+          : 0,
       },
       scheduleStats: scheduleDetails,
       awardStats: {

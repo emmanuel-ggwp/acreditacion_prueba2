@@ -16,6 +16,8 @@ interface ReportData {
   eventInfo: any;
   participantStats: {
     registered: number;
+    registeredGuests: number;
+    totalRegistered: number;
     accredited: number;
     accreditedGuests: number;
     totalAccredited: number;
@@ -153,7 +155,10 @@ const EventReport: React.FC<EventReportProps> = ({ eventId }) => {
           <div className="flex justify-between items-start">
             <div>
               <p className="text-sm font-medium text-gray-500">Total registrados</p>
-              <h3 className="text-3xl font-bold text-gray-900 mt-2">{data.participantStats.registered}</h3>
+              <h3 className="text-3xl font-bold text-gray-900 mt-2">{data.participantStats.totalRegistered}</h3>
+              <p className="text-xs text-gray-500 mt-1">
+                {data.participantStats.registered} Participantes, {data.participantStats.registeredGuests} Invitados
+              </p>
             </div>
             <div className="p-2 bg-blue-50 rounded-lg">
               <Users className="w-6 h-6 text-blue-600" />
