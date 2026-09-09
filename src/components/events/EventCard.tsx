@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Calendar as CalendarIcon, MapPin, Trash2, Edit, ArrowRight, MoreVertical, Globe, Lock, Unlock, Ban, RotateCcw, ExternalLink } from 'lucide-react';
+import { Calendar as CalendarIcon, MapPin, Trash2, Edit, ArrowRight, MoreVertical, Globe, Lock, Unlock, Ban, RotateCcw, ExternalLink, BarChart3 } from 'lucide-react';
 import Link from 'next/link';
 import Event from '@/models/Event';
 import RoleGuard from '../auth/RoleGuard';
@@ -85,6 +85,13 @@ const EventCard: React.FC<EventCardProps> = ({ event }) => {
           </div>
           <RoleGuard allowedRoles={[ROLES.ADMIN]}>
             <div className="flex items-center space-x-1">
+              <Link
+                href={`/events/${event.id}/reports`}
+                title="Ver reportes (panel por fecha)"
+                className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-md transition-colors"
+              >
+                <BarChart3 size={16} />
+              </Link>
               <ButtonEventReport eventId={event.id} eventName={event.name} />
               <div className="relative">
                 <button
