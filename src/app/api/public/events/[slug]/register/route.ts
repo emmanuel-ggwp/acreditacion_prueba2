@@ -12,11 +12,17 @@ import { getCustomQuestions, sanitizeCustomAnswers } from '@/utils/customQuestio
 import { sequelize } from '@/lib/sequelize';
 import { Op, fn, col, where as sqlWhere } from 'sequelize';
 import { getScheduleParticipantCount, getEventParticipantCount } from '@/services/capacityService';
+import { limitPublicRegister } from '@/lib/rate-limit';
 
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ slug: string }> }
 ) {
+  // Límite estricto por IP: frena el registro masivo/automatizado (contamina el padrón,
+  // agota cupos y enumera inscritos). Antes de abrir la transacción.
+  const limited = await limitPublicRegister(request);
+  if (limited) return limited;
+
   const t = await sequelize.transaction();
   try {
     const { slug } = await params;

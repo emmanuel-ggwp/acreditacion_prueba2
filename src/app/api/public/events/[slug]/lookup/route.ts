@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Op } from 'sequelize';
 import { Event, Participant, Guest, EventSchedule } from '@/models/index';
 import { rutVariants } from '@/utils/validators/rut';
+import { limitPublicLookup } from '@/lib/rate-limit';
 
 // Busca un participante precargado del evento por su RUT (para el flujo modo "rut").
 export async function GET(
@@ -9,6 +10,11 @@ export async function GET(
   { params }: { params: Promise<{ slug: string }> }
 ) {
   try {
+    // Límite estricto por IP: el lookup devuelve datos personales del precargado, así
+    // que se frena la enumeración/cosecha de datos por RUT (más estricto que el general).
+    const limited = await limitPublicLookup(request);
+    if (limited) return limited;
+
     const { slug } = await params;
     const rut = new URL(request.url).searchParams.get('rut') || '';
 
@@ -60,12 +66,13 @@ export async function GET(
         guestCompanion: p.guestCompanion,
         guestLoads: p.guestLoads,
       },
+      // No se expone el RUT (documentNumber) de los invitados: es PII y el formulario
+      // público no lo usa. Se muestran las cargas por nombre y se confirman por id.
       guests: (p.guests || []).map((g: any) => ({
         id: g.id,
         firstName: g.firstName,
         lastName: g.lastName,
         guestType: g.guestType,
-        documentNumber: g.documentNumber,
         dietaryPreference: g.dietaryPreference,
       })),
     });

@@ -134,6 +134,26 @@ async function authenticatedUserId(request: NextRequest): Promise<string | null>
   }
 }
 
+// Límites DEDICADOS para endpoints públicos sin login, más estrictos que el cubo
+// anónimo general (120/min). El uso legítimo es una o dos consultas por persona; estos
+// topes frenan la enumeración/cosecha de datos por RUT y el registro masivo. Viven en
+// memoria del proceso Node (los route handlers no corren en el runtime Edge del
+// middleware, así que son cubos aparte). Por IP (clientIdentifier).
+const publicLookupLimiter = new RateLimiterMemory({ keyPrefix: 'public_lookup', points: 20, duration: 60 });
+const publicRegisterLimiter = new RateLimiterMemory({ keyPrefix: 'public_register', points: 12, duration: 60 });
+
+/** Límite estricto para el lookup público por RUT. Devuelve 429 o null si pasa. */
+export async function limitPublicLookup(request: NextRequest): Promise<NextResponse | null> {
+  try { await publicLookupLimiter.consume(clientIdentifier(request)); return null; }
+  catch (e) { return tooManyRequests(e); }
+}
+
+/** Límite estricto para el registro público. Devuelve 429 o null si pasa. */
+export async function limitPublicRegister(request: NextRequest): Promise<NextResponse | null> {
+  try { await publicRegisterLimiter.consume(clientIdentifier(request)); return null; }
+  catch (e) { return tooManyRequests(e); }
+}
+
 function tooManyRequests(e: unknown): NextResponse {
   const msBeforeNext = (e as { msBeforeNext?: number })?.msBeforeNext ?? 60000;
   return new NextResponse('Too many requests', {
