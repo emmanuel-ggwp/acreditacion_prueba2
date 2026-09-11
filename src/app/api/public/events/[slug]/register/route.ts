@@ -9,6 +9,7 @@ import {
 } from '@/utils/validators/participantSchemas';
 import { CONTACT_EMAIL } from '@/utils/contact';
 import { getCustomQuestions, sanitizeCustomAnswers } from '@/utils/customQuestions';
+import { getGuestMode } from '@/utils/formFields';
 import { sequelize } from '@/lib/sequelize';
 import { Op, fn, col, where as sqlWhere } from 'sequelize';
 import { getScheduleParticipantCount, getEventParticipantCount } from '@/services/capacityService';
@@ -344,19 +345,40 @@ export async function POST(
     // tomaba el código más arriba: quien ya está inscrito no se modifica solo,
     // contacta con una persona.
     // ────────────────────────────────────────────────────────────────────────────
-    if (existingScheduleIds.length === 0) {
-      // Los campos numéricos describen el mismo cupo y se recortan contra él. El cliente
-      // ya lo hace; el servidor no lo hacía.
-      if (effectiveGuestCap >= 0) {
-        const clamped: Record<string, unknown> = {};
-        const gc = Number((participant as any).guestCount ?? 0);
-        const gl = Number((participant as any).guestLoads ?? 0);
-        if (gc > effectiveGuestCap) clamped.guestCount = effectiveGuestCap;
-        if (gl > effectiveGuestCap) clamped.guestLoads = effectiveGuestCap;
-        if (Object.keys(clamped).length) await participant.update(clamped, { transaction: t });
-      }
+    // Modo de invitados del evento: el servidor es la AUTORIDAD (el cliente puede
+    // editarse en el navegador, así que no se confía en él para el tope).
+    const guestMode = getGuestMode((event as any).registrationConfig);
 
-      const guestCounts = await applyGuests(guestsInput, {
+    if (existingScheduleIds.length === 0) {
+      // Recorte AUTORITATIVO de los invitados numéricos contra el cupo. No se confía en el
+      // número que llega: se recalcula y se recorta acá, de modo que una petición manipulada
+      // no pueda declarar más invitados que el máximo del evento.
+      const clamped: Record<string, unknown> = {};
+      if (guestMode === 'companion') {
+        // El total = (acompañante ? 1 : 0) + cargas; el conjunto no puede pasar el cupo.
+        const companion = !!(participant as any).guestCompanion;
+        let loads = Math.max(0, Math.floor(Number((participant as any).guestLoads) || 0));
+        const maxLoads = Math.max(0, effectiveGuestCap - (companion ? 1 : 0));
+        if (loads > maxLoads) loads = maxLoads;
+        clamped.guestLoads = loads;
+        clamped.guestCount = (companion ? 1 : 0) + loads;
+      } else if (guestMode === 'count') {
+        clamped.guestCount = Math.min(Math.max(0, Math.floor(Number((participant as any).guestCount) || 0)), effectiveGuestCap);
+        clamped.guestLoads = 0;
+      } else {
+        // Modo 'named': los invitados van en el array y applyGuests los recorta al cupo;
+        // los campos numéricos no aplican, se dejan en 0 (evita mezclar conteos).
+        clamped.guestCount = 0;
+        clamped.guestLoads = 0;
+      }
+      await participant.update(clamped, { transaction: t });
+
+      // En modos numéricos NO se aceptan invitados con NOMBRE desde la petición (el cupo se
+      // maneja por guestCount): solo se permiten confirmaciones de cargas precargadas ({id}).
+      // Así una petición manipulada no puede colar nombres además del número declarado.
+      const guestsForApply = guestMode === 'named' ? guestsInput : guestsInput.filter((g) => g.id);
+
+      const guestCounts = await applyGuests(guestsForApply, {
         participant,
         primaryScheduleId,
         remainingGuestSlots,
