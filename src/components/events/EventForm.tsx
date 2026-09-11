@@ -211,6 +211,8 @@ const EventForm: React.FC<EventFormProps> = ({ event, onClose, onSuccess }) => {
           ...(event?.registrationConfig?.guests || {}),
           mode: event?.registrationConfig?.guests?.mode || 'named',
           dietary: !!event?.registrationConfig?.guests?.dietary,
+          termSingular: event?.registrationConfig?.guests?.termSingular || 'Invitado',
+          termPlural: event?.registrationConfig?.guests?.termPlural || 'Invitados',
         },
         dietaryOptions: (event?.registrationConfig?.dietaryOptions && event.registrationConfig.dietaryOptions.length)
           ? event.registrationConfig.dietaryOptions
@@ -516,6 +518,21 @@ const EventForm: React.FC<EventFormProps> = ({ event, onClose, onSuccess }) => {
                     {watch('registrationConfig.guests.mode' as any) === 'companion' && 'El asistente indica si va con acompañante y cuántas cargas lleva.'}
                     {(watch('registrationConfig.guests.mode' as any) === 'named' || !watch('registrationConfig.guests.mode' as any)) && 'Cada invitado se ingresa con su nombre; se pueden acreditar uno por uno.'}
                   </p>
+                </div>
+              )}
+
+              {/* Cómo llamar a los invitados en la landing (solo etiqueta visual). */}
+              {watch('allowGuests') && (
+                <div className="sm:col-span-2">
+                  <label className="flex items-center text-sm font-semibold text-gray-700 mb-1">
+                    ¿Cómo llamarlos en la página pública?
+                    <InfoTooltip text="Solo cambia la palabra que ven los asistentes (títulos y botón 'Agregar…'), por ejemplo 'Carga/Cargas' en lugar de 'Invitado/Invitados'. No cambia cómo funciona." />
+                  </label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <input {...register('registrationConfig.guests.termSingular' as any)} placeholder="Singular (ej. Carga)" maxLength={30} className="block w-full rounded-xl border-gray-200 bg-gray-50 px-4 py-3 text-gray-900 focus:border-indigo-500 focus:bg-white focus:ring-2 focus:ring-indigo-500/20 sm:text-sm" />
+                    <input {...register('registrationConfig.guests.termPlural' as any)} placeholder="Plural (ej. Cargas)" maxLength={30} className="block w-full rounded-xl border-gray-200 bg-gray-50 px-4 py-3 text-gray-900 focus:border-indigo-500 focus:bg-white focus:ring-2 focus:ring-indigo-500/20 sm:text-sm" />
+                  </div>
+                  <p className="mt-1 text-xs text-gray-500">Por defecto: <b>Invitado</b> / <b>Invitados</b>. Ejemplo: <b>Carga</b> / <b>Cargas</b>.</p>
                 </div>
               )}
             </div>

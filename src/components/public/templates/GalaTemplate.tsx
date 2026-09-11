@@ -151,6 +151,9 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
   const capOf = (v: any) => { const n = Number(v); return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0; };
   const maxGuests = capOf(event.registrationConfig?.guests?.max) || capOf(event.maxGuestsPerParticipant);
   const guestMode = getGuestMode(event.registrationConfig);
+  // Cómo se nombra a los invitados en la landing (configurable por evento). Default: Invitado/Invitados.
+  const guestTermSingular = (event.registrationConfig?.guests?.termSingular || 'Invitado').trim() || 'Invitado';
+  const guestTermPlural = (event.registrationConfig?.guests?.termPlural || 'Invitados').trim() || 'Invitados';
   const [countGuests, setCountGuests] = useState(0);
   const [companion, setCompanion] = useState(false);
   const [loads, setLoads] = useState(0);
@@ -245,21 +248,35 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
       if (form.email.trim() && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(form.email.trim())) { setError('Ingresa un correo electrónico válido.'); return; }
       missing.push(...missingRequiredCustom(customQuestions, customAnswers));
       if (missing.length) { setError('Completa los campos obligatorios: ' + missing.join(', ') + '.'); return; }
-      // Acompañante nuevo (flujo RUT): incluye su preferencia alimenticia si el evento
-      // la pide. El invitado no tiene columna de comentarios: el detalle (alergia/otro)
-      // se compone dentro de dietaryPreference ("Alergia: maní"), igual que en el flujo abierto.
-      let acompObj: any = null;
-      if (acompEnabled && acomp.firstName.trim()) {
-        acompObj = { firstName: acomp.firstName.trim(), lastName: acomp.lastName.trim() || undefined, guestType: 'ACOMPANANTE' };
+      // Invitados NUEVOS que agrega la persona. En modo 'named' se agregan varios
+      // (openGuests, hasta el máximo); en modos numéricos se conserva el acompañante único.
+      // El invitado no tiene columna de comentarios: el detalle (alergia/otro) se compone
+      // dentro de dietaryPreference ("Alergia: maní"), igual que en el flujo abierto.
+      let newGuests: any[] = [];
+      if (guestMode === 'named') {
+        newGuests = openGuests
+          .filter((g) => g.firstName.trim())
+          .map((g) => {
+            const gd: any = {};
+            if (guestDiet) {
+              gd.dietaryPreference = isFreeTextDiet(g.dietaryPreference) && (g.dietaryComments || '').trim()
+                ? dietaryFull(g.dietaryPreference, g.dietaryComments)
+                : (g.dietaryPreference || 'NONE');
+            }
+            return { firstName: g.firstName.trim(), lastName: g.lastName.trim() || undefined, guestType: 'ACOMPANANTE', ...gd };
+          });
+      } else if (acompEnabled && acomp.firstName.trim()) {
+        const gd: any = {};
         if (guestDiet) {
-          acompObj.dietaryPreference = isFreeTextDiet(acomp.dietaryPreference) && acomp.dietaryComments.trim()
+          gd.dietaryPreference = isFreeTextDiet(acomp.dietaryPreference) && acomp.dietaryComments.trim()
             ? dietaryFull(acomp.dietaryPreference, acomp.dietaryComments)
             : (acomp.dietaryPreference || 'NONE');
         }
+        newGuests = [{ firstName: acomp.firstName.trim(), lastName: acomp.lastName.trim() || undefined, guestType: 'ACOMPANANTE', ...gd }];
       }
       const guests = [
         ...cargas.filter((c) => c.selected).map((c) => (guestDiet ? { id: c.id, dietaryPreference: c.dietaryPreference || 'NONE' } : { id: c.id })),
-        ...(acompObj ? [acompObj] : []),
+        ...newGuests,
       ];
       payload = {
         participantId,
@@ -368,8 +385,8 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
           const existingNames = mode === 'rut'
             ? cargas.filter((c) => c.selected).map((c) => `${c.firstName} ${c.lastName || ''}`.trim())
             : [];
-          const newNames = mode === 'rut'
-            ? (acompEnabled && acomp.firstName.trim() ? [`${acomp.firstName} ${acomp.lastName}`.trim() + ' (Acompañante)'] : [])
+          const newNames = (mode === 'rut' && guestMode !== 'named')
+            ? (acompEnabled && acomp.firstName.trim() ? [`${acomp.firstName} ${acomp.lastName}`.trim()] : [])
             : openGuests.filter((g) => g.firstName.trim()).map((g) => `${g.firstName} ${g.lastName || ''}`.trim());
           const guestsList = [...existingNames, ...newNames.slice(0, createdGuests)];
           const nombre = `${form.firstName} ${form.lastName}`.trim();
@@ -410,6 +427,42 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
   const overlayNode = <div className="absolute inset-0" style={{ backgroundColor: hexToRgba(overlayColor, overlay) }} aria-hidden="true" />;
 
   const selectedSchedule = schedules.find((s) => s.id === selectedScheduleId);
+
+  // Adder reutilizable de invitados nuevos (modo 'named'): hasta `maxGuests`, con nombre,
+  // apellido y preferencia alimenticia. Se usa en el flujo RUT y en el abierto para que
+  // en ambos se pueda agregar MÁS DE UNO (antes el flujo RUT solo dejaba un acompañante).
+  const namedGuestAdder = (title: string) => (
+    <div className="mt-5">
+      <p className="text-white font-semibold mb-2">{title} <span className="text-white/60 text-sm font-normal">(hasta {maxGuests})</span></p>
+      {openGuests.map((g, i) => (
+        <div key={i} className="mb-3 rounded-xl p-2" style={{ border: '1px solid rgba(255,255,255,0.18)' }}>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <input className={`${inputClass} flex-1`} style={inputStyle} placeholder={`Nombre del ${guestTermSingular.toLowerCase()} ${i + 1}`} value={g.firstName} onChange={(e) => updateOpenGuest(i, 'firstName', e.target.value)} />
+            <input className={`${inputClass} flex-1`} style={inputStyle} placeholder="Apellido" value={g.lastName} onChange={(e) => updateOpenGuest(i, 'lastName', e.target.value)} />
+            <button type="button" onClick={() => removeOpenGuest(i)} title={`Quitar ${guestTermSingular.toLowerCase()}`} className="px-4 py-2 rounded-full text-white border self-start" style={{ borderColor: 'rgba(255,255,255,0.3)' }}>✕</button>
+          </div>
+          {guestDiet && (
+            <select className={`${inputClass} mt-2`} style={inputStyle} value={g.dietaryPreference || 'NONE'} onChange={(e) => updateOpenGuest(i, 'dietaryPreference', e.target.value)}>
+              {ensureDietOption(dietOpts, g.dietaryPreference).map((o) => <option key={o.value} value={o.value} style={{ color: '#111' }}>{`Preferencia alimenticia: ${o.label}`}</option>)}
+            </select>
+          )}
+          {guestDiet && isFreeTextDiet(g.dietaryPreference) && (
+            <input
+              className={`${inputClass} mt-2`}
+              style={inputStyle}
+              maxLength={GUEST_DIET_DETAIL_MAX}
+              placeholder={String(g.dietaryPreference).toUpperCase().includes('ALERG') ? 'Especifica la alergia' : 'Especifica el requerimiento'}
+              value={g.dietaryComments || ''}
+              onChange={(e) => updateOpenGuest(i, 'dietaryComments', e.target.value)}
+            />
+          )}
+        </div>
+      ))}
+      {openGuests.length < maxGuests && (
+        <button type="button" onClick={addOpenGuest} className="text-sm underline text-white/90 hover:text-white">+ Agregar {guestTermSingular.toLowerCase()}</button>
+      )}
+    </div>
+  );
 
   const renderDateCard = (s: any) => {
     const selected = s.id === selectedScheduleId;
@@ -547,7 +600,7 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
           {/* Cargas / invitados registrados */}
           {cargas.length > 0 && (
             <div className="mt-3 text-left rounded-2xl p-4" style={{ backgroundColor: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)' }}>
-              <p className="text-white/90 text-sm font-semibold mb-2">Invitados / cargas:</p>
+              <p className="text-white/90 text-sm font-semibold mb-2">{guestTermPlural}:</p>
               <ul className="space-y-1">
                 {cargas.map((c) => (
                   <li key={c.id} className="text-white/85 text-sm">• {c.firstName} {c.lastName || ''}{c.guestType ? ` (${guestTypeLabel(c.guestType)})` : ''}</li>
@@ -764,10 +817,10 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
                 </div>
               )}
 
-              {/* Cargas */}
+              {/* Cargas / invitados precargados por el organizador */}
               {cargas.length > 0 && (
                 <div className="mb-5">
-                  <p className="text-white font-semibold mb-2">Cargas</p>
+                  <p className="text-white font-semibold mb-2">{guestTermPlural}</p>
                   <div className="space-y-2">
                     {cargas.map((c, idx) => (
                       <div key={c.id} className="p-3 rounded-xl border" style={{ backgroundColor: 'rgba(255,255,255,0.06)', borderColor: 'rgba(255,255,255,0.2)' }}>
@@ -793,8 +846,12 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
                 </div>
               )}
 
-              {/* Acompañante — solo si el evento deja cupo para uno. */}
-              {event.allowGuests && maxGuests > 0 && (
+              {/* Invitados nuevos que agrega la persona (modo con nombre): hasta el máximo.
+                  Antes el flujo RUT solo permitía UN acompañante; ahora deja agregar varios. */}
+              {event.allowGuests && maxGuests > 0 && guestMode === 'named' && namedGuestAdder(`Agregar ${guestTermPlural.toLowerCase()}`)}
+
+              {/* Modos numéricos (count/companion): se conserva el acompañante simple. */}
+              {event.allowGuests && maxGuests > 0 && guestMode !== 'named' && (
                 <div className="mb-2">
                   <label className="flex items-center gap-3 text-white font-semibold cursor-pointer">
                     <input type="checkbox" checked={acompEnabled} onChange={(e) => setAcompEnabled(e.target.checked)} className="w-5 h-5" style={{ accentColor: primary }} />
@@ -878,40 +935,7 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
                 </div>
               )}
 
-              {event.allowGuests && maxGuests > 0 && guestMode === 'named' && (
-                <div className="mt-5">
-                  <p className="text-white font-semibold mb-2">Invitados <span className="text-white/60 text-sm font-normal">(hasta {maxGuests})</span></p>
-                  {openGuests.map((g, i) => (
-                    <div key={i} className="mb-3 rounded-xl p-2" style={{ border: '1px solid rgba(255,255,255,0.18)' }}>
-                      <div className="flex flex-col sm:flex-row gap-2">
-                        <input className={`${inputClass} flex-1`} style={inputStyle} placeholder={`Nombre del invitado ${i + 1}`} value={g.firstName} onChange={(e) => updateOpenGuest(i, 'firstName', e.target.value)} />
-                        <input className={`${inputClass} flex-1`} style={inputStyle} placeholder="Apellido" value={g.lastName} onChange={(e) => updateOpenGuest(i, 'lastName', e.target.value)} />
-                        <button type="button" onClick={() => removeOpenGuest(i)} title="Quitar invitado" className="px-4 py-2 rounded-full text-white border self-start" style={{ borderColor: 'rgba(255,255,255,0.3)' }}>✕</button>
-                      </div>
-                      {guestDiet && (
-                        <select className={`${inputClass} mt-2`} style={inputStyle} value={g.dietaryPreference || 'NONE'} onChange={(e) => updateOpenGuest(i, 'dietaryPreference', e.target.value)}>
-                          {ensureDietOption(dietOpts, g.dietaryPreference).map((o) => <option key={o.value} value={o.value} style={{ color: '#111' }}>{`Preferencia alimenticia: ${o.label}`}</option>)}
-                        </select>
-                      )}
-                      {guestDiet && isFreeTextDiet(g.dietaryPreference) && (
-                        <input
-                          className={`${inputClass} mt-2`}
-                          style={inputStyle}
-                          // Más corto: este detalle viaja compuesto dentro de
-                          // `dietaryPreference`, no en columna propia. Ver `dietary.ts`.
-                          maxLength={GUEST_DIET_DETAIL_MAX}
-                          placeholder={String(g.dietaryPreference).toUpperCase().includes('ALERG') ? 'Especifica la alergia' : 'Especifica el requerimiento'}
-                          value={g.dietaryComments || ''}
-                          onChange={(e) => updateOpenGuest(i, 'dietaryComments', e.target.value)}
-                        />
-                      )}
-                    </div>
-                  ))}
-                  {openGuests.length < maxGuests && (
-                    <button type="button" onClick={addOpenGuest} className="text-sm underline text-white/90 hover:text-white">+ Agregar invitado</button>
-                  )}
-                </div>
-              )}
+              {event.allowGuests && maxGuests > 0 && guestMode === 'named' && namedGuestAdder(guestTermPlural)}
 
               {/* Modo 'count': solo el número de invitados. */}
               {event.allowGuests && maxGuests > 0 && guestMode === 'count' && (

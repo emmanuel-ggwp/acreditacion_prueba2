@@ -40,6 +40,10 @@ export const guestsConfigSchema = z.object({
   fields: z.array(formFieldConfigSchema).default([]),
   // ¿Se pide preferencia alimenticia a cada invitado? (solo aplica al modo 'named')
   dietary: z.boolean().optional(),
+  // Etiqueta VISUAL con que se nombra a los invitados en la landing (singular/plural),
+  // ej. "Carga"/"Cargas". Si no se define, se usa "Invitado"/"Invitados".
+  termSingular: z.string().optional(),
+  termPlural: z.string().optional(),
 });
 
 /** Config de un campo opcional del formulario: { enabled, required }. */
