@@ -15,7 +15,7 @@ function generateNonce(): string {
   return btoa(bin);
 }
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const isApi = request.nextUrl.pathname.startsWith('/api');
 
   // Rate limit y CORS SOLO en /api. El middleware ahora corre también en las
