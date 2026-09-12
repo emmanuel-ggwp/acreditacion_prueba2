@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Participant from '@/models/Participant';
 import Guest from '@/models/Guest';
 import useAccreditationStore from '@/store/accreditationStore';
@@ -23,6 +23,17 @@ const fmtScheduleDate = (d?: string) => {
   try { return new Date(d).toLocaleDateString('es-CL', { weekday: 'long', day: '2-digit', month: 'long' }); } catch { return ''; }
 };
 
+// Traduce los mensajes de error del backend (en inglés) a algo claro para la puerta.
+const traducirError = (msg?: string): string => {
+  const m = msg || '';
+  if (m.includes('maximum capacity')) return 'Se alcanzó el aforo máximo de este horario.';
+  if (m.includes('already been accredited')) return 'Esta persona ya está acreditada en este horario.';
+  if (m.includes('not active')) return 'El evento o el horario no está activo.';
+  if (m.includes('does not belong') || m.includes('not found or does not belong')) return 'La persona no pertenece a este evento.';
+  if (m.includes('Event schedule not found')) return 'No se encontró el horario.';
+  return m || 'Ocurrió un error.';
+};
+
 const ParticipantCard: React.FC<ParticipantCardProps> = ({ person, type, scheduleId, scheduleLabel, onAccredited }) => {
   const [guestsToAccredit, setGuestsToAccredit] = useState<string[]>([]);
   const [accreditationStatus, setAccreditationStatus] = useState<{isAccredited: boolean, accreditation?: any}>({ isAccredited: false });
@@ -32,6 +43,9 @@ const ParticipantCard: React.FC<ParticipantCardProps> = ({ person, type, schedul
   const [editingCount, setEditingCount] = useState(false);
   // Estado de acreditación de cada invitado con nombre (para poder corregir su asistencia).
   const [guestStatuses, setGuestStatuses] = useState<Record<string, boolean>>({});
+  // Guardia anti-doble-envío (doble toque en celular): el ref corta antes de que React re-renderice.
+  const submittingRef = useRef(false);
+  const [submitting, setSubmitting] = useState(false);
 
   const { verifyAccreditation, accreditParticipant, accreditGuest, unaccredit, setGuestCount, loading } = useAccreditationStore();
   const { user } = useAuthStore();
@@ -97,30 +111,53 @@ const ParticipantCard: React.FC<ParticipantCardProps> = ({ person, type, schedul
 
   const handleAccredit = async () => {
     if (!user) {
-      alert('Debes iniciar sesión para acreditar.');
+      showToast.error('Debes iniciar sesión para acreditar.');
       return;
     }
+    // Anti-doble-toque: si ya hay un envío en curso, no dispares otro.
+    if (submittingRef.current) return;
+    submittingRef.current = true;
+    setSubmitting(true);
 
+    const failedGuests: string[] = [];
     try {
       if (type === 'participant') {
         await accreditParticipant(person.id, scheduleId, user.id, notes, hasNumericGuests ? arrivedGuests : undefined);
-        // Also accredit selected guests
+        // Acreditar los invitados seleccionados. Si uno falla (cupo/ya acreditado),
+        // seguimos con el resto: el participante YA quedó acreditado.
         for (const guestId of guestsToAccredit) {
-          await accreditGuest(guestId, scheduleId, user.id, notes);
+          try {
+            await accreditGuest(guestId, scheduleId, user.id, notes);
+          } catch {
+            const g = namedGuests.find((x: any) => x.id === guestId);
+            failedGuests.push(g ? `${g.firstName} ${g.lastName}`.trim() : 'invitado');
+          }
         }
       } else {
         await accreditGuest(person.id, scheduleId, user.id, notes);
       }
-      
-      // Refresh status
+
+      // Refrescar SIEMPRE, aunque algún invitado haya fallado (la persona ya entró).
       await reloadStatus();
       setNotes('');
       setGuestsToAccredit([]);
       onAccredited?.();
-      showToast.success(`${name.trim()} acreditado ✓${guestsToAccredit.length ? ` (+${guestsToAccredit.length} invitado${guestsToAccredit.length === 1 ? '' : 's'})` : ''}`);
+
+      const okGuests = guestsToAccredit.length - failedGuests.length;
+      if (failedGuests.length) {
+        showToast.error(`${name.trim()} acreditado, pero no se pudo con ${failedGuests.length} invitado${failedGuests.length === 1 ? '' : 's'} (${failedGuests.join(', ')}). Márcalos con las casillas.`);
+      } else {
+        showToast.success(`${name.trim()} acreditado ✓${okGuests > 0 ? ` (+${okGuests} invitado${okGuests === 1 ? '' : 's'})` : ''}`);
+      }
     } catch (e) {
       console.error(e);
-      showToast.error('Error al acreditar: ' + (e as Error).message);
+      // Si el participante ya estaba acreditado (p. ej. doble toque), refrescamos para
+      // que la tarjeta muestre el estado real en vez de "No Acreditado".
+      await reloadStatus().catch(() => {});
+      showToast.error('Error al acreditar: ' + traducirError((e as Error).message));
+    } finally {
+      submittingRef.current = false;
+      setSubmitting(false);
     }
   };
 
@@ -133,7 +170,7 @@ const ParticipantCard: React.FC<ParticipantCardProps> = ({ person, type, schedul
       onAccredited?.();
       showToast.success(`Se quitó la acreditación de ${name.trim()}`);
     } catch (e) {
-      showToast.error('Error al des-acreditar: ' + (e as Error).message);
+      showToast.error('Error al des-acreditar: ' + traducirError((e as Error).message));
     }
   };
 
@@ -146,7 +183,7 @@ const ParticipantCard: React.FC<ParticipantCardProps> = ({ person, type, schedul
       await reloadStatus();
       onAccredited?.();
     } catch (e) {
-      alert('Error al actualizar el invitado: ' + (e as Error).message);
+      showToast.error('Error al actualizar el invitado: ' + traducirError((e as Error).message));
     }
   };
 
@@ -158,7 +195,7 @@ const ParticipantCard: React.FC<ParticipantCardProps> = ({ person, type, schedul
       await reloadStatus();
       onAccredited?.();
     } catch (e) {
-      alert('Error al guardar: ' + (e as Error).message);
+      showToast.error('Error al guardar: ' + traducirError((e as Error).message));
     }
   };
 
@@ -393,10 +430,10 @@ const ParticipantCard: React.FC<ParticipantCardProps> = ({ person, type, schedul
             <div className="sm:flex sm:justify-end">
               <button
                 onClick={handleAccredit}
-                disabled={loading}
+                disabled={loading || submitting}
                 className="w-full sm:w-auto bg-green-600 text-white font-bold py-3.5 px-6 sm:px-8 rounded-xl hover:bg-green-700 active:bg-green-800 transition text-lg flex items-center justify-center gap-2 disabled:bg-green-400 shadow-lg shadow-green-600/20"
               >
-                {loading && <Loader2 className="h-5 w-5 animate-spin" />}
+                {(loading || submitting) && <Loader2 className="h-5 w-5 animate-spin" />}
                 <Check size={22} />
                 ACREDITAR{guestsToAccredit.length > 0 ? ` (+${guestsToAccredit.length})` : ''}
               </button>
