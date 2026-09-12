@@ -164,8 +164,15 @@ const AccreditationPanel = ({ eventId: eventIdProp, scheduleId: scheduleIdProp }
                 const sel = s.id === scheduleId;
                 const st = STATUS[s.status] || STATUS.published;
                 const cap = s.maxCapacity || s.displayMaxCapacity || s.Event?.maxCapacity || 0;
-                const acc = Number(s.accreditedCount || 0);
-                const pct = cap > 0 ? Math.min(100, Math.round((acc / cap) * 100)) : 0;
+                // Aforo real = personas totales (participantes + invitados). El cupo se controla
+                // por personas totales, así que la barra refleja eso; el desglose muestra el
+                // detalle. Fallback al conteo de filas si aún no llegó eventStats.
+                const est = eventStats?.perSchedule.find((ps) => ps.scheduleId === s.id);
+                const bodies = est ? est.total : Number(s.accreditedCount || 0);
+                const partN = est ? est.participants : null;
+                const guestN = est ? est.guests : null;
+                const pct = cap > 0 ? Math.min(100, Math.round((bodies / cap) * 100)) : 0;
+                const full = cap > 0 && bodies >= cap;
                 return (
                   <div key={s.id} className={`rounded-lg border p-3 transition ${sel ? 'border-indigo-500 ring-2 ring-indigo-200 bg-indigo-50/40' : 'border-gray-200 bg-white hover:border-indigo-300'}`}>
                     <div className="flex items-start justify-between gap-2">
@@ -178,8 +185,14 @@ const AccreditationPanel = ({ eventId: eventIdProp, scheduleId: scheduleIdProp }
                       {(s.location || s.displayLocation) && <p className="flex items-center gap-1"><MapPin size={12} /> {s.location || s.displayLocation}</p>}
                     </div>
                     <div className="mt-2">
-                      <div className="flex items-center justify-between text-xs text-gray-600 mb-0.5"><span>Acreditados</span><span className="font-medium">{acc}{cap > 0 ? ` / ${cap}` : ''}</span></div>
-                      {cap > 0 && <div className="w-full bg-gray-200 rounded-full h-1.5"><div className="bg-indigo-600 h-1.5 rounded-full" style={{ width: `${pct}%` }} /></div>}
+                      <div className="flex items-center justify-between text-xs text-gray-600 mb-0.5">
+                        <span>Aforo (personas)</span>
+                        <span className={`font-medium ${full ? 'text-red-600' : ''}`}>{bodies}{cap > 0 ? ` / ${cap}` : ''}</span>
+                      </div>
+                      {cap > 0 && <div className="w-full bg-gray-200 rounded-full h-1.5"><div className={`h-1.5 rounded-full ${full ? 'bg-red-500' : 'bg-indigo-600'}`} style={{ width: `${pct}%` }} /></div>}
+                      {partN !== null && (
+                        <p className="mt-1 text-[11px] text-gray-500">{partN} participante{partN === 1 ? '' : 's'}{guestN ? ` · ${guestN} invitado${guestN === 1 ? '' : 's'}` : ''}</p>
+                      )}
                     </div>
                     <div className="mt-3 flex items-center gap-2">
                       <button onClick={() => { setScheduleId(s.id); setSelectedPerson(null); setSetupCollapsed(true); }} className={`flex-1 text-sm font-medium rounded-md py-2 ${sel ? 'bg-indigo-600 text-white' : 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200 active:bg-indigo-300'}`}>
