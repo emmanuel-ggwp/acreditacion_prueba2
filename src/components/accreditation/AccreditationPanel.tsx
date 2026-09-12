@@ -247,7 +247,7 @@ const AccreditationPanel = ({ eventId: eventIdProp, scheduleId: scheduleIdProp }
       {scheduleId && (
         <div className="space-y-4">
           <div className={`grid grid-cols-2 gap-3 ${(stats?.awarded ?? 0) > 0 ? 'sm:grid-cols-4' : 'sm:grid-cols-3'}`}>
-            <StatCard icon={UserCheck} label="Acreditados" value={stats?.participants ?? '—'} color="text-indigo-600" />
+            <StatCard icon={UserCheck} label="Participantes" value={stats?.participants ?? '—'} color="text-indigo-600" />
             <StatCard icon={Users} label="Invitados" value={stats?.guests ?? '—'} color="text-teal-600" />
             <StatCard icon={UsersRound} label="Total" value={stats?.total ?? '—'} color="text-gray-900" />
             {(stats?.awarded ?? 0) > 0 && <StatCard icon={Award} label="Premiados" value={stats?.awarded ?? 0} color="text-amber-600" onClick={() => setShowAwarded(true)} />}
