@@ -8,6 +8,7 @@ import {
   penalizeAccountRateLimit,
   resetAccountRateLimit,
 } from '@/lib/auth-rate-limit';
+import { setRefreshCookie } from '@/lib/authCookie';
 
 export async function POST(request: NextRequest) {
   // Límite por IP: holgado, para no dejar fuera a toda una sede tras el mismo NAT.
@@ -36,13 +37,19 @@ export async function POST(request: NextRequest) {
       return accountLimited;
     }
 
-    const result = await authService.login(validatedData);
+    const { refreshToken, ...publicResult } = await authService.login(validatedData);
 
     // Acertar devuelve la cuota de SU credencial; el cubo por IP se mantiene a
     // propósito, o bastaría una credencial válida para reiniciarlo a voluntad.
     await resetAccountRateLimit(email, request);
 
-    return NextResponse.json({ success: true, data: result });
+    // El refresh token (30 días) NO va en el cuerpo: se entrega en una cookie
+    // HttpOnly que el JS de la página no puede leer (hallazgo #4 / F3-08). El
+    // cuerpo lleva solo el user y el access token (corto), que el cliente sigue
+    // enviando por la cabecera Authorization.
+    const response = NextResponse.json({ success: true, data: publicResult });
+    setRefreshCookie(response, refreshToken);
+    return response;
   } catch (error) {
     if (error instanceof ZodError) {
       return NextResponse.json({ success: false, error: error.issues }, { status: 400 });

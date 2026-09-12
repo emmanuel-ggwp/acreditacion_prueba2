@@ -11,7 +11,6 @@ import { FrontendUser } from '../types';
 interface AuthState {
   user: FrontendUser | null;
   accessToken: string | null;
-  refreshToken: string | null;
   isAuthenticated: boolean;
   loading: boolean;
   error: string | null;
@@ -27,14 +26,8 @@ interface AuthResponse {
   data: {
     user: FrontendUser;
     accessToken: string;
-    refreshToken: string;
-  };
-}
-
-interface RefreshResponse {
-  success: boolean;
-  data: {
-    accessToken: string;
+    // El refresh token ya NO viaja en el cuerpo: llega en una cookie HttpOnly
+    // que el JS no ve (hallazgo #4 / F3-08).
   };
 }
 
@@ -44,7 +37,6 @@ const useAuthStore = create<AuthState>()(
       (set, get) => ({
         user: null,
         accessToken: null,
-        refreshToken: null,
         isAuthenticated: false,
         loading: false,
         error: null,
@@ -53,8 +45,10 @@ const useAuthStore = create<AuthState>()(
           set({ loading: true, error: null });
           try {
             const response = await apiClient.post<AuthResponse>(API_ENDPOINTS.LOGIN, credentials);
-            const { user, accessToken, refreshToken } = response.data;
-            set({ user, accessToken, refreshToken, isAuthenticated: true, loading: false });
+            // El refresh token queda en la cookie HttpOnly que fija el servidor; el
+            // cliente solo maneja user + access token.
+            const { user, accessToken } = response.data;
+            set({ user, accessToken, isAuthenticated: true, loading: false });
           } catch (error: any) {
             set({ error: error.message, loading: false });
             throw error;
@@ -62,27 +56,48 @@ const useAuthStore = create<AuthState>()(
         },
 
         logout: async () => {
+          // Solo se llama al servidor si había sesión: evita un POST espurio a
+          // /logout tras un login fallido. El servidor lee el refresh token de la
+          // cookie (no del cuerpo) para revocarlo y borra la cookie.
+          const hadSession = !!(get().user || get().accessToken);
           set({ loading: true });
           try {
-            const refreshToken = get().refreshToken;
-            if (refreshToken) {
-              await apiClient.post(API_ENDPOINTS.LOGOUT, { refreshToken });
+            if (hadSession) {
+              await apiClient.post(API_ENDPOINTS.LOGOUT, {});
             }
           } catch (error: any) {
             console.error("Logout failed", error);
           } finally {
-            set({ user: null, accessToken: null, refreshToken: null, isAuthenticated: false, loading: false });
+            set({ user: null, accessToken: null, isAuthenticated: false, loading: false });
           }
         },
 
         refreshAuthToken: async () => {
-          const currentRefreshToken = get().refreshToken;
-          if (!currentRefreshToken) return;
+          // Sin access token no hay sesión que renovar: evita refrescos espurios
+          // (p. ej. tras un login fallido) y corta cualquier recursión.
+          const token = get().accessToken;
+          if (!token) return;
 
           set({ loading: true });
           try {
-            const response = await apiClient.post<RefreshResponse>(API_ENDPOINTS.REFRESH_TOKEN, { refreshToken: currentRefreshToken });
-            const { accessToken } = response.data;
+            // Fetch DIRECTO, no apiClient: la cookie HttpOnly del refresh token
+            // viaja sola (same-origin) y, sobre todo, un 401 aquí NO debe disparar
+            // el reintento-con-refresco de apiClient, que recurriría sobre este
+            // mismo endpoint. Se envía el access token (aunque esté por caducar)
+            // para que el rate-limit lo cuente en el cubo por-usuario, como antes.
+            const res = await fetch(API_ENDPOINTS.REFRESH_TOKEN, {
+              method: 'POST',
+              credentials: 'same-origin',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${token}`,
+              },
+              body: '{}',
+            });
+            if (!res.ok) throw new Error('Refresh request failed');
+            const json = await res.json();
+            const accessToken = json?.data?.accessToken;
+            if (!accessToken) throw new Error('No access token in refresh response');
             set({ accessToken, loading: false });
           } catch (error: any) {
             set({ error: 'Session expired. Please log in again.', loading: false });
@@ -110,7 +125,11 @@ const useAuthStore = create<AuthState>()(
       {
         name: 'auth-storage',
         storage: createJSONStorage(() => localStorage),
-        partialize: (state) => ({ accessToken: state.accessToken, refreshToken: state.refreshToken, user: state.user }),
+        // Ya NO se persiste el refresh token: vive en la cookie HttpOnly, fuera del
+        // alcance del JS (hallazgo #4 / F3-08). El access token (corto) sigue en
+        // localStorage para sobrevivir a la recarga; moverlo a memoria es la mejora
+        // siguiente (ver nota en la PR).
+        partialize: (state) => ({ accessToken: state.accessToken, user: state.user }),
       }
     )
   )

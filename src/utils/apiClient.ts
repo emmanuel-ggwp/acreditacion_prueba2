@@ -39,6 +39,11 @@ const apiClient = {
     }
 
     const config: RequestInit = {
+      // same-origin (el valor por defecto de fetch, explícito aquí): envía y acepta
+      // la cookie HttpOnly del refresh token en las peticiones a /api/auth/* del
+      // mismo origen, sin abrir el envío de credenciales a orígenes cruzados
+      // (la app llama siempre a rutas relativas del mismo origen).
+      credentials: 'same-origin',
       ...fetchOptions,
       headers,
       body,

@@ -1,11 +1,23 @@
+// Factory mock: evita cargar el authService real (y con él la cadena de modelos
+// → sequelize), que en este entorno no arranca sin base de datos. Solo se
+// necesita la forma de authService que usa este handler.
+jest.mock('@/services/authService', () => ({
+  authService: { login: jest.fn() },
+}));
+
+// El límite de credenciales se mockea: importa `jose` (ESM) vía rate-limit, que
+// este jest no transpila, y aquí solo se prueba el handler, no el rate-limit.
+jest.mock('@/lib/auth-rate-limit', () => ({
+  authRateLimit: jest.fn().mockResolvedValue(null),
+  checkAccountRateLimit: jest.fn().mockResolvedValue(null),
+  penalizeAccountRateLimit: jest.fn().mockResolvedValue(undefined),
+  resetAccountRateLimit: jest.fn().mockResolvedValue(undefined),
+}));
+
 import { POST } from '../route';
-import { AuthService, authService } from '@/services/authService';
-import { NextResponse } from 'next/server';
-import { ZodError } from 'zod';
+import { authService } from '@/services/authService';
 
-jest.mock('@/services/authService');
-
-const mockedAuthService = authService as jest.Mocked<typeof authService>;
+const mockedAuthService = authService as unknown as { login: jest.Mock };
 
 describe('POST /api/auth/login', () => {
 
@@ -42,7 +54,16 @@ describe('POST /api/auth/login', () => {
     expect(body.success).toBe(true);
     expect(body.data.accessToken).toEqual('fake-access-token');
     expect(body.data.user.email).toEqual('test@example.com');
-    expect(body.data.refreshToken).toEqual('fake-refresh-token');
+
+    // El refresh token NO debe filtrarse en el cuerpo (hallazgo #4 / F3-08): va
+    // en una cookie HttpOnly.
+    expect(body.data.refreshToken).toBeUndefined();
+
+    const setCookie = response.headers.get('set-cookie') ?? '';
+    expect(setCookie).toContain('refreshToken=fake-refresh-token');
+    expect(setCookie).toContain('HttpOnly');
+    expect(setCookie).toMatch(/SameSite=strict/i);
+    expect(setCookie).toContain('Path=/api/auth');
   });
 
   it('should return 401 for invalid credentials', async () => {
