@@ -41,14 +41,13 @@ describe('withAuth — revocación fail-closed (SB-06)', () => {
     expect(handler).not.toHaveBeenCalled();
   });
 
-  it('403 si el rol no está permitido', async () => {
+  it('403 si el rol (de la BD) no está permitido', async () => {
     mockVerify.mockReturnValue({ id: 'u1', role: 'GUARDIA' });
+    mockFindByPk.mockResolvedValue({ id: 'u1', isActive: true, role: 'GUARDIA' });
     const guarded = withAuth(handler as any, ['ADMIN'] as any);
     const res = await guarded(makeReq('Bearer t'), { params: {} });
     expect(res.status).toBe(403);
     expect(handler).not.toHaveBeenCalled();
-    // Ni siquiera consulta la BD si el rol ya no da.
-    expect(mockFindByPk).not.toHaveBeenCalled();
   });
 
   it('503 si la consulta a la BD falla (FAIL-CLOSED, el núcleo de SB-06)', async () => {
@@ -81,10 +80,29 @@ describe('withAuth — revocación fail-closed (SB-06)', () => {
 
   it('llama al handler si el token es válido y el usuario está activo', async () => {
     mockVerify.mockReturnValue({ id: 'u1', role: 'ADMIN' });
-    mockFindByPk.mockResolvedValue({ id: 'u1', isActive: true });
+    mockFindByPk.mockResolvedValue({ id: 'u1', isActive: true, role: 'ADMIN' });
     const guarded = withAuth(handler as any, ['ADMIN'] as any);
     const res = await guarded(makeReq('Bearer t'), { params: {} });
     expect(handler).toHaveBeenCalledTimes(1);
     expect(res.status).toBe(200);
+  });
+
+  // SB-07: la autorización usa el rol de la BD, no el (posiblemente viejo) del token.
+  it('deniega si el token dice ADMIN pero la BD ya degradó a GUARDIA (SB-07)', async () => {
+    mockVerify.mockReturnValue({ id: 'u1', role: 'ADMIN' });
+    mockFindByPk.mockResolvedValue({ id: 'u1', isActive: true, role: 'GUARDIA' });
+    const guarded = withAuth(handler as any, ['ADMIN'] as any);
+    const res = await guarded(makeReq('Bearer t'), { params: {} });
+    expect(res.status).toBe(403);
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  it('permite si el token dice GUARDIA pero la BD ya ascendió a ADMIN (SB-07)', async () => {
+    mockVerify.mockReturnValue({ id: 'u1', role: 'GUARDIA' });
+    mockFindByPk.mockResolvedValue({ id: 'u1', isActive: true, role: 'ADMIN' });
+    const guarded = withAuth(handler as any, ['ADMIN'] as any);
+    const res = await guarded(makeReq('Bearer t'), { params: {} });
+    expect(res.status).toBe(200);
+    expect(handler).toHaveBeenCalledTimes(1);
   });
 });

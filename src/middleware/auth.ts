@@ -30,27 +30,25 @@ const roleGuard: RoleGuard = (allowedRoles) => (handler) => async (req, context)
     return NextResponse.json({ message: 'Unauthorized: Invalid token' }, { status: 401 });
   }
 
-  const user = decoded as { id: string; role: Role };
+  const tokenUser = decoded as { id: string; role: Role };
 
-  if (!allowedRoles.includes(user.role)) {
-    return NextResponse.json({ message: 'Forbidden: Insufficient permissions' }, { status: 403 });
-  }
-
-  // Comprobación de revocación (F3-09 / SB-06). El token ya está verificado
-  // criptográficamente arriba; esto contrasta contra la BD que la cuenta siga
-  // vigente: que EXISTA (no borrada) y esté ACTIVA (no deshabilitada). Desactivar a
-  // alguien corta así su sesión en curso de inmediato, no solo le impide renovar el
-  // token (respuesta a incidentes).
+  // Vigencia + ROL contrastados contra la BD (F3-09/SB-06 + F3-10/SB-07). El token
+  // ya está verificado criptográficamente arriba; la BD es la FUENTE DE VERDAD para:
+  //  - que la cuenta EXISTA (no borrada) y esté ACTIVA (no deshabilitada) — cortar
+  //    una sesión en curso de inmediato, no solo impedir renovar el token; y
+  //  - el ROL, de modo que degradar o revocar permisos surta efecto en la SIGUIENTE
+  //    petición y no cuando caduque el access token (que puede durar días).
   //
   // FALLA CERRADO: si la consulta no se puede ejecutar, se DENIEGA (503). Antes el
   // `catch` vacío dejaba pasar la petición —un error de base de datos se traducía en
-  // acceso concedido, justo con un token que quizá estaba revocado—. Denegar es lo
-  // correcto y, además, sin BD el handler no podría hacer nada útil de todos modos.
+  // acceso concedido, con un token quizá ya revocado—. Denegar es lo correcto y,
+  // además, sin BD el handler no podría hacer nada útil de todos modos.
   //
-  // (El ROL se sigue tomando del token; releerlo de la BD para que un cambio de rol
-  // surta efecto al instante es SB-07, un cambio aparte.)
+  // La autorización por rol se hace DESPUÉS de leer la BD, sobre el rol de la BD y
+  // no el del token; por eso también una petición sin permiso pasa por esta consulta.
+  let dbRole: Role;
   try {
-    const dbUser = await User.findByPk(user.id, { attributes: ['id', 'isActive'] });
+    const dbUser = await User.findByPk(tokenUser.id, { attributes: ['id', 'isActive', 'role'] });
     if (!dbUser) {
       return NextResponse.json({ message: 'Sesión inválida. Vuelve a iniciar sesión.' }, { status: 401 });
     }
@@ -59,13 +57,19 @@ const roleGuard: RoleGuard = (allowedRoles) => (handler) => async (req, context)
     if (dbUser.isActive === false) {
       return NextResponse.json({ message: 'Cuenta deshabilitada.' }, { status: 403 });
     }
+    dbRole = dbUser.role as Role;
   } catch (e) {
     console.error('withAuth: no se pudo verificar la vigencia del usuario en la BD', e);
     return NextResponse.json({ message: 'Servicio no disponible temporalmente.' }, { status: 503 });
   }
 
+  if (!allowedRoles.includes(dbRole)) {
+    return NextResponse.json({ message: 'Forbidden: Insufficient permissions' }, { status: 403 });
+  }
+
   const authenticatedRequest = req as AuthenticatedRequest;
-  authenticatedRequest.user = user;
+  // El rol que ve el handler es el de la BD (actual), no el (posiblemente viejo) del token.
+  authenticatedRequest.user = { id: tokenUser.id, role: dbRole };
 
   return handler(authenticatedRequest, context);
 };
