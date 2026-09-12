@@ -1,5 +1,6 @@
 import React from 'react';
 import { notFound } from 'next/navigation';
+import { CalendarCheck } from 'lucide-react';
 import { Event, EventSchedule, EmailTemplate } from '@/models/index';
 import { templates, TemplateType } from '@/components/public/templates';
 import RegistrationClosed from '@/components/public/RegistrationClosed';
@@ -50,6 +51,28 @@ export default async function PublicEventPage({ params }: { params: Promise<{ sl
 
   if (!event) {
     notFound();
+  }
+
+  // Evento finalizado: TODAS las fechas ya pasaron. Tiene prioridad sobre el resto
+  // (cerrado / lleno) porque el evento ya se realizó; da igual el estado de la
+  // inscripción. Un evento sin fechas nunca se considera finalizado.
+  const schedules = Array.isArray(event.schedules) ? event.schedules : [];
+  const now = Date.now();
+  const eventFinished =
+    schedules.length > 0 &&
+    schedules.every((s: any) => {
+      const end = new Date(s.endDateTime).getTime();
+      return Number.isFinite(end) && end < now;
+    });
+  if (eventFinished) {
+    return (
+      <RegistrationClosed
+        event={event}
+        icon={CalendarCheck}
+        title="Evento finalizado"
+        message="Este evento ya se realizó. ¡Gracias por acompañarnos!"
+      />
+    );
   }
 
   // Inscripción cerrada: el enlace sigue activo pero no se muestra el formulario.

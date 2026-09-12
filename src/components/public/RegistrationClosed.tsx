@@ -1,5 +1,5 @@
 import React from 'react';
-import { CalendarX2 } from 'lucide-react';
+import { CalendarX2, type LucideIcon } from 'lucide-react';
 import { CONTACT_EMAIL } from '@/utils/contact';
 
 interface RegistrationClosedProps {
@@ -9,16 +9,21 @@ interface RegistrationClosedProps {
     backgroundImageUrl?: string | null;
   };
   title?: string;
-  message?: string;
+  message?: React.ReactNode;
+  /** Icono mostrado cuando el evento no tiene logo (por defecto un calendario tachado). */
+  icon?: LucideIcon;
 }
 
 /**
- * Pantalla mostrada en la landing pública cuando el evento tiene la inscripción
- * cerrada. El enlace sigue funcionando, pero no se muestra el formulario.
- * Reutiliza, si existen, el logo, la imagen de fondo y el nombre del evento.
+ * Pantalla de aviso a pantalla completa para la landing pública: inscripción
+ * cerrada, cupos agotados, evento finalizado o evento no encontrado. El enlace
+ * sigue funcionando, pero no se muestra el formulario. Reutiliza, si existen, el
+ * logo, la imagen de fondo y el nombre del evento; si no, muestra el icono. Es
+ * responsive y siempre ofrece el correo de contacto.
  */
-export default function RegistrationClosed({ event, title, message }: RegistrationClosedProps) {
+export default function RegistrationClosed({ event, title, message, icon }: RegistrationClosedProps) {
   const hasBackground = !!event?.backgroundImageUrl;
+  const Icon = icon || CalendarX2;
 
   return (
     <div
@@ -47,7 +52,7 @@ export default function RegistrationClosed({ event, title, message }: Registrati
             />
           ) : (
             <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600">
-              <CalendarX2 className="h-8 w-8" />
+              <Icon className="h-8 w-8" />
             </div>
           )}
 
