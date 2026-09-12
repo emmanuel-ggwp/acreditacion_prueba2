@@ -2,6 +2,11 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  // No anunciar el stack en cada respuesta (SB-10 / F6-07): por defecto Next añade
+  // `X-Powered-By: Next.js`, que es reconocimiento gratis para un atacante (le dice
+  // qué tecnología y qué vulnerabilidades buscar). Quitarla no cierra ningún
+  // agujero, es endurecimiento por defensa en profundidad.
+  poweredByHeader: false,
   serverExternalPackages: ['sequelize'],
   turbopack: {
     // Configure Turbopack here if needed
