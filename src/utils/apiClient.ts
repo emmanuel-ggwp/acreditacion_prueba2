@@ -17,21 +17,28 @@ const apiClient = {
   async request<T>(
     endpoint: string,
     options: ApiClientRequestOptions = {},
-    retryConfig: RetryConfig = { attempts: 1, delay: 1000 }
+    retryConfig: RetryConfig = { attempts: 1, delay: 1000 },
+    // Interno: marca el reintento posterior a un refresh para NO volver a refrescar
+    // (evita la recursión sin fondo del bucle 401 → refresh → 401). (SB-17)
+    alreadyRefreshed = false
   ): Promise<T> {
     const { accessToken, refreshAuthToken, logout } = useAuthStore.getState();
     const { responseType = 'json', ...fetchOptions } = options;
 
+    // `set`, no `append` (SB-17): con `append`, el reintento tras un 401 —que ya
+    // trae una cabecera Authorization— añadía una SEGUNDA, y el servidor recibía
+    // `Bearer a, Bearer b`; `authHeader.split(' ')[1]` devolvía `a,` (token
+    // inválido) → 401 de nuevo → refresh → recursión. `set` garantiza una sola.
     const headers = new Headers(options.headers || {});
     if (accessToken) {
-      headers.append('Authorization', `Bearer ${accessToken}`);
+      headers.set('Authorization', `Bearer ${accessToken}`);
     }
 
     // Prepare the body and config for the actual fetch call
     let body: BodyInit | null | undefined;
     if (options.body) {
         if (typeof options.body === 'object' && !(options.body instanceof Blob) && !(options.body instanceof FormData)) {
-            headers.append('Content-Type', 'application/json');
+            headers.set('Content-Type', 'application/json');
             body = JSON.stringify(options.body);
         } else {
             body = options.body as BodyInit;
@@ -64,22 +71,30 @@ const apiClient = {
         const response = await fetch(endpoint, config);
 
         if (response.status === 401 && !skipRefreshRetry) {
+          // Si ya se refrescó una vez y AÚN devuelve 401, el token nuevo no sirve:
+          // no se refresca en bucle, se cierra sesión. (SB-17)
+          if (alreadyRefreshed) {
+            logout();
+            throw new AuthenticationError('Session expired. Please log in again.');
+          }
+          // El refresco va en su propio try: solo un fallo AL REFRESCAR cierra la
+          // sesión. El reintento va DESPUÉS, fuera del try, para que un 404/500 del
+          // endpoint tras un refresco correcto se propague tal cual y no se
+          // enmascare como "sesión caducada".
+          let refreshed = false;
           try {
             await refreshAuthToken();
-            // After refreshing, we get the new token and retry the request
-            const newAccessToken = useAuthStore.getState().accessToken;
-            if (newAccessToken) {
-              headers.set('Authorization', `Bearer ${newAccessToken}`);
-              // This counts as a new "first" attempt with the new token
-              return await this.request(endpoint, { ...config, headers });
-            } else {
-              logout();
-              throw new AuthenticationError('Session expired. Please log in again.');
-            }
-          } catch (error) {
+            refreshed = !!useAuthStore.getState().accessToken;
+          } catch {
+            refreshed = false;
+          }
+          if (!refreshed) {
             logout();
             throw new AuthenticationError('Session refresh failed. Please log in again.');
           }
+          // Reintento UNA sola vez: la llamada recursiva relee el access token nuevo
+          // del store y lo pone ella misma (con `set`); el flag corta la recursión.
+          return await this.request<T>(endpoint, options, retryConfig, true);
         }
 
         if (!response.ok) {
