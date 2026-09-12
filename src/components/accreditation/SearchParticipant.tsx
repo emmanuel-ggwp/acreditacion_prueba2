@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { Search, X, ChevronRight } from 'lucide-react';
 import { debounce } from 'lodash';
 import useParticipantStore from '@/store/participantStore';
@@ -17,21 +17,29 @@ const SearchParticipant: React.FC<SearchParticipantProps> = ({ eventId, onSelect
   const [results, setResults] = useState<(Participant | Guest)[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const { searchParticipants } = useParticipantStore();
+  // Contador de secuencia: solo aplicamos la respuesta de la ÚLTIMA búsqueda lanzada,
+  // así una respuesta lenta antigua no pisa los resultados de lo que se tecleó después.
+  const seqRef = useRef(0);
 
   const searchPeopleHandler = async (searchQuery: string) => {
     if (searchQuery.length < 3) {
+      seqRef.current++; // invalida cualquier respuesta en vuelo
       setResults([]);
+      setIsLoading(false);
       return;
     }
+    const mySeq = ++seqRef.current;
     setIsLoading(true);
     try {
       const response = await searchParticipants(eventId, searchQuery);
-
+      if (mySeq !== seqRef.current) return; // llegó una búsqueda más nueva: descartar esta
       setResults([...(response || [])]);
     } catch (error) {
+      if (mySeq !== seqRef.current) return;
       setResults([]);
+    } finally {
+      if (mySeq === seqRef.current) setIsLoading(false);
     }
-    setIsLoading(false);
   };
 
   const debouncedSearch = useCallback(debounce(searchPeopleHandler, 400), [eventId]);
