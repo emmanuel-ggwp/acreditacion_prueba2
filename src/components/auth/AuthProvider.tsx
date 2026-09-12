@@ -88,7 +88,17 @@ const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     return <>{children}</>;
   }
 
-  if (loading || !isMounted) {
+  // La pantalla "Autenticando…" es para la comprobación INICIAL de sesión, no para
+  // el envío del formulario de login. En /login y /register no debe mostrarse por
+  // el `loading` del submit: si se muestra, AuthProvider DESMONTA el formulario y,
+  // al volver, se pierden el mensaje de error (p. ej. «Credenciales inválidas») y
+  // los campos escritos. El propio botón del formulario ya indica el estado de
+  // carga. El gate `!isMounted` se mantiene para la hidratación.
+  const isPublicRoute = pathname != null && publicRoutes.includes(pathname);
+  if (!isMounted) {
+    return <div className="flex items-center justify-center h-screen">Autenticando...</div>;
+  }
+  if (loading && !isPublicRoute) {
     return <div className="flex items-center justify-center h-screen">Autenticando...</div>;
   }
 

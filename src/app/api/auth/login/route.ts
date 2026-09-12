@@ -54,13 +54,16 @@ export async function POST(request: NextRequest) {
     if (error instanceof ZodError) {
       return NextResponse.json({ success: false, error: error.issues }, { status: 400 });
     }
-    if (error instanceof Error && (error.message === 'Invalid credentials' || error.message === 'User account is disabled')) {
+    if (error instanceof Error && error.message === 'Invalid credentials') {
       // El único sitio donde se gasta cuota: el intento FALLÓ contra una cuenta
       // concreta desde esta IP. Un error de validación o un 500 no penalizan.
+      // (authService lanza 'Invalid credentials' tanto para contraseña incorrecta
+      // como para cuenta desactivada — SB-28 — así que aquí ya no se distingue.)
       if (email) {
         await penalizeAccountRateLimit(email, request);
       }
-      return NextResponse.json({ success: false, error: error.message }, { status: 401 });
+      // Mensaje claro para el usuario y en español, idéntico en ambos casos.
+      return NextResponse.json({ success: false, error: 'Credenciales inválidas' }, { status: 401 });
     }
     console.error('Login error:', error);
     return NextResponse.json({ success: false, error: 'An internal server error occurred' }, { status: 500 });

@@ -78,7 +78,10 @@ describe('AuthService', () => {
       await expect(authService.login(credentials)).rejects.toThrow('Invalid credentials');
     });
 
-     it('should throw an error for a disabled user', async () => {
+     it('lanza el mismo error genérico para una cuenta desactivada (SB-28)', async () => {
+      // Contraseña CORRECTA pero cuenta desactivada: debe lanzar exactamente el
+      // mismo 'Invalid credentials' que una contraseña incorrecta, para no revelar
+      // que la credencial era válida. El motivo real queda solo en auditoría.
       const credentials = { email: 'test@example.com', password: 'password123' };
       const user = {
         id: 'user-1',
@@ -89,7 +92,7 @@ describe('AuthService', () => {
       UserMock.findOne.mockResolvedValue(user as any);
       bcryptMock.compareSync.mockReturnValue(true);
 
-      await expect(authService.login(credentials)).rejects.toThrow('User account is disabled');
+      await expect(authService.login(credentials)).rejects.toThrow('Invalid credentials');
     });
   });
 

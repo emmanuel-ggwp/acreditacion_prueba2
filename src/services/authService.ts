@@ -28,7 +28,13 @@ export class AuthService {
         entityId: user.id,
         details: { success: false, reason: 'User account is disabled' },
       });
-      throw new Error('User account is disabled');
+      // Mismo mensaje genérico que "contraseña incorrecta" (SB-28): un error
+      // distinto ("cuenta desactivada") permitiría a quien tenga una credencial
+      // robada CONFIRMAR que era válida aunque la cuenta esté suspendida —
+      // información útil para reutilizarla en otros servicios (el escenario
+      // post-compromiso de esta auditoría). La distinción real queda solo en el
+      // registro de auditoría de arriba, no en la respuesta al cliente.
+      throw new Error('Invalid credentials');
     }
 
     await user.update({ lastLogin: new Date() });

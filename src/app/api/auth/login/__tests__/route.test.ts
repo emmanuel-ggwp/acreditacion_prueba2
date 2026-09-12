@@ -80,7 +80,28 @@ describe('POST /api/auth/login', () => {
     const body = await response.json();
 
     expect(response.status).toBe(401);
-    expect(body).toEqual({ success: false, error: 'Invalid credentials' });
+    // Mensaje genérico en español, idéntico para contraseña incorrecta y cuenta
+    // desactivada (SB-28): no revela cuál de las dos fue.
+    expect(body).toEqual({ success: false, error: 'Credenciales inválidas' });
+  });
+
+  it('devuelve el MISMO mensaje genérico para una cuenta desactivada (SB-28)', async () => {
+    // authService lanza 'Invalid credentials' también para cuenta desactivada, así
+    // que el cliente no puede distinguir «contraseña incorrecta» de «desactivada».
+    const requestBody = { email: 'disabled@example.com', password: 'correctpassword' };
+    mockedAuthService.login.mockRejectedValue(new Error('Invalid credentials'));
+
+    const request = new Request('http://localhost/api/auth/login', {
+      method: 'POST',
+      body: JSON.stringify(requestBody),
+      headers: { 'Content-Type': 'application/json' },
+    });
+
+    const response = await POST(request as any);
+    const body = await response.json();
+
+    expect(response.status).toBe(401);
+    expect(body).toEqual({ success: false, error: 'Credenciales inválidas' });
   });
 
   it('should return 400 for invalid input', async () => {

@@ -49,12 +49,21 @@ const apiClient = {
       body,
     };
 
+    // Un 401 en login/logout NO es "sesión expirada que un refresh arregle": en
+    // login significa credenciales inválidas y en logout no hay sesión que
+    // renovar. Para esos endpoints se omite el reintento-con-refresco (que
+    // enmascaraba el error como "Session expired") y se deja pasar el mensaje real
+    // del servidor al usuario. Register SÍ mantiene el refresco: es una llamada
+    // autenticada donde un 401 puede ser un access token caducado.
+    const skipRefreshRetry =
+      endpoint.includes(API_ENDPOINTS.LOGIN) || endpoint.includes(API_ENDPOINTS.LOGOUT);
+
     let attempt = 0;
     while (attempt < retryConfig.attempts) {
       try {
         const response = await fetch(endpoint, config);
 
-        if (response.status === 401) {
+        if (response.status === 401 && !skipRefreshRetry) {
           try {
             await refreshAuthToken();
             // After refreshing, we get the new token and retry the request
@@ -75,13 +84,20 @@ const apiClient = {
 
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({ message: response.statusText }));
+          // Los handlers devuelven el mensaje en `error`; se prioriza sobre `message`.
+          const serverMessage = errorData.error || errorData.message;
           switch (response.status) {
+            case 401:
+              // Llega aquí el 401 de login/logout (sin reintento de refresco): se
+              // surface el mensaje real del servidor —p. ej. "Credenciales
+              // inválidas"— en vez de enmascararlo como sesión expirada.
+              throw new AuthenticationError(serverMessage || 'Credenciales inválidas');
             case 404:
-              throw new NotFoundError(errorData.message);
+              throw new NotFoundError(serverMessage);
             case 422:
-              throw new ValidationError(errorData.message, errorData.errors);
+              throw new ValidationError(serverMessage, errorData.errors);
             default:
-              throw new ServerError(errorData.message || 'An unknown server error occurred');
+              throw new ServerError(serverMessage || 'Ocurrió un error inesperado del servidor');
           }
         }
 
