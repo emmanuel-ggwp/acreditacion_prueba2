@@ -313,7 +313,10 @@ export class ParticipantService {
 
   async updateParticipant(participantId: string, data: z.infer<typeof updateParticipantSchema>, userId?: string) {
     const validatedData = updateParticipantSchema.parse(data);
-    const { scheduleIds, ...rest } = validatedData as any;
+    // `eventId` se descarta: un participante NO se mueve de evento por la API de
+    // edición (mass-assignment). Se registra qué evento tiene, no se cambia. El
+    // esquema ya excluye isAwarded/awardReason/createdAt/updatedAt.
+    const { scheduleIds, eventId: _ignoredEventId, ...rest } = validatedData as any;
     const participant = await Participant.findByPk(participantId);
     if (!participant) {
       throw new Error('Participant not found');

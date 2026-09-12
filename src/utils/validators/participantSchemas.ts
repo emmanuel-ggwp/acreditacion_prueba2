@@ -42,7 +42,14 @@ export const participantSchema = z.object({
   updatedAt: z.iso.datetime({ message: 'Formato de fecha de actualización inválido' }).optional(),
 });
 
-export const createParticipantSchema = participantSchema.omit({ id: true, createdBy: true, isAccredited: true }).extend({
+export const createParticipantSchema = participantSchema.omit({
+  id: true, createdBy: true, isAccredited: true,
+  // Campos que el cliente NO debe poder fijar por la API genérica de participantes
+  // (mass-assignment). isAwarded/awardReason los gobierna el MÓDULO DE PREMIOS
+  // (participantAwardService, con control de stock); fijarlos aquí saltaría esos
+  // controles. createdAt/updatedAt los gestiona la BD.
+  isAwarded: true, awardReason: true, createdAt: true, updatedAt: true,
+}).extend({
   // Opcional: sin horario = participante "precargado" (se inscribe luego). Con horario = inscrito.
   scheduleIds: z.array(z.string().uuid()).optional().default([])
 });
@@ -120,7 +127,15 @@ export const publicRegistrationSchema = participantSchema.omit({
   isAccredited: true,
   allowedGuests: true,
   createdAt: true,
-  updatedAt: true
+  updatedAt: true,
+  // Defensa en profundidad en la superficie ANÓNIMA: aunque hoy el handler no hace
+  // spread de estos campos, no deben poder llegar nunca desde el registro público.
+  // eventId lo fija el slug; isAwarded/awardReason los gobierna el módulo de premios;
+  // allowMultipleSchedules es un override que decide el organizador, no el asistente.
+  eventId: true,
+  isAwarded: true,
+  awardReason: true,
+  allowMultipleSchedules: true,
 }).extend({
   scheduleIds: z.array(z.string().uuid()).min(1, "Se requiere al menos un horario"),
   // Correo opcional a nivel de esquema: su obligatoriedad la controla cada evento

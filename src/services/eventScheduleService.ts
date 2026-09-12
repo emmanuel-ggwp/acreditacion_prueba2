@@ -53,10 +53,13 @@ export class EventScheduleService {
         }
     }
 
+    // `eventId` no se cambia por edición (mass-assignment): una fecha no se mueve a
+    // otro evento. El create sí lo fija desde la ruta.
+    const { eventId: _ignoredEventId, ...rest } = validatedData as any;
     const before: any = JSON.parse(JSON.stringify(schedule.get({ plain: true })));
-    await schedule.update(validatedData);
+    await schedule.update(rest);
     if (userId) {
-      const changes = auditLogService.buildChanges(before, schedule.get({ plain: true }), Object.keys(validatedData));
+      const changes = auditLogService.buildChanges(before, schedule.get({ plain: true }), Object.keys(rest));
       if (Object.keys(changes).length) {
         await auditLogService.log({ userId, action: 'UPDATE', entity: 'EventSchedule', entityId: schedule.id, details: { name: scheduleName(schedule), changes } });
       }

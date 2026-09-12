@@ -28,10 +28,13 @@ export class AwardService {
       }
     }
 
+    // `eventId` no se cambia por edición (mass-assignment): un premio no se mueve
+    // de evento. El create sí lo fija desde la ruta.
+    const { eventId: _ignoredEventId, ...rest } = validatedData as any;
     const before: any = JSON.parse(JSON.stringify(award.get({ plain: true })));
-    await award.update(validatedData);
+    await award.update(rest);
     if (userId) {
-      const changes = auditLogService.buildChanges(before, award.get({ plain: true }), Object.keys(validatedData));
+      const changes = auditLogService.buildChanges(before, award.get({ plain: true }), Object.keys(rest));
       if (Object.keys(changes).length) {
         await auditLogService.log({ userId, action: 'UPDATE', entity: 'Award', entityId: award.id, details: { name: (award as any).name, changes } });
       }
