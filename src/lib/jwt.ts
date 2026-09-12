@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken';
 import { jwtDecode } from 'jwt-decode';
+import { randomUUID } from 'crypto';
 
 const JWT_SECRET = process.env.JWT_SECRET!;
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
@@ -14,8 +15,15 @@ interface TokenPayload {
 }
 
 export const generateTokens = (payload: TokenPayload) => {
-  const accessToken = jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN } as jwt.SignOptions);
-  const refreshToken = jwt.sign(payload, REFRESH_TOKEN_SECRET, { expiresIn: REFRESH_TOKEN_EXPIRES_IN } as jwt.SignOptions);
+  // `jti` (UUID) único por token (SB-29). Sin él, dos `jwt.sign` del mismo usuario
+  // dentro del MISMO segundo producen bytes idénticos (el payload es igual y el
+  // `iat` tiene resolución de 1 s). El refresh token se guarda con una restricción
+  // `unique`, así que dos tokens idénticos chocaban: 500 en /login o 401 en
+  // /refresh (con el token filtrado en el detalle del error al log). Es alcanzable
+  // con uso normal: doble clic en «Entrar», dos pestañas, o una cuenta compartida.
+  // Un jti distinto por token lo hace único siempre. Cada token lleva el suyo.
+  const accessToken = jwt.sign(payload, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN, jwtid: randomUUID() } as jwt.SignOptions);
+  const refreshToken = jwt.sign(payload, REFRESH_TOKEN_SECRET, { expiresIn: REFRESH_TOKEN_EXPIRES_IN, jwtid: randomUUID() } as jwt.SignOptions);
   return { accessToken, refreshToken };
 };
 
