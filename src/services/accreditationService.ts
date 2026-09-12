@@ -237,13 +237,20 @@ export class AccreditationService {
     try {
         for (const item of validatedData) {
             try {
-                if (item.type === 'participant') {
-                    await this._verifyAndLock({ participantId: item.participantId, eventScheduleId: item.eventScheduleId }, transaction);
-                    await Accreditation.create({ participantId: item.participantId, eventScheduleId: item.eventScheduleId, accreditedBy, checkInTime: new Date() }, { transaction });
-                } else {
-                    await this._verifyAndLock({ guestId: item.guestId, eventScheduleId: item.eventScheduleId }, transaction);
-                    await Accreditation.create({ guestId: item.guestId, eventScheduleId: item.eventScheduleId, accreditedBy, checkInTime: new Date() }, { transaction });
-                }
+                // SAVEPOINT por ítem (transacción anidada): si un ítem falla a nivel de BD
+                // (deadlock, violación de índice, etc.), se revierte SOLO ese ítem y la
+                // transacción padre sigue válida. Antes, un único error de BD abortaba toda
+                // la transacción: los ítems siguientes fallaban con "transaction is aborted"
+                // y el commit hacía rollback, guardando 0 pero reportando "N creados".
+                await sequelize.transaction({ transaction }, async (t) => {
+                    if (item.type === 'participant') {
+                        await this._verifyAndLock({ participantId: item.participantId, eventScheduleId: item.eventScheduleId }, t);
+                        await Accreditation.create({ participantId: item.participantId, eventScheduleId: item.eventScheduleId, accreditedBy, checkInTime: new Date() }, { transaction: t });
+                    } else {
+                        await this._verifyAndLock({ guestId: item.guestId, eventScheduleId: item.eventScheduleId }, t);
+                        await Accreditation.create({ guestId: item.guestId, eventScheduleId: item.eventScheduleId, accreditedBy, checkInTime: new Date() }, { transaction: t });
+                    }
+                });
                 results.created++;
             } catch (error: any) {
                 results.errors.push({ data: item, error: error.message });
