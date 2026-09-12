@@ -88,7 +88,6 @@ const useAccreditationStore = create<AccreditationState>()(
             accreditationsToday: state.accreditationsToday + 1,
             loading: false,
           }));
-          useAccreditationStore.getState().getLastAccreditation((newAccreditation as any).EventSchedule.eventId);
         } catch (error: any) {
           set({ error: error.message, loading: false });
           throw error;
@@ -156,13 +155,16 @@ const useAccreditationStore = create<AccreditationState>()(
       },
 
       getLastAccreditation: async (eventId: string) => {
-        set({ loading: true, error: null });
+        // Sin evento no hay nada que pedir: evita el 500 por `eventId=undefined`
+        // (el POST de acreditación no devuelve el eventId del horario).
+        if (!eventId) return;
+        // Lectura secundaria (no bloquea la UI): no tocamos el `loading` compartido.
         try {
-          const result = await apiClient.get<{ accreditations: RichAccreditation[] }>(`/api/accreditations?eventId=${eventId}&page=1&limit=1`);
+          const result = await apiClient.get<{ accreditations: RichAccreditation[] }>(`/api/accreditations?eventId=${encodeURIComponent(eventId)}&page=1&limit=1`);
           const last = result.accreditations.length > 0 ? result.accreditations[0] : null;
-          set({ lastAccreditation: last, loading: false });
+          set({ lastAccreditation: last });
         } catch (error: any) {
-          set({ error: error.message, loading: false });
+          set({ error: error.message });
         }
       },
 
