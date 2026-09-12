@@ -11,43 +11,58 @@ function setCorsHeaders(response: NextResponse, origin: string) {
   response.headers.set('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization');
 }
 
-// 'unsafe-eval' solo en desarrollo (Next lo necesita para el HMR); en producción
-// se retira (F6-03/SB-03). Esta CSP solo cubre /api (respuestas JSON, sin scripts):
-// la que protege las páginas es la de next.config.js. Se mantiene en paralelo con
-// aquella para que no diverjan.
-const CSP = [
-  "default-src 'self'",
-  "connect-src 'self' https://api.emailjs.com",
-  `script-src 'self' 'unsafe-inline'${process.env.NODE_ENV !== 'production' ? " 'unsafe-eval'" : ''}`,
-  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-  "img-src 'self' data: https:",
-  "font-src 'self' https://fonts.gstatic.com",
-  "object-src 'none'",
-  "base-uri 'self'",
-  "form-action 'self'",
-  "frame-ancestors 'none'",
-].join('; ') + ';';
+/**
+ * Construye la Content-Security-Policy con un nonce por petición (SB-03).
+ *
+ * script-src usa `'nonce-<n>' 'strict-dynamic'`: el navegador (CSP nivel 3)
+ * ejecuta SOLO el script que lleva este nonce —los de arranque/hidratación que
+ * Next.js marca automáticamente— y los que ESE cargue por propagación (los
+ * chunks de la app). Con `strict-dynamic`, `'self'` y `'unsafe-inline'` quedan
+ * IGNORADOS para scripts, así que un `<script>` que un XSS inyecte en el DOM sin
+ * el nonce NO se ejecuta. Ese es el objetivo del hallazgo #4: que la CSP deje de
+ * ser decorativa frente a XSS.
+ *
+ * `'unsafe-eval'` solo en desarrollo, donde Turbopack/react-refresh evalúan
+ * código para el HMR; el bundle de producción no lo necesita.
+ *
+ * style-src conserva `'unsafe-inline'`: React aplica estilos en línea y librerías
+ * como recharts/react-select inyectan `style="..."`; ponerles nonce a todos no es
+ * viable y el XSS por estilos es de impacto muy inferior al de script.
+ */
+export function buildCsp(nonce: string): string {
+  const isDev = process.env.NODE_ENV !== 'production';
+  const scriptSrc = `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${isDev ? " 'unsafe-eval'" : ''}`;
+  return [
+    "default-src 'self'",
+    "connect-src 'self' https://api.emailjs.com",
+    scriptSrc,
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "img-src 'self' data: https:",
+    "font-src 'self' https://fonts.gstatic.com",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "frame-ancestors 'none'",
+  ].join('; ') + ';';
+}
 
-export async function securityMiddleware(request: NextRequest, response: NextResponse) {
-  // Set security headers
-  response.headers.set('X-DNS-Prefetch-Control', 'on');
-  response.headers.set('Strict-Transport-Security', 'max-age=63072000; includeSubDomains; preload');
-  response.headers.set('Content-Security-Policy', CSP);
-  response.headers.set('X-XSS-Protection', '1; mode=block');
-  response.headers.set('X-Frame-Options', 'SAMEORIGIN');
-  response.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
-  response.headers.set('X-Content-Type-Options', 'nosniff');
-  response.headers.set('Referrer-Policy', 'origin-when-cross-origin');
-
-  // CORS handling
+/**
+ * CORS en ejecución. Es lo ÚNICO que queda aquí porque es lo único dinámico: el
+ * juego de orígenes depende de ALLOWED_ORIGIN, que se lee en cada arranque
+ * (D8.2/SB-02), y el preflight OPTIONS necesita una respuesta propia. El resto de
+ * cabeceras de seguridad ESTÁTICAS viven en next.config.js (fuente única, cubren
+ * todas las rutas, incluida /api); la CSP la emite el middleware con el nonce.
+ *
+ * Solo se aplica a /api (lo decide el llamador en middleware.ts): CORS no tiene
+ * sentido en las respuestas de página.
+ */
+export function corsMiddleware(request: NextRequest, response: NextResponse): NextResponse {
   const origin = request.headers.get('origin') ?? '';
   if (request.method === 'OPTIONS') {
     const res = new NextResponse(null, { status: 204 });
     setCorsHeaders(res, origin);
     return res;
   }
-
   setCorsHeaders(response, origin);
-
   return response;
 }

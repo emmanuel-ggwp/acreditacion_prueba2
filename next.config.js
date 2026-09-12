@@ -17,34 +17,6 @@ const nextConfig = {
     };
   },
   async headers() {
-    // NODE_ENV es el ÚNICO process.env que se puede leer aquí sin caer en la
-    // trampa del congelado-en-build (ver comentario CORS abajo): `next build`
-    // corre con NODE_ENV=production y `next dev` con development, así que el
-    // valor que se congela en el artefacto de producción es justo el correcto
-    // para el servidor. NO vale para ALLOWED_ORIGIN u otras variables de
-    // despliegue, que cambian entre build y arranque.
-    const isDev = process.env.NODE_ENV !== 'production';
-
-    // 'unsafe-eval' se retira en producción (endurecimiento F6-03/SB-03: Next no
-    // lo necesita en el bundle compilado). En desarrollo se mantiene porque
-    // Turbopack/react-refresh evalúan código para el HMR y sin él revienta el
-    // Fast Refresh. 'unsafe-inline' se conserva en script-src: retirarlo exige un
-    // nonce por petición, que solo puede emitir el middleware (SB-03) —se hace ahí,
-    // no en esta cabecera estática.
-    const scriptSrc = `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ''}`;
-    const csp = [
-      "default-src 'self'",
-      "connect-src 'self' https://api.emailjs.com",
-      scriptSrc,
-      "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-      "img-src 'self' data: https:",
-      "font-src 'self' https://fonts.gstatic.com",
-      "object-src 'none'",
-      "base-uri 'self'",
-      "form-action 'self'",
-      "frame-ancestors 'none'",
-    ].join('; ') + ';';
-
     return [
       {
         // Apply these headers to all routes in your application.
@@ -56,15 +28,17 @@ const nextConfig = {
         // `Access-Control-Allow-Origin: *` junto a Allow-Credentials: true (F2-04)
         // aunque ALLOWED_ORIGIN estuviera bien puesta en el servidor. La fuente
         // ÚNICA de CORS es src/middleware/security.ts, que lee ALLOWED_ORIGIN en
-        // ejecución (decisión D8.2 / SB-02). El resto de cabeceras son estáticas
-        // (o dependen solo de NODE_ENV, que sí es correcto congelar): inocuo.
+        // ejecución (decisión D8.2 / SB-02).
+        //
+        // LA CSP TAMPOCO VA AQUÍ (SB-03): lleva un nonce por petición y una
+        // cabecera estática no puede. La emite el middleware (src/middleware.ts →
+        // buildCsp). Estas cabeceras que quedan son valores estáticos, sin
+        // process.env: congelarlas es inocuo, y cubren TODAS las rutas —incluidos
+        // los estáticos que el matcher del middleware excluye—.
         source: '/:path*',
         headers: [
           { key: "X-DNS-Prefetch-Control", value: "on" },
           { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains; preload" },
-          // CSP: script-src sin 'unsafe-eval' en producción; 'unsafe-inline' pendiente
-          // de nonce (SB-03). base-uri y form-action acotan inyección de <base>/<form>.
-          { key: "Content-Security-Policy", value: csp },
           { key: "X-XSS-Protection", value: "1; mode=block" },
           { key: "X-Frame-Options", value: "SAMEORIGIN" },
           { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
