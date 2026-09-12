@@ -272,6 +272,8 @@ export class ReportService {
       const today = new Date();
       return {
         totalEvents: await Event.count(),
+        // Eventos vigentes (no cancelados): es lo que el panel muestra arriba.
+        activeEvents: await Event.count({ where: { isActive: true } }),
         totalParticipants: await Participant.count(),
         accreditationsToday: await Accreditation.count({
           where: { checkInTime: { [Op.between]: [startOfDay(today), endOfDay(today)] } }

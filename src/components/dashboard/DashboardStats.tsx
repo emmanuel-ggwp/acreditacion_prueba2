@@ -6,6 +6,7 @@ import apiClient from '@/utils/apiClient';
 import useEventStore from '@/store/eventStore';
 import { ButtonEventReport } from '../events/ButtonEventReport';
 import { showToast } from '@/components/ui/Toast';
+import DashboardHero from './DashboardHero';
 
 interface ScheduleStat {
   id: string;
@@ -158,10 +159,10 @@ const EventStatCard = React.memo(({ stat, viewMode }: { stat: EventStat, viewMod
 EventStatCard.displayName = 'EventStatCard';
 
 const StatCard = React.memo(({ title, value, icon: Icon, trend, trendUp }: { title: string; value: number | string; icon: React.ElementType, trend?: string, trendUp?: boolean }) => (
-  <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all duration-300 group">
-    <div className="flex justify-between items-start mb-4">
-        <div className="p-3 rounded-xl bg-indigo-50 text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-colors duration-300">
-            <Icon className="h-6 w-6" />
+  <div className="bg-white p-4 sm:p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all duration-300 group h-full">
+    <div className="flex justify-between items-start mb-3 sm:mb-4">
+        <div className="p-2.5 sm:p-3 rounded-xl bg-indigo-50 text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-colors duration-300">
+            <Icon className="h-5 w-5 sm:h-6 sm:w-6" />
         </div>
         {trend && (
             <span className={`flex items-center text-xs font-medium px-2 py-1 rounded-full ${trendUp ? 'text-green-600 bg-green-50' : 'text-gray-600 bg-gray-50'}`}>
@@ -171,8 +172,8 @@ const StatCard = React.memo(({ title, value, icon: Icon, trend, trendUp }: { tit
         )}
     </div>
     <div>
-      <p className="text-sm font-medium text-gray-500 mb-1">{title}</p>
-      <h3 className="text-3xl font-bold text-gray-900 tracking-tight">{value}</h3>
+      <p className="text-xs sm:text-sm font-medium text-gray-500 mb-1">{title}</p>
+      <h3 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">{value}</h3>
     </div>
   </div>
 ));
@@ -184,7 +185,7 @@ const DashboardStats: React.FC = () => {
   const [viewMode, setViewMode] = useState<'event' | 'date'>('date');
   const [showDropdown, setShowDropdown] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
-  const [kpis, setKpis] = useState<{ totalEvents?: number; totalParticipants?: number; accreditationsToday?: number } | null>(null);
+  const [kpis, setKpis] = useState<{ totalEvents?: number; activeEvents?: number; totalParticipants?: number; accreditationsToday?: number } | null>(null);
   const itemsPerPage = 6;
 
   useEffect(() => {
@@ -281,14 +282,19 @@ const DashboardStats: React.FC = () => {
   }, [events, eventsLoading]);
 
   return (
-    <div className="space-y-8">
-      
+    <div className="space-y-6 sm:space-y-8">
+
+      {/* Cabecera: eventos activos arriba (null mientras carga el KPI). */}
+      <DashboardHero activeEvents={kpis === null ? null : (kpis.activeEvents ?? 0)} />
 
       {/* KPIs reales */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 sm:gap-6">
         <StatCard title="Eventos" value={kpis?.totalEvents ?? '—'} icon={Calendar} />
         <StatCard title="Participantes" value={kpis?.totalParticipants ?? '—'} icon={Users} />
-        <StatCard title="Personas acreditadas hoy" value={kpis?.accreditationsToday ?? '—'} icon={CheckSquare} />
+        {/* En móvil ocupa el ancho completo (fila propia): evita la tarjeta suelta a media fila. */}
+        <div className="col-span-2 sm:col-span-1">
+          <StatCard title="Personas acreditadas hoy" value={kpis?.accreditationsToday ?? '—'} icon={CheckSquare} />
+        </div>
       </div>
 
       {/* Event Statistics Section */}
