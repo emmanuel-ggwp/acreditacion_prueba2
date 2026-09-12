@@ -37,7 +37,10 @@ export const decodeAccessToken = (token: string): (TokenPayload & { exp: number 
 
 export const verifyAccessToken = (token: string): (TokenPayload & { exp: number }) | null => {
   try {
-    return jwt.verify(token, JWT_SECRET) as (TokenPayload & { exp: number });
+    // `algorithms: ['HS256']` explícito: no confiar solo en el defecto de la
+    // librería. Fija el algoritmo esperado y descarta cualquier otro (incluido
+    // 'none' y confusiones RS/HS) — endurecimiento barato frente a token forgery.
+    return jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] }) as (TokenPayload & { exp: number });
   } catch (error) {
     return null;
   }
@@ -53,7 +56,7 @@ export const decodeRefreshToken = (token: string): (TokenPayload & { exp: number
 
 export const verifyRefreshToken = (token: string): (TokenPayload & { exp: number }) | null => {
   try {
-    return jwt.verify(token, REFRESH_TOKEN_SECRET) as (TokenPayload & { exp: number });
+    return jwt.verify(token, REFRESH_TOKEN_SECRET, { algorithms: ['HS256'] }) as (TokenPayload & { exp: number });
   } catch (error) {
     return null;
   }
