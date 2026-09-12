@@ -3,6 +3,8 @@ import { Op } from 'sequelize';
 import { Event, Participant, Guest, EventSchedule } from '@/models/index';
 import { rutVariants } from '@/utils/validators/rut';
 import { limitPublicLookup } from '@/lib/rate-limit';
+import { getFormFields } from '@/utils/formFields';
+import { getCustomQuestions } from '@/utils/customQuestions';
 
 // Busca un participante precargado del evento por su RUT (para el flujo modo "rut").
 export async function GET(
@@ -44,28 +46,41 @@ export async function GET(
     const registeredScheduleIds = (p.schedules || []).map((s: any) => s.id);
     // Permiso efectivo: el evento lo permite, o el participante tiene el override.
     const allowMultiple = !!(event as any).allowMultipleSchedules || !!p.allowMultipleSchedules;
+
+    // PII MÍNIMA (F3-02): este endpoint es PÚBLICO y los RUT son enumerables, así que
+    // solo se devuelve lo que el formulario de ESTE evento realmente autocompleta.
+    // Los campos deshabilitados (por defecto empresa/cargo/SAP/dieta lo están) NO se
+    // exponen: nada de datos personales del padrón que el formulario no vaya a usar.
+    const ff = getFormFields((event as any).registrationConfig);
+    const participantOut: any = {
+      id: p.id,
+      firstName: p.firstName,
+      lastName: p.lastName,
+      // Conteos de invitados (no son PII, hacen falta para el autocompletado numérico).
+      guestCount: p.guestCount,
+      guestCompanion: p.guestCompanion,
+      guestLoads: p.guestLoads,
+    };
+    if (ff.email.enabled) participantOut.email = p.email;
+    if (ff.phone.enabled) participantOut.phone = p.phone;
+    if (ff.documentNumber.enabled) participantOut.documentNumber = p.documentNumber;
+    if (ff.company.enabled) participantOut.company = p.company;
+    if (ff.position.enabled) participantOut.position = p.position;
+    if (ff.numeroSap.enabled) participantOut.numeroSap = p.numeroSap;
+    if (ff.dietary.enabled) {
+      participantOut.dietaryPreference = p.dietaryPreference;
+      participantOut.dietaryComments = p.dietaryComments;
+    }
+    // customData solo si el evento tiene preguntas configurables.
+    if (getCustomQuestions((event as any).registrationConfig).length) {
+      participantOut.customData = p.customData;
+    }
+
     return NextResponse.json({
       found: true,
       allowMultiple,
       registeredScheduleIds,
-      participant: {
-        id: p.id,
-        firstName: p.firstName,
-        lastName: p.lastName,
-        email: p.email,
-        phone: p.phone,
-        documentNumber: p.documentNumber,
-        // Datos precargados por el organizador que también deben autocompletarse.
-        company: p.company,
-        position: p.position,
-        numeroSap: p.numeroSap,
-        dietaryPreference: p.dietaryPreference,
-        dietaryComments: p.dietaryComments,
-        customData: p.customData,
-        guestCount: p.guestCount,
-        guestCompanion: p.guestCompanion,
-        guestLoads: p.guestLoads,
-      },
+      participant: participantOut,
       // No se expone el RUT (documentNumber) de los invitados: es PII y el formulario
       // público no lo usa. Se muestran las cargas por nombre y se confirman por id.
       guests: (p.guests || []).map((g: any) => ({
