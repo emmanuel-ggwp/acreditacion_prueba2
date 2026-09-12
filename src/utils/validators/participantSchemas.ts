@@ -1,6 +1,16 @@
 
 import { z } from 'zod';
-import { customValidators } from './userSchemas';
+
+// Validadores de campos de participante (teléfono, documento). Antes vivían en
+// `userSchemas.ts`, que se eliminó al unificar los esquemas de auth (SB-31); este
+// es su único consumidor, así que se trajeron aquí.
+const phoneRegex = /^[+]?[(]?[0-9]{3}[)]?[-\s.]?[0-9]{3}[-\s.]?[0-9]{4,6}$/;
+const documentNumberRegex = /^[a-zA-Z0-9-]{5,20}$/;
+
+const customValidators = {
+  phone: z.string().regex(phoneRegex, 'Formato de número de teléfono inválido'),
+  documentNumber: z.string().regex(documentNumberRegex, 'Formato de número de documento inválido'),
+};
 
 export const participantSchema = z.object({
   id: z.guid(),

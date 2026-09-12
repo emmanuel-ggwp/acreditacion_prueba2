@@ -2,6 +2,7 @@ import { Op } from 'sequelize';
 import { User } from '@/models/index';
 import { auditLogService } from './auditLogService';
 import { normalizeEmail } from '@/utils/email';
+import { passwordError } from '@/utils/validators/authSchemas';
 
 const PUBLIC_ATTRS = ['id', 'username', 'email', 'firstName', 'lastName', 'role', 'isActive', 'lastLogin', 'createdAt'];
 const VALID_ROLES = ['ADMIN', 'MANAGER', 'OPERATOR', 'GUARDIA'];
@@ -22,7 +23,10 @@ export class UserService {
     if (!username?.trim() || !email?.trim() || !password) {
       throw new Error('Usuario, correo y contraseña son obligatorios.');
     }
-    if (String(password).length < 6) throw new Error('La contraseña debe tener al menos 6 caracteres.');
+    // Política de contraseñas ÚNICA (D2.6/SB-31): antes aquí bastaban 6 caracteres,
+    // debilitando el camino de alta frente al de /api/auth/register.
+    const createPwErr = passwordError(password);
+    if (createPwErr) throw new Error(createPwErr);
     if (role && !VALID_ROLES.includes(role)) throw new Error('Rol inválido.');
 
     // El modelo guarda la forma canónica (hook, R2-03c): el control de
@@ -56,7 +60,11 @@ export class UserService {
       throw new Error('No puedes desactivar tu propia cuenta.');
     }
     if (data.role && !VALID_ROLES.includes(data.role)) throw new Error('Rol inválido.');
-    if (data.password && String(data.password).length < 6) throw new Error('La contraseña debe tener al menos 6 caracteres.');
+    // Misma política única al restablecer contraseña (D2.6/SB-31).
+    if (data.password) {
+      const updatePwErr = passwordError(data.password);
+      if (updatePwErr) throw new Error(updatePwErr);
+    }
 
     const before: any = { email: (user as any).email, firstName: (user as any).firstName, lastName: (user as any).lastName, role: (user as any).role, isActive: (user as any).isActive };
     const patch: any = {};

@@ -6,7 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import useAuthStore from '@/store/authStore';
 import { useRouter } from 'next/navigation';
-import { loginSchema } from '@/utils/validators/userSchemas';
+import { loginSchema } from '@/utils/validators/authSchemas';
 import { errorHandler } from '@/utils/errors';
 
 type LoginFormInputs = z.infer<typeof loginSchema>;

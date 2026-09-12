@@ -7,6 +7,10 @@ import { showToast } from '@/components/ui/Toast';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import DeleteReasonModal from '@/components/ui/DeleteReasonModal';
 import { Plus, Pencil, Trash2, UserCheck, UserX, X } from 'lucide-react';
+import { passwordError } from '@/utils/validators/authSchemas';
+
+// Pista de contraseña, alineada con la política única del servidor (D2.6/SB-31).
+const PASSWORD_HINT = 'Mínimo 8 caracteres, con mayúscula, minúscula, número y símbolo';
 
 const roleBadge: Record<string, string> = {
   ADMIN: 'bg-purple-100 text-purple-700',
@@ -33,6 +37,13 @@ const UserManager: React.FC = () => {
   const openEdit = (u: any) => setForm({ id: u.id, username: u.username, email: u.email, password: '', firstName: u.firstName || '', lastName: u.lastName || '', role: u.role });
 
   const save = async () => {
+    // Validación de contraseña en cliente con la MISMA política que el servidor
+    // (D2.6/SB-31): en alta siempre; al editar, solo si se escribió una nueva.
+    const needsPassword = !form.id || !!form.password;
+    if (needsPassword) {
+      const pwErr = passwordError(form.password);
+      if (pwErr) { showToast.error(pwErr); return; }
+    }
     setSaving(true);
     try {
       if (!form.id) {
@@ -156,7 +167,8 @@ const UserManager: React.FC = () => {
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">{form.id ? 'Nueva contraseña (opcional)' : 'Contraseña *'}</label>
-                <input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} placeholder={form.id ? 'Dejar en blanco para no cambiar' : 'Mínimo 6 caracteres'} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+                <input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} placeholder={form.id ? 'Dejar en blanco para no cambiar' : PASSWORD_HINT} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+                <p className="mt-1 text-xs text-gray-500">{PASSWORD_HINT}.{form.id ? ' Déjala en blanco para no cambiarla.' : ''}</p>
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">Rol</label>
