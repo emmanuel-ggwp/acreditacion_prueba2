@@ -31,6 +31,10 @@ interface AuthResponse {
   };
 }
 
+// Refresco en vuelo compartido (single-flight): ver refreshAuthToken. Vive fuera
+// del store porque es un candado de concurrencia del módulo, no estado de la UI.
+let refreshInFlight: Promise<void> | null = null;
+
 const useAuthStore = create<AuthState>()(
   devtools(
     persist(
@@ -73,36 +77,51 @@ const useAuthStore = create<AuthState>()(
         },
 
         refreshAuthToken: async () => {
+          // SINGLE-FLIGHT: si ya hay un refresco en vuelo, todos esperan el MISMO.
+          // Sin esto, varias peticiones que caducan a la vez (típico al recargar la
+          // página, donde arrancan varias llamadas a la API) disparan refrescos
+          // CONCURRENTES; como el refresh token ROTA (se revoca el usado), solo el
+          // primero acierta y el resto recibe un 401 sobre un token ya revocado y
+          // fuerza un cierre de sesión injustificado. Deduplicando, hay un solo
+          // refresco y las demás peticiones reintentan con el token nuevo.
+          if (refreshInFlight) return refreshInFlight;
+
           // Sin access token no hay sesión que renovar: evita refrescos espurios
           // (p. ej. tras un login fallido) y corta cualquier recursión.
           const token = get().accessToken;
           if (!token) return;
 
-          set({ loading: true });
-          try {
-            // Fetch DIRECTO, no apiClient: la cookie HttpOnly del refresh token
-            // viaja sola (same-origin) y, sobre todo, un 401 aquí NO debe disparar
-            // el reintento-con-refresco de apiClient, que recurriría sobre este
-            // mismo endpoint. Se envía el access token (aunque esté por caducar)
-            // para que el rate-limit lo cuente en el cubo por-usuario, como antes.
-            const res = await fetch(API_ENDPOINTS.REFRESH_TOKEN, {
-              method: 'POST',
-              credentials: 'same-origin',
-              headers: {
-                'Content-Type': 'application/json',
-                Authorization: `Bearer ${token}`,
-              },
-              body: '{}',
-            });
-            if (!res.ok) throw new Error('Refresh request failed');
-            const json = await res.json();
-            const accessToken = json?.data?.accessToken;
-            if (!accessToken) throw new Error('No access token in refresh response');
-            set({ accessToken, loading: false });
-          } catch (error: any) {
-            set({ error: 'Session expired. Please log in again.', loading: false });
-            get().logout();
-          }
+          refreshInFlight = (async () => {
+            set({ loading: true });
+            try {
+              // Fetch DIRECTO, no apiClient: la cookie HttpOnly del refresh token
+              // viaja sola (same-origin) y, sobre todo, un 401 aquí NO debe disparar
+              // el reintento-con-refresco de apiClient, que recurriría sobre este
+              // mismo endpoint. Se envía el access token (aunque esté por caducar)
+              // para que el rate-limit lo cuente en el cubo por-usuario, como antes.
+              const res = await fetch(API_ENDPOINTS.REFRESH_TOKEN, {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: {
+                  'Content-Type': 'application/json',
+                  Authorization: `Bearer ${token}`,
+                },
+                body: '{}',
+              });
+              if (!res.ok) throw new Error('Refresh request failed');
+              const json = await res.json();
+              const accessToken = json?.data?.accessToken;
+              if (!accessToken) throw new Error('No access token in refresh response');
+              set({ accessToken, loading: false });
+            } catch (error: any) {
+              set({ error: 'Session expired. Please log in again.', loading: false });
+              get().logout();
+            } finally {
+              refreshInFlight = null;
+            }
+          })();
+
+          return refreshInFlight;
         },
 
         setUser: (user) => {
