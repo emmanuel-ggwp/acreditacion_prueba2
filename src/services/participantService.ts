@@ -325,9 +325,11 @@ export class ParticipantService {
     const before: any = JSON.parse(JSON.stringify(participant.get({ plain: true })));
     await participant.update(rest);
 
-    // Persistir cambios de horarios (la asociación tiene alias 'schedules').
+    // Persistir cambios de horarios (la asociación tiene alias 'schedules'). Solo se
+    // aceptan fechas del MISMO evento del participante: sin el filtro por eventId se le
+    // podía inscribir en fechas de OTRO evento y contaminar el cupo ajeno.
     if (Array.isArray(scheduleIds)) {
-      const schedules = await EventSchedule.findAll({ where: { id: scheduleIds } });
+      const schedules = await EventSchedule.findAll({ where: { id: scheduleIds, eventId: (participant as any).eventId } });
       await (participant as any).setSchedules(schedules);
     }
 
@@ -430,7 +432,21 @@ export class ParticipantService {
       email: (participant as any).email,
       reason: reason || null,
     };
-    await participant.destroy();
+
+    // Borrado en cascada y en una transacción, igual que bulkDeleteParticipants: sin
+    // esto, el soft-delete del participante dejaba invitados e inscripciones (join)
+    // colgando y el mensaje afirmaba que se habían eliminado.
+    const tx = await sequelize.transaction();
+    try {
+      await ParticipantSchedule.destroy({ where: { participantId }, transaction: tx });
+      await Guest.destroy({ where: { participantId }, force: true, transaction: tx });
+      await Participant.destroy({ where: { id: participantId }, force: true, transaction: tx });
+      await tx.commit();
+    } catch (e) {
+      await tx.rollback();
+      throw e;
+    }
+
     // Registro de auditoría: qué se eliminó, el motivo y quién lo hizo.
     if (userId) {
       await auditLogService.log({
@@ -441,7 +457,7 @@ export class ParticipantService {
         details,
       });
     }
-    return { message: 'Participant and associated guests deleted successfully' };
+    return { message: 'Participante e invitados eliminados correctamente' };
   }
 
   // Elimina varios participantes (o todos los del evento) junto con sus invitados,
