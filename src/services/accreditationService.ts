@@ -13,25 +13,19 @@ import { dietaryFull, dietaryLabel } from '@/utils/dietary';
 
 export class AccreditationService {
 
-  // Ocupación de un horario, con los dos criterios que se controlan por separado:
-  // - participants: participantes acreditados (no cuenta invitados) → cupo de participantes.
-  // - bodies: personas totales = filas (participantes + invitados con nombre) + suma de
-  //   invitados numéricos (guest_count) → aforo total.
-  private async _occupancy(eventScheduleId: string, transaction?: Transaction): Promise<{ participants: number; bodies: number }> {
+  // Aforo ocupado (personas totales) = filas (participantes + invitados con nombre)
+  // + suma de invitados numéricos (guest_count).
+  private async _occupiedBodies(eventScheduleId: string, transaction?: Transaction): Promise<number> {
     const agg: any = await Accreditation.findOne({
       where: { eventScheduleId },
       attributes: [
-        [fn('COUNT', fn('DISTINCT', col('participant_id'))), 'participants'],
         [fn('COUNT', col('id')), 'rows'],
         [fn('COALESCE', fn('SUM', col('guest_count')), 0), 'guestSum'],
       ],
       transaction,
       raw: true,
     });
-    return {
-      participants: Number(agg?.participants || 0),
-      bodies: Number(agg?.rows || 0) + Number(agg?.guestSum || 0),
-    };
+    return Number(agg?.rows || 0) + Number(agg?.guestSum || 0);
   }
 
   private async _verifyAndLock(
@@ -75,19 +69,14 @@ export class AccreditationService {
         throw new Error('Participant or Guest ID is required.');
     }
 
-    // Dos límites que se controlan por separado:
-    //  - Cupo de PARTICIPANTES (maxCapacity, hereda del evento): solo lo consume un
-    //    participante, no un invitado.
-    //  - AFORO total en personas (maxAttendees, nivel horario; null = sin límite):
-    //    participantes + invitados; incomingBodies = 1 + acompañantes numéricos.
-    const participantCap = schedule.maxCapacity ?? event.maxCapacity;
+    // En la ACREDITACIÓN solo se controla el AFORO total en personas (maxAttendees,
+    // nivel horario; null = sin límite): participantes + invitados; incomingBodies =
+    // 1 + acompañantes numéricos. El cupo de participantes (maxCapacity) es un límite
+    // de INSCRIPCIÓN y NO se vuelve a aplicar en la puerta.
     const aforoCap = (schedule as any).maxAttendees;
-    if (participantCap || aforoCap) {
-      const { participants, bodies } = await this._occupancy(eventScheduleId, transaction);
-      if (participantId && participantCap && participants + 1 > participantCap) {
-        throw new Error('Event schedule has reached its maximum participant capacity.');
-      }
-      if (aforoCap && bodies + incomingBodies > aforoCap) {
+    if (aforoCap) {
+      const occupied = await this._occupiedBodies(eventScheduleId, transaction);
+      if (occupied + incomingBodies > aforoCap) {
         throw new Error('Event schedule has reached its maximum capacity.');
       }
     }
@@ -220,7 +209,7 @@ export class AccreditationService {
       // Editar invitados numéricos afecta el AFORO total (no el cupo de participantes).
       const aforoCap = (schedule as any).maxAttendees;
       if (aforoCap) {
-        const { bodies } = await this._occupancy(eventScheduleId, transaction);
+        const bodies = await this._occupiedBodies(eventScheduleId, transaction);
         // Aforo de los demás = total menos el aporte de esta fila (1 + su guest_count viejo).
         const othersBodies = bodies - 1 - Number((acc as any).guestCount || 0);
         if (othersBodies + 1 + newCount > aforoCap) {
