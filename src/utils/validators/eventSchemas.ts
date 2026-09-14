@@ -38,6 +38,9 @@ export const guestsConfigSchema = z.object({
   typesEnabled: z.boolean().default(false),
   types: z.array(guestTypeOptionSchema).default([]),
   fields: z.array(formFieldConfigSchema).default([]),
+  // Toggles por campo de INVITADO (apellido / RUT / edad): { <campo>: {enabled, required} }.
+  // El nombre siempre se pide. Ver getGuestFields (utils/formFields.ts).
+  formFields: z.record(z.string(), z.object({ enabled: z.boolean().optional(), required: z.boolean().optional() })).optional(),
   // ¿Se pide preferencia alimenticia a cada invitado? (solo aplica al modo 'named')
   dietary: z.boolean().optional(),
   // Etiqueta VISUAL con que se nombra a los invitados en la landing (singular/plural),

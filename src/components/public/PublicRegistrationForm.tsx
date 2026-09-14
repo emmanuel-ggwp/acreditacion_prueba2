@@ -5,7 +5,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { publicRegistrationSchema } from '@/utils/validators/participantSchemas';
-import { getFormFields, guestDietaryEnabled, getGuestMode } from '@/utils/formFields';
+import { getFormFields, guestDietaryEnabled, getGuestMode, getGuestFields } from '@/utils/formFields';
 import { getDietaryOptions, isFreeTextDiet, dietaryFull, ensureDietOption, DIET_COMMENTS_MAX, GUEST_DIET_DETAIL_MAX } from '@/utils/dietary';
 import { sendConfirmationEmail } from '@/lib/emailjs';
 import { buildGuestSummary } from '@/utils/guests';
@@ -66,6 +66,8 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
   // Con varias fechas, el modal se abre primero (elegir fecha antes del formulario).
   const [showDateModal, setShowDateModal] = useState(availableSchedules.length > 1);
   const guestDiet = guestDietaryEnabled((event as any).registrationConfig);
+  // Campos configurables por evento para cada invitado (apellido / RUT / edad).
+  const guestFields = getGuestFields((event as any).registrationConfig);
   const dietOpts = getDietaryOptions((event as any).registrationConfig);
   // Preguntas configurables del evento (Sí/No + lista, ej. transporte + recorrido).
   const customQuestions = getCustomQuestions((event as any).registrationConfig);
@@ -91,9 +93,9 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
   // `id` presente = carga PRECARGADA por el organizador, traída por el lookup. Se envía
   // por id para confirmarla, nunca como invitado nuevo: sin el id, el servidor creaba un
   // DUPLICADO en cada inscripción (D1.4). El tope solo lo consumen los que no tienen id.
-  const [openGuests, setOpenGuests] = useState<{ id?: string; firstName: string; lastName: string; dietaryPreference?: string; dietaryComments?: string; selected?: boolean }[]>([]);
+  const [openGuests, setOpenGuests] = useState<{ id?: string; firstName: string; lastName: string; documentNumber?: string; age?: string; dietaryPreference?: string; dietaryComments?: string; selected?: boolean }[]>([]);
   const newGuestCount = openGuests.filter((g) => !g.id).length;
-  const addGuest = () => setOpenGuests((g) => (g.filter((x) => !x.id).length < maxGuests ? [...g, { firstName: '', lastName: '', dietaryPreference: 'NONE', dietaryComments: '' }] : g));
+  const addGuest = () => setOpenGuests((g) => (g.filter((x) => !x.id).length < maxGuests ? [...g, { firstName: '', lastName: '', documentNumber: '', age: '', dietaryPreference: 'NONE', dietaryComments: '' }] : g));
   const removeGuest = (i: number) => setOpenGuests((g) => g.filter((_, idx) => idx !== i));
   const updateGuest = (i: number, k: string, v: string) => setOpenGuests((g) => g.map((x, idx) => (idx === i ? { ...x, [k]: v } : x)));
 
@@ -221,6 +223,8 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
                   ? dietaryFull(g.dietaryPreference, g.dietaryComments)
                   : (g.dietaryPreference || 'NONE');
               }
+              if (guestFields.documentNumber.enabled && (g.documentNumber || '').trim()) gd.documentNumber = g.documentNumber!.trim();
+              if (guestFields.age.enabled && String(g.age ?? '').trim()) gd.age = Number(g.age);
               return { firstName: g.firstName.trim(), lastName: g.lastName.trim() || undefined, guestType: 'ACOMPANANTE', ...gd };
             });
         }
@@ -640,10 +644,22 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
                 ) : (
                   <>
                     <div className="flex gap-2">
-                      <input value={g.firstName} onChange={(e) => updateGuest(i, 'firstName', e.target.value)} placeholder={`Nombre del invitado ${i + 1}`} className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" />
-                      <input value={g.lastName} onChange={(e) => updateGuest(i, 'lastName', e.target.value)} placeholder="Apellido" className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" />
+                      <input required value={g.firstName} onChange={(e) => updateGuest(i, 'firstName', e.target.value)} placeholder={`Nombre del invitado ${i + 1} *`} className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" />
+                      {guestFields.lastName.enabled && (
+                        <input value={g.lastName} onChange={(e) => updateGuest(i, 'lastName', e.target.value)} required={guestFields.lastName.required} placeholder={`Apellido${guestFields.lastName.required ? ' *' : ''}`} className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" />
+                      )}
                       <button type="button" onClick={() => removeGuest(i)} title="Quitar" className="px-3 text-gray-400 hover:text-red-600 border border-gray-300 rounded-md flex-shrink-0">✕</button>
                     </div>
+                    {(guestFields.documentNumber.enabled || guestFields.age.enabled) && (
+                      <div className="flex gap-2">
+                        {guestFields.documentNumber.enabled && (
+                          <input value={g.documentNumber || ''} onChange={(e) => updateGuest(i, 'documentNumber', e.target.value)} required={guestFields.documentNumber.required} placeholder={`RUT / Documento${guestFields.documentNumber.required ? ' *' : ''}`} className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" />
+                        )}
+                        {guestFields.age.enabled && (
+                          <input type="number" min={0} max={120} value={g.age || ''} onChange={(e) => updateGuest(i, 'age', e.target.value)} required={guestFields.age.required} placeholder={`Edad${guestFields.age.required ? ' *' : ''}`} className="w-24 min-w-0 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" />
+                        )}
+                      </div>
+                    )}
                     {guestDiet && (
                       <select value={g.dietaryPreference || 'NONE'} onChange={(e) => updateGuest(i, 'dietaryPreference', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white">
                         {ensureDietOption(dietOpts, g.dietaryPreference).map((o) => <option key={o.value} value={o.value}>Preferencia alimenticia: {o.label}</option>)}

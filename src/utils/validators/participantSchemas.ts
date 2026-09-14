@@ -111,6 +111,9 @@ export const publicGuestSchema = z.object({
   firstName: z.string().trim().max(120).optional().nullable(),
   lastName: z.string().trim().max(120).optional().nullable(),
   documentNumber: z.string().trim().max(40).optional().nullable(),
+  // Edad del invitado (si el evento la pide). Coerce: el formulario la manda como texto;
+  // "" queda como null y no como 0.
+  age: z.coerce.number().int().min(0).max(120).optional().nullable(),
   // Etiqueta configurable por evento: la elige el administrador, así que su longitud
   // no es predecible. El límite es la columna.
   guestType: z.string().trim().max(TEXT_COLUMN_MAX).optional().nullable(),

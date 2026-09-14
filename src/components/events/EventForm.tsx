@@ -6,7 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import useEventStore from '@/store/eventStore';
 import { createEventSchema, updateEventSchema } from '@/utils/validators/eventSchemas';
-import { CONFIGURABLE_FIELDS, getFormFields } from '@/utils/formFields';
+import { CONFIGURABLE_FIELDS, getFormFields, CONFIGURABLE_GUEST_FIELDS, getGuestFields } from '@/utils/formFields';
 import { DEFAULT_DIET_LABELS } from '@/utils/dietary';
 import { TITLE_FONTS, googleFontHref } from '@/utils/fonts';
 import { errorHandler } from '@/utils/errors';
@@ -213,6 +213,8 @@ const EventForm: React.FC<EventFormProps> = ({ event, onClose, onSuccess }) => {
           dietary: !!event?.registrationConfig?.guests?.dietary,
           termSingular: event?.registrationConfig?.guests?.termSingular || 'Invitado',
           termPlural: event?.registrationConfig?.guests?.termPlural || 'Invitados',
+          // Campos por invitado (apellido / RUT / edad): {enabled, required}. El nombre siempre se pide.
+          formFields: getGuestFields(event?.registrationConfig),
         },
         dietaryOptions: (event?.registrationConfig?.dietaryOptions && event.registrationConfig.dietaryOptions.length)
           ? event.registrationConfig.dietaryOptions
@@ -518,6 +520,36 @@ const EventForm: React.FC<EventFormProps> = ({ event, onClose, onSuccess }) => {
                     {watch('registrationConfig.guests.mode' as any) === 'companion' && 'El asistente indica si va con acompañante y cuántas cargas lleva.'}
                     {(watch('registrationConfig.guests.mode' as any) === 'named' || !watch('registrationConfig.guests.mode' as any)) && 'Cada invitado se ingresa con su nombre; se pueden acreditar uno por uno.'}
                   </p>
+                </div>
+              )}
+
+              {/* Qué datos pedir de cada invitado con nombre (apellido / RUT / edad). */}
+              {watch('allowGuests') && watch('registrationConfig.guests.mode' as any) === 'named' && (
+                <div className="sm:col-span-2">
+                  <label className="flex items-center text-sm font-semibold text-gray-700 mb-2">
+                    Datos de cada invitado
+                    <InfoTooltip text="Elige qué pedir de cada invitado con nombre y qué es obligatorio. El Nombre siempre se pide." />
+                  </label>
+                  <div className="rounded-xl border border-gray-200 divide-y">
+                    {CONFIGURABLE_GUEST_FIELDS.map((f) => {
+                      const enabled = watch(`registrationConfig.guests.formFields.${f.key}.enabled` as any);
+                      return (
+                        <div key={f.key} className="flex items-center justify-between gap-3 px-3 py-2.5">
+                          <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                            <input type="checkbox" {...register(`registrationConfig.guests.formFields.${f.key}.enabled` as any)} className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
+                            {f.label}
+                          </label>
+                          {enabled && (
+                            <label className="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer">
+                              <input type="checkbox" {...register(`registrationConfig.guests.formFields.${f.key}.required` as any)} className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
+                              Obligatorio
+                            </label>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <p className="mt-1 text-xs text-gray-500">El <b>Nombre</b> de cada invitado siempre se pide.</p>
                 </div>
               )}
 

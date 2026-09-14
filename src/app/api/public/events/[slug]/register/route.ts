@@ -461,6 +461,7 @@ async function applyGuests(
           firstName: g.firstName,
           lastName: g.lastName ?? null,
           documentNumber: g.documentNumber ?? null,
+          age: (g as any).age ?? null,
           guestType: g.guestType ?? null,
           dietaryPreference: g.dietaryPreference ?? null,
           confirmed: true,

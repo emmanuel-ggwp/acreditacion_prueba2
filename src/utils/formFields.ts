@@ -47,6 +47,35 @@ export function guestDietaryEnabled(registrationConfig: any): boolean {
   return getGuestMode(registrationConfig) === 'named' && !!registrationConfig?.guests?.dietary;
 }
 
+// Campos configurables por evento para cada INVITADO (modo 'named'). El NOMBRE siempre
+// se pide (identifica al invitado); esto controla apellido, RUT y edad.
+export const CONFIGURABLE_GUEST_FIELDS: FieldDef[] = [
+  { key: 'lastName', label: 'Apellido' },
+  { key: 'documentNumber', label: 'RUT / Documento' },
+  { key: 'age', label: 'Edad' },
+];
+
+// Defaults para no cambiar el comportamiento actual: apellido visible (opcional),
+// RUT y edad apagados.
+const GUEST_DEFAULTS: FormFieldsConfig = {
+  lastName: { enabled: true, required: false },
+  documentNumber: { enabled: false, required: false },
+  age: { enabled: false, required: false },
+};
+
+/** Config de campos de INVITADO del evento (registrationConfig.guests.formFields) + defaults. */
+export function getGuestFields(registrationConfig: any): FormFieldsConfig {
+  const cfg = registrationConfig?.guests?.formFields || {};
+  const out: FormFieldsConfig = {};
+  for (const { key } of CONFIGURABLE_GUEST_FIELDS) {
+    out[key] = {
+      enabled: cfg[key]?.enabled ?? GUEST_DEFAULTS[key].enabled,
+      required: (cfg[key]?.enabled ?? GUEST_DEFAULTS[key].enabled) ? (cfg[key]?.required ?? GUEST_DEFAULTS[key].required) : false,
+    };
+  }
+  return out;
+}
+
 export type GuestMode = 'named' | 'count' | 'companion';
 
 /** Modo de declaración de invitados del evento (default 'named'). */

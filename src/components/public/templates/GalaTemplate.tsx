@@ -5,7 +5,7 @@ import { Calendar, MapPin, ArrowRight, CheckCircle2, Clock, Loader2, Info, Mail,
 import { isValidRut } from '@/utils/validators/rut';
 import { sendConfirmationEmail } from '@/lib/emailjs';
 import { buildGuestSummary } from '@/utils/guests';
-import { getFormFields, guestDietaryEnabled, getGuestMode } from '@/utils/formFields';
+import { getFormFields, guestDietaryEnabled, getGuestMode, getGuestFields } from '@/utils/formFields';
 import CustomQuestionFields from '@/components/public/CustomQuestionFields';
 import { getCustomQuestions, initCustomAnswers, missingRequiredCustom, type CustomAnswers } from '@/utils/customQuestions';
 import { getDietaryOptions, isFreeTextDiet, dietaryFull, dietaryLabel, ensureDietOption, DIET_COMMENTS_MAX, GUEST_DIET_DETAIL_MAX } from '@/utils/dietary';
@@ -141,7 +141,7 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
   const [participantId, setParticipantId] = useState<string | null>(null);
   const [cargas, setCargas] = useState<Carga[]>([]);
   const [acompEnabled, setAcompEnabled] = useState(false);
-  const [acomp, setAcomp] = useState({ firstName: '', lastName: '', dietaryPreference: 'NONE', dietaryComments: '' });
+  const [acomp, setAcomp] = useState({ firstName: '', lastName: '', documentNumber: '', age: '', dietaryPreference: 'NONE', dietaryComments: '' });
 
   // Cupo de invitados. Se calcula IGUAL que en el servidor
   // (`api/public/events/[slug]/register/route.ts`): `registrationConfig.guests.max` solo
@@ -151,16 +151,28 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
   const capOf = (v: any) => { const n = Number(v); return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0; };
   const maxGuests = capOf(event.registrationConfig?.guests?.max) || capOf(event.maxGuestsPerParticipant);
   const guestMode = getGuestMode(event.registrationConfig);
+  // Campos por invitado configurables por evento (apellido / RUT / edad). El nombre siempre se pide.
+  const guestFields = getGuestFields(event.registrationConfig);
   // Cómo se nombra a los invitados en la landing (configurable por evento). Default: Invitado/Invitados.
   const guestTermSingular = (event.registrationConfig?.guests?.termSingular || 'Invitado').trim() || 'Invitado';
   const guestTermPlural = (event.registrationConfig?.guests?.termPlural || 'Invitados').trim() || 'Invitados';
   const [countGuests, setCountGuests] = useState(0);
   const [companion, setCompanion] = useState(false);
   const [loads, setLoads] = useState(0);
-  const [openGuests, setOpenGuests] = useState<{ firstName: string; lastName: string; dietaryPreference?: string; dietaryComments?: string }[]>([]);
-  const addOpenGuest = () => setOpenGuests((g) => (g.length < maxGuests ? [...g, { firstName: '', lastName: '', dietaryPreference: 'NONE', dietaryComments: '' }] : g));
+  const [openGuests, setOpenGuests] = useState<{ firstName: string; lastName: string; documentNumber?: string; age?: string; dietaryPreference?: string; dietaryComments?: string }[]>([]);
+  const addOpenGuest = () => setOpenGuests((g) => (g.length < maxGuests ? [...g, { firstName: '', lastName: '', documentNumber: '', age: '', dietaryPreference: 'NONE', dietaryComments: '' }] : g));
   const removeOpenGuest = (i: number) => setOpenGuests((g) => g.filter((_, idx) => idx !== i));
   const updateOpenGuest = (i: number, k: string, v: string) => setOpenGuests((g) => g.map((x, idx) => (idx === i ? { ...x, [k]: v } : x)));
+
+  // Campos configurables de un invitado con nombre (apellido/RUT/edad), según los
+  // toggles del evento. El nombre se agrega aparte; solo se envía lo habilitado y no vacío.
+  const buildGuestFields = (g: { lastName?: string; documentNumber?: string; age?: string }) => {
+    const out: any = {};
+    if (guestFields.lastName.enabled && (g.lastName || '').trim()) out.lastName = g.lastName!.trim();
+    if (guestFields.documentNumber.enabled && (g.documentNumber || '').trim()) out.documentNumber = g.documentNumber!.trim();
+    if (guestFields.age.enabled && String(g.age ?? '').trim()) out.age = Number(g.age);
+    return out;
+  };
 
   const setField = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
@@ -263,7 +275,7 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
                 ? dietaryFull(g.dietaryPreference, g.dietaryComments)
                 : (g.dietaryPreference || 'NONE');
             }
-            return { firstName: g.firstName.trim(), lastName: g.lastName.trim() || undefined, guestType: 'ACOMPANANTE', ...gd };
+            return { firstName: g.firstName.trim(), ...buildGuestFields(g), guestType: 'ACOMPANANTE', ...gd };
           });
       } else if (acompEnabled && acomp.firstName.trim()) {
         const gd: any = {};
@@ -272,7 +284,7 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
             ? dietaryFull(acomp.dietaryPreference, acomp.dietaryComments)
             : (acomp.dietaryPreference || 'NONE');
         }
-        newGuests = [{ firstName: acomp.firstName.trim(), lastName: acomp.lastName.trim() || undefined, guestType: 'ACOMPANANTE', ...gd }];
+        newGuests = [{ firstName: acomp.firstName.trim(), ...buildGuestFields(acomp), guestType: 'ACOMPANANTE', ...gd }];
       }
       const guests = [
         ...cargas.filter((c) => c.selected).map((c) => (guestDiet ? { id: c.id, dietaryPreference: c.dietaryPreference || 'NONE' } : { id: c.id })),
@@ -327,7 +339,7 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
                   ? dietaryFull(g.dietaryPreference, g.dietaryComments)
                   : (g.dietaryPreference || 'NONE');
               }
-              return { firstName: g.firstName.trim(), lastName: g.lastName.trim() || undefined, guestType: 'ACOMPANANTE', ...gd };
+              return { firstName: g.firstName.trim(), ...buildGuestFields(g), guestType: 'ACOMPANANTE', ...gd };
             });
         }
       }
@@ -445,10 +457,22 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
       {openGuests.map((g, i) => (
         <div key={i} className="mb-3 rounded-xl p-2" style={{ border: '1px solid rgba(255,255,255,0.18)' }}>
           <div className="flex flex-col sm:flex-row gap-2">
-            <input className={`${inputClass} flex-1`} style={inputStyle} placeholder={`Nombre del ${guestTermSingular.toLowerCase()} ${i + 1}`} value={g.firstName} onChange={(e) => updateOpenGuest(i, 'firstName', e.target.value)} />
-            <input className={`${inputClass} flex-1`} style={inputStyle} placeholder="Apellido" value={g.lastName} onChange={(e) => updateOpenGuest(i, 'lastName', e.target.value)} />
+            <input required className={`${inputClass} flex-1`} style={inputStyle} placeholder={`Nombre del ${guestTermSingular.toLowerCase()} ${i + 1} *`} value={g.firstName} onChange={(e) => updateOpenGuest(i, 'firstName', e.target.value)} />
+            {guestFields.lastName.enabled && (
+              <input required={guestFields.lastName.required} className={`${inputClass} flex-1`} style={inputStyle} placeholder={`Apellido${guestFields.lastName.required ? ' *' : ''}`} value={g.lastName} onChange={(e) => updateOpenGuest(i, 'lastName', e.target.value)} />
+            )}
             <button type="button" onClick={() => removeOpenGuest(i)} title={`Quitar ${guestTermSingular.toLowerCase()}`} className="px-4 py-2 rounded-full text-white border self-start" style={{ borderColor: 'rgba(255,255,255,0.3)' }}>✕</button>
           </div>
+          {(guestFields.documentNumber.enabled || guestFields.age.enabled) && (
+            <div className="flex flex-col sm:flex-row gap-2 mt-2">
+              {guestFields.documentNumber.enabled && (
+                <input required={guestFields.documentNumber.required} className={`${inputClass} flex-1`} style={inputStyle} placeholder={`RUT / Documento${guestFields.documentNumber.required ? ' *' : ''}`} value={g.documentNumber || ''} onChange={(e) => updateOpenGuest(i, 'documentNumber', e.target.value)} />
+              )}
+              {guestFields.age.enabled && (
+                <input required={guestFields.age.required} type="number" min={0} max={120} className={`${inputClass} sm:w-28`} style={inputStyle} placeholder={`Edad${guestFields.age.required ? ' *' : ''}`} value={g.age || ''} onChange={(e) => updateOpenGuest(i, 'age', e.target.value)} />
+              )}
+            </div>
+          )}
           {guestDiet && (
             <select className={`${inputClass} mt-2`} style={inputStyle} value={g.dietaryPreference || 'NONE'} onChange={(e) => updateOpenGuest(i, 'dietaryPreference', e.target.value)}>
               {ensureDietOption(dietOpts, g.dietaryPreference).map((o) => <option key={o.value} value={o.value} style={{ color: '#111' }}>{`Preferencia alimenticia: ${o.label}`}</option>)}
@@ -869,7 +893,15 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
                     <div className="mt-3 space-y-3">
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         <input className={inputClass} style={inputStyle} placeholder="Nombre del acompañante" value={acomp.firstName} onChange={(e) => setAcomp((a) => ({ ...a, firstName: e.target.value }))} />
-                        <input className={inputClass} style={inputStyle} placeholder="Apellido del acompañante" value={acomp.lastName} onChange={(e) => setAcomp((a) => ({ ...a, lastName: e.target.value }))} />
+                        {guestFields.lastName.enabled && (
+                          <input required={guestFields.lastName.required} className={inputClass} style={inputStyle} placeholder={`Apellido del acompañante${guestFields.lastName.required ? ' *' : ''}`} value={acomp.lastName} onChange={(e) => setAcomp((a) => ({ ...a, lastName: e.target.value }))} />
+                        )}
+                        {guestFields.documentNumber.enabled && (
+                          <input required={guestFields.documentNumber.required} className={inputClass} style={inputStyle} placeholder={`RUT / Documento${guestFields.documentNumber.required ? ' *' : ''}`} value={acomp.documentNumber} onChange={(e) => setAcomp((a) => ({ ...a, documentNumber: e.target.value }))} />
+                        )}
+                        {guestFields.age.enabled && (
+                          <input required={guestFields.age.required} type="number" min={0} max={120} className={inputClass} style={inputStyle} placeholder={`Edad${guestFields.age.required ? ' *' : ''}`} value={acomp.age} onChange={(e) => setAcomp((a) => ({ ...a, age: e.target.value }))} />
+                        )}
                       </div>
                       {guestDiet && (
                         <>
