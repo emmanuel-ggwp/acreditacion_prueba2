@@ -15,10 +15,10 @@ const AwardCard: React.FC<AwardCardProps> = ({ award, onEdit }) => {
   const { deleteAward } = useAwardStore();
   const [showDelete, setShowDelete] = useState(false);
 
-  // These would be calculated or fetched
-  const assignedCount = 0;
-  const deliveredCount = 0;
-  const stock = award.quantity - assignedCount;
+  // Conteos reales que devuelve la API (listAwardsByEvent); fallback defensivo a 0.
+  const assignedCount = Number((award as any).assignedCount) || 0;
+  const deliveredCount = Number((award as any).deliveredCount) || 0;
+  const stock = (award as any).availableStock != null ? Number((award as any).availableStock) : award.quantity - assignedCount;
   const percentageUsed = award.quantity > 0 ? (assignedCount / award.quantity) * 100 : 0;
 
   const confirmDelete = async (reason: string) => {

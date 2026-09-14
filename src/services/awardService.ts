@@ -64,12 +64,15 @@ export class AwardService {
 
   async listAwardsByEvent(eventId: string) {
     const awards = await Award.findAll({ where: { eventId } });
-    
+
     const awardsWithStock = await Promise.all(awards.map(async (award) => {
-        const availableStock = await this.getAvailableStock(award.id);
+        const assignedCount = await ParticipantAward.count({ where: { awardId: award.id } });
+        const deliveredCount = await ParticipantAward.count({ where: { awardId: award.id, deliveredAt: { [Op.ne]: null } } });
         return {
             ...award.toJSON(),
-            availableStock,
+            assignedCount,
+            deliveredCount,
+            availableStock: award.quantity - assignedCount,
         };
     }));
 

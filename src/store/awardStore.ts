@@ -116,7 +116,7 @@ const useAwardStore = create<AwardState>()(
         if (!user) throw new Error('User not authenticated');
         set({ loading: true, error: null });
         try {
-          const updated = await apiClient.post<ParticipantAward>(`/api/participant-awards/${participantAwardId}/deliver`, { userId: user.id });
+          const updated = await apiClient.patch<ParticipantAward>(`/api/participant-awards/${participantAwardId}/deliver`, {});
           set((state) => ({
             participantAwards: state.participantAwards.map(pa => pa.id === participantAwardId ? updated : pa),
             loading: false,
@@ -131,7 +131,7 @@ const useAwardStore = create<AwardState>()(
         if (!user) throw new Error('User not authenticated');
         set({ loading: true, error: null });
         try {
-          await apiClient.post(`/api/participant-awards/${participantAwardId}/cancel`, { userId: user.id });
+          await apiClient.delete(`/api/participant-awards/${participantAwardId}/cancel`);
           set((state) => ({
             participantAwards: state.participantAwards.filter(pa => pa.id !== participantAwardId),
             loading: false,
