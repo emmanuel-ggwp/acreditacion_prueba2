@@ -165,10 +165,13 @@ const AccreditationPanel = ({ eventId: eventIdProp, scheduleId: scheduleIdProp }
                 const st = STATUS[s.status] || STATUS.published;
                 // En el panel se muestran solo CANTIDADES (sin barras ni topes): el cupo es
                 // límite de inscripción y el aforo se controla al acreditar, no se topa aquí.
+                // Hasta que llegan las stats reales (event-stats) se muestra "—" en vez de
+                // un aproximado: accreditedCount cuenta filas (participantes + invitados con
+                // nombre) y mostrarlo como "Participantes" engañaba.
                 const est = eventStats?.perSchedule.find((ps) => ps.scheduleId === s.id);
-                const bodies = est ? est.total : Number(s.accreditedCount || 0);
-                const partN = est ? est.participants : Number(s.accreditedCount || 0);
-                const guestN = est ? est.guests : 0;
+                const partN: number | string = est ? est.participants : '—';
+                const guestN: number | string = est ? est.guests : '—';
+                const bodies: number | string = est ? est.total : '—';
                 return (
                   <div key={s.id} className={`rounded-lg border p-3 transition ${sel ? 'border-indigo-500 ring-2 ring-indigo-200 bg-indigo-50/40' : 'border-gray-200 bg-white hover:border-indigo-300'}`}>
                     <div className="flex items-start justify-between gap-2">

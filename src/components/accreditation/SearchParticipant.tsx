@@ -52,8 +52,9 @@ const SearchParticipant: React.FC<SearchParticipantProps> = ({ eventId, onSelect
   }, [query, debouncedSearch]);
 
   const handleSelect = (person: Participant | Guest) => {
-    const type = 'firstName' in person ? 'participant' : 'guest';
-    onSelect({ type: 'participant', data: person as Participant }); // Placeholder
+    // El buscador solo devuelve PARTICIPANTES del evento (searchParticipants), así que
+    // siempre se selecciona como participante; sus invitados se gestionan en la tarjeta.
+    onSelect({ type: 'participant', data: person as Participant });
     setQuery('');
     setResults([]);
   };
