@@ -152,7 +152,9 @@ export class ReportService {
             scheduleName: s.scheduleName,
             startDateTime: s.startDateTime,
             endDateTime: s.endDateTime,
+            // capacity = CUPO DE PARTICIPANTES; maxAttendees = AFORO total (personas), informativo.
             capacity,
+            maxAttendees: (s as any).maxAttendees ?? null,
             registered: registeredTotal,
             registeredTotal,
             registeredParticipants,
@@ -161,7 +163,9 @@ export class ReportService {
             accreditedParticipants: Number(accData.participants) || 0,
             accreditedGuests,
             awardsDelivered,
-            capacityUsedPercentage: capacity > 0 ? (accTotal / capacity) * 100 : 0,
+            // % del cupo de PARTICIPANTES (participantes acreditados / cupo), no personas:
+            // así el porcentaje no se pasa de 100% al incluir invitados.
+            capacityUsedPercentage: capacity > 0 ? ((Number(accData.participants) || 0) / capacity) * 100 : 0,
         };
     });
 

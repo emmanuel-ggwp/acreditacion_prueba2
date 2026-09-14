@@ -28,6 +28,7 @@ interface ReportData {
     startDateTime: string;
     endDateTime: string;
     capacity: number;
+    maxAttendees: number | null;
     registered: number;
     registeredParticipants: number;
     registeredGuests: number;
@@ -301,9 +302,9 @@ const EventReport: React.FC<EventReportProps> = ({ eventId }) => {
                 <th className="px-6 py-4">Fecha</th>
                 <th className="px-6 py-4">Nombre</th>
                 <th className="px-6 py-4">Hora</th>
-                <th className="px-6 py-4 text-center">Cupo</th>
-                <th className="px-6 py-4 text-center">Inscritos <span className="normal-case font-normal text-gray-400">(% del cupo)</span></th>
-                <th className="px-6 py-4 text-center">Acreditados <span className="normal-case font-normal text-gray-400">(% del cupo)</span></th>
+                <th className="px-6 py-4 text-center">Cupo particip. <span className="normal-case font-normal text-gray-400">/ aforo</span></th>
+                <th className="px-6 py-4 text-center">Inscritos <span className="normal-case font-normal text-gray-400">(part. / cupo)</span></th>
+                <th className="px-6 py-4 text-center">Acreditados <span className="normal-case font-normal text-gray-400">(part. / cupo)</span></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -314,15 +315,18 @@ const EventReport: React.FC<EventReportProps> = ({ eventId }) => {
                   <td className="px-6 py-4 whitespace-nowrap">
                     {new Date(schedule.startDateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} – {new Date(schedule.endDateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </td>
-                  <td className="px-6 py-4 text-center">{schedule.capacity > 0 ? schedule.capacity : 'Ilimitado'}</td>
+                  <td className="px-6 py-4 text-center">
+                    <div className="font-medium text-gray-800">{schedule.capacity > 0 ? schedule.capacity : 'Ilimitado'}</div>
+                    <div className="text-[10px] text-gray-400">aforo {schedule.maxAttendees && schedule.maxAttendees > 0 ? schedule.maxAttendees : '—'}</div>
+                  </td>
                   <td className="px-6 py-4 text-center">
                     <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700" title={`${schedule.registeredParticipants} participantes · ${schedule.registeredGuests} invitados`}>
                       {schedule.registered}
                     </span>
                     {schedule.capacity > 0 && (() => {
-                      const pct = (schedule.registered / schedule.capacity) * 100;
+                      const pct = (schedule.registeredParticipants / schedule.capacity) * 100;
                       return (
-                        <div className="flex items-center justify-center gap-1.5 mt-1.5" title={`${schedule.registered} de ${schedule.capacity} del cupo`}>
+                        <div className="flex items-center justify-center gap-1.5 mt-1.5" title={`${schedule.registeredParticipants} participantes de ${schedule.capacity} de cupo`}>
                           <div className="w-12 bg-gray-200 rounded-full h-1">
                             <div className={`h-1 rounded-full ${pct > 90 ? 'bg-red-500' : 'bg-gray-500'}`} style={{ width: `${Math.min(pct, 100)}%` }}></div>
                           </div>
@@ -336,9 +340,9 @@ const EventReport: React.FC<EventReportProps> = ({ eventId }) => {
                       {schedule.accreditedTotal}
                     </span>
                     {schedule.capacity > 0 && (() => {
-                      const pct = (schedule.accreditedTotal / schedule.capacity) * 100;
+                      const pct = (schedule.accreditedParticipants / schedule.capacity) * 100;
                       return (
-                        <div className="flex items-center justify-center gap-1.5 mt-1.5" title={`${schedule.accreditedTotal} de ${schedule.capacity} del cupo`}>
+                        <div className="flex items-center justify-center gap-1.5 mt-1.5" title={`${schedule.accreditedParticipants} participantes de ${schedule.capacity} de cupo`}>
                           <div className="w-12 bg-gray-200 rounded-full h-1">
                             <div className="h-1 rounded-full bg-green-500" style={{ width: `${Math.min(pct, 100)}%` }}></div>
                           </div>

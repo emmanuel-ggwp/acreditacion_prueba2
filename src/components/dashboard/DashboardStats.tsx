@@ -253,7 +253,9 @@ const DashboardStats: React.FC = () => {
               id: event.id,
               name: event.name,
               date: date,
-              registered: report.participantStats.registered,
+              // Personas totales (participantes + invitados) para cuadrar con "asistentes"
+              // (que también son personas) y con la vista por fecha (registeredTotal).
+              registered: report.participantStats.totalRegistered,
               attendees: report.participantStats.totalAccredited,
               awards: report.awardStats.delivered,
               schedules: scheduleStats,
