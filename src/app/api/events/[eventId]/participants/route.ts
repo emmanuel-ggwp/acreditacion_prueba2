@@ -27,6 +27,8 @@ export const GET = withAuth(async (
     const awarded = searchParams.get('awarded') === 'true' ? true : undefined;
     // Estado de inscripción: 'true' → inscritos (con fecha); 'false' → precargados.
     const registered = searchParams.get('registered') === 'true' ? true : searchParams.get('registered') === 'false' ? false : undefined;
+    const mailParam = searchParams.get('mail');
+    const mail = (mailParam === 'sent' || mailParam === 'failed' || mailParam === 'unsent') ? mailParam : undefined;
 
     if (search) {
       const results = await participantService.searchParticipants(eventId, search);
@@ -35,7 +37,7 @@ export const GET = withAuth(async (
 
     const result = await participantService.listParticipants(
       eventId,
-      { name, email, accredited, withAward, awarded, registered },
+      { name, email, accredited, withAward, awarded, registered, mail },
       { page, limit }
     );
 

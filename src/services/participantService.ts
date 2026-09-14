@@ -507,7 +507,7 @@ export class ParticipantService {
     return participant;
   }
 
-  async listParticipants(eventId: string, filters: { name?: string, email?: string, accredited?: boolean, withAward?: boolean, awarded?: boolean, registered?: boolean }, pagination: { page: number, limit: number }) {
+  async listParticipants(eventId: string, filters: { name?: string, email?: string, accredited?: boolean, withAward?: boolean, awarded?: boolean, registered?: boolean, mail?: 'sent' | 'failed' | 'unsent' }, pagination: { page: number, limit: number }) {
     const { page = 1, limit = 10 } = pagination;
     
     // Participantes del evento (incluye precargados sin horario) vía eventId.
@@ -568,6 +568,10 @@ export class ParticipantService {
         const subQuery = `(SELECT 1 FROM "participant_schedules" ps WHERE ps."participant_id" = "Participant"."id" LIMIT 1)`;
         andConds.push(sequelize.literal(`${filters.registered ? 'EXISTS' : 'NOT EXISTS'} ${subQuery}`));
     }
+    // Estado del correo de confirmación: enviado / fallido / no enviado (null o skipped).
+    if (filters.mail === 'sent') where.emailStatus = 'sent';
+    else if (filters.mail === 'failed') where.emailStatus = 'failed';
+    else if (filters.mail === 'unsent') andConds.push({ [Op.or]: [{ emailStatus: null }, { emailStatus: 'skipped' }] } as any);
     if (andConds.length) where[Op.and] = andConds;
 
     const findOptions: any = {

@@ -78,6 +78,8 @@ const ParticipantList = ({ eventId }: { eventId: string }) => {
   const [showOnlyAwarded, setShowOnlyAwarded] = useState(false);
   // Filtro por estado de inscripción: todos / solo inscritos / solo precargados.
   const [statusFilter, setStatusFilter] = useState<'all' | 'registered' | 'preloaded'>('all');
+  // Filtro por estado del correo de confirmación: todos / enviado / fallido / no enviado.
+  const [mailFilter, setMailFilter] = useState<'all' | 'sent' | 'failed' | 'unsent'>('all');
   const [isFormOpen, setIsFormOpen] = useState(false);
   // Modo "Inscribir" del form: convierte un precargado en inscrito (exige obligatorios + fecha).
   const [formInscribir, setFormInscribir] = useState(false);
@@ -114,8 +116,9 @@ const ParticipantList = ({ eventId }: { eventId: string }) => {
     if (showOnlyAwarded) f.awarded = 'true';
     if (statusFilter === 'registered') f.registered = 'true';
     else if (statusFilter === 'preloaded') f.registered = 'false';
+    if (mailFilter !== 'all') f.mail = mailFilter;
     return f;
-  }, [filter, showOnlyAwarded, statusFilter]);
+  }, [filter, showOnlyAwarded, statusFilter, mailFilter]);
 
   const reload = useCallback(() => {
     fetchParticipantsByEvent(eventId, page, PAGE_SIZE, currentFilters);
@@ -188,7 +191,7 @@ const ParticipantList = ({ eventId }: { eventId: string }) => {
   }, [participants, selectedIds, resendTo]);
 
   // Cambiar la búsqueda o el filtro vuelve a la página 1.
-  useEffect(() => { setPage(1); }, [filter, showOnlyAwarded, statusFilter]);
+  useEffect(() => { setPage(1); }, [filter, showOnlyAwarded, statusFilter, mailFilter]);
 
   // Carga de la tabla (con debounce mientras se escribe en el buscador).
   useEffect(() => {
@@ -470,6 +473,18 @@ const ParticipantList = ({ eventId }: { eventId: string }) => {
         >
           <Award size={16} /> {showOnlyAwarded ? 'Mostrando premiados' : 'Solo premiados'}
         </button>
+        {/* Filtro por estado del correo. Corre en el servidor (todos los del evento). */}
+        <select
+          value={mailFilter}
+          onChange={(e) => setMailFilter(e.target.value as 'all' | 'sent' | 'failed' | 'unsent')}
+          className="px-3 py-2 rounded-lg text-sm font-medium border border-gray-300 bg-white text-gray-700 self-start"
+          title="Filtrar por estado del correo de confirmación"
+        >
+          <option value="all">Correo: todos</option>
+          <option value="sent">Correo: enviado</option>
+          <option value="failed">Correo: fallido</option>
+          <option value="unsent">Correo: no enviado</option>
+        </select>
       </div>
 
       <div className="overflow-x-auto">
