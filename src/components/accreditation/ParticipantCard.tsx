@@ -26,7 +26,8 @@ const fmtScheduleDate = (d?: string) => {
 // Traduce los mensajes de error del backend (en inglés) a algo claro para la puerta.
 const traducirError = (msg?: string): string => {
   const m = msg || '';
-  if (m.includes('maximum capacity')) return 'Se alcanzó el aforo máximo de este horario.';
+  if (m.includes('participant capacity')) return 'Se alcanzó el cupo de participantes de este horario.';
+  if (m.includes('maximum capacity')) return 'Se alcanzó el aforo máximo (personas) de este horario.';
   if (m.includes('already been accredited')) return 'Esta persona ya está acreditada en este horario.';
   if (m.includes('not active')) return 'El evento o el horario no está activo.';
   if (m.includes('does not belong') || m.includes('not found or does not belong')) return 'La persona no pertenece a este evento.';

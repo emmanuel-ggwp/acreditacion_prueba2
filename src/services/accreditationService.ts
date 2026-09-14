@@ -13,19 +13,25 @@ import { dietaryFull, dietaryLabel } from '@/utils/dietary';
 
 export class AccreditationService {
 
-  // Aforo ocupado por las personas ya presentes en un horario: filas de acreditación
-  // (participantes + invitados con nombre) + la suma de invitados numéricos (guest_count).
-  private async _occupiedBodies(eventScheduleId: string, transaction?: Transaction): Promise<number> {
+  // Ocupación de un horario, con los dos criterios que se controlan por separado:
+  // - participants: participantes acreditados (no cuenta invitados) → cupo de participantes.
+  // - bodies: personas totales = filas (participantes + invitados con nombre) + suma de
+  //   invitados numéricos (guest_count) → aforo total.
+  private async _occupancy(eventScheduleId: string, transaction?: Transaction): Promise<{ participants: number; bodies: number }> {
     const agg: any = await Accreditation.findOne({
       where: { eventScheduleId },
       attributes: [
+        [fn('COUNT', fn('DISTINCT', col('participant_id'))), 'participants'],
         [fn('COUNT', col('id')), 'rows'],
         [fn('COALESCE', fn('SUM', col('guest_count')), 0), 'guestSum'],
       ],
       transaction,
       raw: true,
     });
-    return Number(agg?.rows || 0) + Number(agg?.guestSum || 0);
+    return {
+      participants: Number(agg?.participants || 0),
+      bodies: Number(agg?.rows || 0) + Number(agg?.guestSum || 0),
+    };
   }
 
   private async _verifyAndLock(
@@ -69,12 +75,19 @@ export class AccreditationService {
         throw new Error('Participant or Guest ID is required.');
     }
 
-    // Control de cupo por AFORO REAL (personas totales): cuerpos ya presentes + los que
-    // trae quien entra (incomingBodies = 1 la persona + sus acompañantes numéricos).
-    const capacity = schedule.maxCapacity ?? event.maxCapacity;
-    if (capacity) {
-      const occupied = await this._occupiedBodies(eventScheduleId, transaction);
-      if (occupied + incomingBodies > capacity) {
+    // Dos límites que se controlan por separado:
+    //  - Cupo de PARTICIPANTES (maxCapacity, hereda del evento): solo lo consume un
+    //    participante, no un invitado.
+    //  - AFORO total en personas (maxAttendees, nivel horario; null = sin límite):
+    //    participantes + invitados; incomingBodies = 1 + acompañantes numéricos.
+    const participantCap = schedule.maxCapacity ?? event.maxCapacity;
+    const aforoCap = (schedule as any).maxAttendees;
+    if (participantCap || aforoCap) {
+      const { participants, bodies } = await this._occupancy(eventScheduleId, transaction);
+      if (participantId && participantCap && participants + 1 > participantCap) {
+        throw new Error('Event schedule has reached its maximum participant capacity.');
+      }
+      if (aforoCap && bodies + incomingBodies > aforoCap) {
         throw new Error('Event schedule has reached its maximum capacity.');
       }
     }
@@ -204,14 +217,13 @@ export class AccreditationService {
       const acc = await Accreditation.findOne({ where: { participantId, eventScheduleId }, transaction });
       if (!acc) throw new Error('El participante no está acreditado en este horario.');
 
-      // El nuevo total de invitados no puede superar el aforo (personas totales).
-      const event = await Event.findByPk((schedule as any).eventId, { transaction });
-      const capacity = (schedule as any).maxCapacity ?? (event as any)?.maxCapacity;
-      if (capacity) {
-        const occupied = await this._occupiedBodies(eventScheduleId, transaction);
-        // Aforo de los demás = ocupado total menos el aporte de esta fila (1 + su guest_count viejo).
-        const occupiedOthers = occupied - 1 - Number((acc as any).guestCount || 0);
-        if (occupiedOthers + 1 + newCount > capacity) {
+      // Editar invitados numéricos afecta el AFORO total (no el cupo de participantes).
+      const aforoCap = (schedule as any).maxAttendees;
+      if (aforoCap) {
+        const { bodies } = await this._occupancy(eventScheduleId, transaction);
+        // Aforo de los demás = total menos el aporte de esta fila (1 + su guest_count viejo).
+        const othersBodies = bodies - 1 - Number((acc as any).guestCount || 0);
+        if (othersBodies + 1 + newCount > aforoCap) {
           throw new Error('Event schedule has reached its maximum capacity.');
         }
       }

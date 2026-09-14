@@ -9,7 +9,10 @@ class EventSchedule extends Model {
   declare public scheduleName: string;
   declare public startDateTime: Date;
   declare public endDateTime: Date;
+  // Cupo de participantes (la inscripción cuenta solo participantes, no invitados).
   declare public maxCapacity: number | null;
+  // Aforo total = participantes + invitados (se controla al acreditar). null = sin límite.
+  declare public maxAttendees: number | null;
   declare public location: string | null;
   declare public blockType: 'SINGLE' | 'AM' | 'PM' | 'FULL_DAY' | 'CUSTOM';
   declare public label: string | null;
@@ -56,6 +59,12 @@ EventSchedule.init(
     maxCapacity: {
       type: DataTypes.INTEGER,
       allowNull: true,
+      comment: 'Cupo de participantes (no cuenta invitados)',
+    },
+    maxAttendees: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      comment: 'Aforo total = participantes + invitados; null = sin límite',
     },
     location: {
       type: DataTypes.STRING,

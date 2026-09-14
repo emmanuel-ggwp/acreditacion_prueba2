@@ -188,7 +188,10 @@ export const scheduleSchema = z.object({
   scheduleName: z.string().min(3, 'El nombre del horario debe tener al menos 3 caracteres'),
   startDateTime: z.iso.datetime({ message: 'Formato de fecha de inicio inválido' }),
   endDateTime: z.iso.datetime({ message: 'Formato de fecha de término inválido' }),
-  maxCapacity: z.number().int().positive('La capacidad máxima debe ser mayor que 0').optional().or(z.literal(0)),
+  // Cupo de participantes (no cuenta invitados).
+  maxCapacity: z.number().int().positive('El cupo de participantes debe ser mayor que 0').optional().or(z.literal(0)),
+  // Aforo total = participantes + invitados; 0 / vacío = sin límite.
+  maxAttendees: z.number().int().positive('El aforo total debe ser mayor que 0').optional().or(z.literal(0)),
   location: z.string().optional(),
   blockType: z.enum(['SINGLE', 'AM', 'PM', 'FULL_DAY', 'CUSTOM']).default('SINGLE'),
   label: z.string().optional().nullable(),

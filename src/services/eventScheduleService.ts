@@ -14,11 +14,16 @@ export class EventScheduleService {
       throw new Error(`Evento ${eventId} no encontrado para la agenda.`);
     }
 
-    // La capacidad de una fecha no puede superar la capacidad máxima del evento.
+    // El cupo de participantes de una fecha no puede superar el del evento.
     const evMax = Number((event as any).maxCapacity) || 0;
     const sMax = Number((validatedData as any).maxCapacity) || 0;
     if (evMax > 0 && sMax > evMax) {
-      throw new Error(`La capacidad de la fecha (${sMax}) no puede superar la capacidad máxima del evento (${evMax}).`);
+      throw new Error(`El cupo de participantes de la fecha (${sMax}) no puede superar el del evento (${evMax}).`);
+    }
+    // El aforo total (participantes + invitados) no puede ser menor que el cupo de participantes.
+    const sAforo = Number((validatedData as any).maxAttendees) || 0;
+    if (sMax > 0 && sAforo > 0 && sAforo < sMax) {
+      throw new Error(`El aforo total (${sAforo}) no puede ser menor que el cupo de participantes (${sMax}).`);
     }
 
     // Nota: se permiten horarios que se solapan (ej. sesiones paralelas en distintas salas).
@@ -43,13 +48,22 @@ export class EventScheduleService {
         }
     }
 
-    // La capacidad de una fecha no puede superar la capacidad máxima del evento.
+    // El cupo de participantes de una fecha no puede superar el del evento.
     if (validatedData.maxCapacity != null) {
         const event = await Event.findByPk((schedule as any).eventId);
         const evMax = Number((event as any)?.maxCapacity) || 0;
         const sMax = Number(validatedData.maxCapacity) || 0;
         if (evMax > 0 && sMax > evMax) {
-            throw new Error(`La capacidad de la fecha (${sMax}) no puede superar la capacidad máxima del evento (${evMax}).`);
+            throw new Error(`El cupo de participantes de la fecha (${sMax}) no puede superar el del evento (${evMax}).`);
+        }
+    }
+    // El aforo total no puede ser menor que el cupo de participantes (usando los valores
+    // efectivos: lo que trae la edición, o lo que ya tiene la fecha).
+    if (validatedData.maxCapacity != null || (validatedData as any).maxAttendees != null) {
+        const cap = Number(validatedData.maxCapacity ?? (schedule as any).maxCapacity) || 0;
+        const aforo = Number((validatedData as any).maxAttendees ?? (schedule as any).maxAttendees) || 0;
+        if (cap > 0 && aforo > 0 && aforo < cap) {
+            throw new Error(`El aforo total (${aforo}) no puede ser menor que el cupo de participantes (${cap}).`);
         }
     }
 
