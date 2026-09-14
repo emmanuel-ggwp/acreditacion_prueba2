@@ -13,23 +13,8 @@ import { dietaryFull, dietaryLabel } from '@/utils/dietary';
 
 export class AccreditationService {
 
-  // Aforo ocupado (personas totales) = filas (participantes + invitados con nombre)
-  // + suma de invitados numéricos (guest_count).
-  private async _occupiedBodies(eventScheduleId: string, transaction?: Transaction): Promise<number> {
-    const agg: any = await Accreditation.findOne({
-      where: { eventScheduleId },
-      attributes: [
-        [fn('COUNT', col('id')), 'rows'],
-        [fn('COALESCE', fn('SUM', col('guest_count')), 0), 'guestSum'],
-      ],
-      transaction,
-      raw: true,
-    });
-    return Number(agg?.rows || 0) + Number(agg?.guestSum || 0);
-  }
-
   private async _verifyAndLock(
-    { participantId, guestId, eventScheduleId, incomingBodies = 1 }: { participantId?: string; guestId?: string; eventScheduleId: string; incomingBodies?: number },
+    { participantId, guestId, eventScheduleId }: { participantId?: string; guestId?: string; eventScheduleId: string },
     transaction: Transaction
   ) {
     // Bloqueamos SOLO la fila del horario (sin include): Postgres no permite
@@ -69,17 +54,10 @@ export class AccreditationService {
         throw new Error('Participant or Guest ID is required.');
     }
 
-    // En la ACREDITACIÓN solo se controla el AFORO total en personas (maxAttendees,
-    // nivel horario; null = sin límite): participantes + invitados; incomingBodies =
-    // 1 + acompañantes numéricos. El cupo de participantes (maxCapacity) es un límite
-    // de INSCRIPCIÓN y NO se vuelve a aplicar en la puerta.
-    const aforoCap = (schedule as any).maxAttendees;
-    if (aforoCap) {
-      const occupied = await this._occupiedBodies(eventScheduleId, transaction);
-      if (occupied + incomingBodies > aforoCap) {
-        throw new Error('Event schedule has reached its maximum capacity.');
-      }
-    }
+    // La ACREDITACIÓN no tiene tope: en la puerta no se limita por aforo ni por cupo.
+    // El cupo de participantes (maxCapacity) es solo un límite de INSCRIPCIÓN, y el
+    // aforo (maxAttendees) es solo informativo. Se sigue bloqueando la fila del
+    // horario (arriba) para serializar y evitar acreditaciones duplicadas.
 
     // Check for prior accreditation
     const idToCheck = participantId || guestId;
@@ -101,9 +79,7 @@ export class AccreditationService {
 
     const transaction = await sequelize.transaction();
     try {
-      // El participante ocupa 1 cupo + sus acompañantes numéricos (modos count/companion).
-      const incomingBodies = 1 + Math.max(0, Number(guestCount) || 0);
-      await this._verifyAndLock({ participantId, eventScheduleId, incomingBodies }, transaction);
+      await this._verifyAndLock({ participantId, eventScheduleId }, transaction);
 
       const accreditation = await Accreditation.create({
         participantId,
@@ -194,40 +170,17 @@ export class AccreditationService {
     return { removed };
   }
 
-  // Editar cuántos invitados llegaron (modos numéricos count/companion).
+  // Editar cuántos invitados llegaron (modos numéricos count/companion). No hay tope de
+  // aforo en la puerta, así que es una edición simple del contador.
   async setAccreditationGuestCount(participantId: string, eventScheduleId: string, guestCount: number, accreditedBy: string) {
-    const newCount = Math.max(0, Number(guestCount) || 0);
-    const transaction = await sequelize.transaction();
-    try {
-      // Bloqueamos la fila del horario para que el recálculo de aforo sea consistente
-      // frente a acreditaciones concurrentes.
-      const schedule = await EventSchedule.findByPk(eventScheduleId, { lock: transaction.LOCK.UPDATE, transaction });
-      if (!schedule) throw new Error('Event schedule not found.');
-      const acc = await Accreditation.findOne({ where: { participantId, eventScheduleId }, transaction });
-      if (!acc) throw new Error('El participante no está acreditado en este horario.');
-
-      // Editar invitados numéricos afecta el AFORO total (no el cupo de participantes).
-      const aforoCap = (schedule as any).maxAttendees;
-      if (aforoCap) {
-        const bodies = await this._occupiedBodies(eventScheduleId, transaction);
-        // Aforo de los demás = total menos el aporte de esta fila (1 + su guest_count viejo).
-        const othersBodies = bodies - 1 - Number((acc as any).guestCount || 0);
-        if (othersBodies + 1 + newCount > aforoCap) {
-          throw new Error('Event schedule has reached its maximum capacity.');
-        }
-      }
-
-      await acc.update({ guestCount: newCount }, { transaction });
-      await auditLogService.log({
-        userId: accreditedBy, action: 'UPDATE', entity: 'Accreditation', entityId: (acc as any).id,
-        details: { participantId, eventScheduleId, guestCount: newCount },
-      });
-      await transaction.commit();
-      return acc;
-    } catch (error) {
-      await transaction.rollback();
-      throw error;
-    }
+    const acc = await Accreditation.findOne({ where: { participantId, eventScheduleId } });
+    if (!acc) throw new Error('El participante no está acreditado en este horario.');
+    await acc.update({ guestCount: Math.max(0, Number(guestCount) || 0) });
+    await auditLogService.log({
+      userId: accreditedBy, action: 'UPDATE', entity: 'Accreditation', entityId: (acc as any).id,
+      details: { participantId, eventScheduleId, guestCount: Math.max(0, Number(guestCount) || 0) },
+    });
+    return acc;
   }
 
   async bulkAccredit(accreditations: z.infer<typeof bulkAccreditationSchema>, accreditedBy: string) {
