@@ -163,17 +163,12 @@ const AccreditationPanel = ({ eventId: eventIdProp, scheduleId: scheduleIdProp }
               {schedules.map((s) => {
                 const sel = s.id === scheduleId;
                 const st = STATUS[s.status] || STATUS.published;
-                // Dos límites separados: cupo de participantes (maxCapacity, hereda del evento)
-                // y aforo total en personas (maxAttendees; 0 = sin límite).
-                const partCap = s.maxCapacity || s.displayMaxCapacity || s.Event?.maxCapacity || 0;
-                const aforoCap = s.maxAttendees || 0;
+                // En el panel se muestran solo CANTIDADES (sin barras ni topes): el cupo es
+                // límite de inscripción y el aforo se controla al acreditar, no se topa aquí.
                 const est = eventStats?.perSchedule.find((ps) => ps.scheduleId === s.id);
                 const bodies = est ? est.total : Number(s.accreditedCount || 0);
                 const partN = est ? est.participants : Number(s.accreditedCount || 0);
                 const guestN = est ? est.guests : 0;
-                const partPct = partCap > 0 ? Math.min(100, Math.round((partN / partCap) * 100)) : 0;
-                const partFull = partCap > 0 && partN >= partCap;
-                const aforoFull = aforoCap > 0 && bodies >= aforoCap;
                 return (
                   <div key={s.id} className={`rounded-lg border p-3 transition ${sel ? 'border-indigo-500 ring-2 ring-indigo-200 bg-indigo-50/40' : 'border-gray-200 bg-white hover:border-indigo-300'}`}>
                     <div className="flex items-start justify-between gap-2">
@@ -185,20 +180,18 @@ const AccreditationPanel = ({ eventId: eventIdProp, scheduleId: scheduleIdProp }
                       <p className="flex items-center gap-1"><Clock size={12} /> {fmtTime(s.startDateTime)} – {fmtTime(s.endDateTime)}</p>
                       {(s.location || s.displayLocation) && <p className="flex items-center gap-1"><MapPin size={12} /> {s.location || s.displayLocation}</p>}
                     </div>
-                    <div className="mt-2 space-y-2">
-                      <div>
-                        <div className="flex items-center justify-between text-xs text-gray-600 mb-0.5">
-                          <span>Participantes</span>
-                          <span className={`font-medium ${partFull ? 'text-red-600' : ''}`}>{partN}{partCap > 0 ? ` / ${partCap}` : ''}</span>
-                        </div>
-                        {partCap > 0 && <div className="w-full bg-gray-200 rounded-full h-1.5"><div className={`h-1.5 rounded-full ${partFull ? 'bg-red-500' : 'bg-indigo-600'}`} style={{ width: `${partPct}%` }} /></div>}
+                    <div className="mt-2 flex items-stretch gap-1.5 text-center">
+                      <div className="flex-1 rounded-lg bg-gray-50 py-1.5">
+                        <p className="text-lg font-semibold text-indigo-600 leading-none">{partN}</p>
+                        <p className="mt-1 text-[11px] text-gray-500">Participantes</p>
                       </div>
-                      <div>
-                        <div className="flex items-center justify-between text-xs text-gray-600">
-                          <span>Aforo (personas)</span>
-                          <span className={`font-medium ${aforoFull ? 'text-red-600' : ''}`}>{bodies}{aforoCap > 0 ? ` / ${aforoCap}` : ''}</span>
-                        </div>
-                        <p className="mt-0.5 text-[11px] text-gray-500">{partN} participante{partN === 1 ? '' : 's'}{guestN > 0 ? ` + ${guestN} invitado${guestN === 1 ? '' : 's'}` : ''}</p>
+                      <div className="flex-1 rounded-lg bg-gray-50 py-1.5">
+                        <p className="text-lg font-semibold text-teal-600 leading-none">{guestN}</p>
+                        <p className="mt-1 text-[11px] text-gray-500">Invitados</p>
+                      </div>
+                      <div className="flex-1 rounded-lg bg-indigo-50 py-1.5">
+                        <p className="text-lg font-semibold text-gray-900 leading-none">{bodies}</p>
+                        <p className="mt-1 text-[11px] text-gray-500">Aforo</p>
                       </div>
                     </div>
                     <div className="mt-3 flex items-center gap-2">
