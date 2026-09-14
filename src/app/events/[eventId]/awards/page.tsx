@@ -5,6 +5,8 @@ import useEventStore from '@/store/eventStore';
 import { useEffect } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
+import RoleGuard from '@/components/auth/RoleGuard';
+import { ROLES } from '@/utils/constants';
 
 interface AwardsPageProps {
   params: {
@@ -23,20 +25,22 @@ const AwardsPage: React.FC<AwardsPageProps> = ({ params }) => {
   }, [eventId, fetchEventById]);
 
   return (
-    <div className="container mx-auto p-4">
-      <div className="mb-4">
-        <Link href="/events" className="text-blue-500 hover:underline flex items-center">
-          <ArrowLeft className="mr-2" size={16} />
-          Volver a Eventos
-        </Link>
+    <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.MANAGER, ROLES.OPERATOR, ROLES.GUARD]}>
+      <div className="container mx-auto p-4">
+        <div className="mb-4">
+          <Link href="/events" className="text-blue-500 hover:underline flex items-center">
+            <ArrowLeft className="mr-2" size={16} />
+            Volver a Eventos
+          </Link>
+        </div>
+        {currentEvent && (
+          <h1 className="text-3xl font-bold mb-4">
+            Premios para el Evento: {currentEvent.name}
+          </h1>
+        )}
+        <AwardList eventId={eventId} />
       </div>
-      {currentEvent && (
-        <h1 className="text-3xl font-bold mb-4">
-          Premios para el Evento: {currentEvent.name}
-        </h1>
-      )}
-      <AwardList eventId={eventId} />
-    </div>
+    </RoleGuard>
   );
 };
 

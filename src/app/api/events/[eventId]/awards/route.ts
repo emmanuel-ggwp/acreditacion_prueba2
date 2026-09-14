@@ -6,7 +6,7 @@ import { awardService } from '@/services/awardService';
 import { AuthenticatedRequest } from '@/types/auth';
 import { ROLES } from '@/utils/constants';
 
-const { ADMIN, OPERATOR, GUARD} = ROLES;
+const { ADMIN, MANAGER, OPERATOR, GUARD} = ROLES;
 
 interface Params {
   params: Promise<{ eventId: string }>;
@@ -24,7 +24,7 @@ export const GET = withAuth(async (req: AuthenticatedRequest, { params }: Params
     console.error('Error fetching awards for event:', error);
     return NextResponse.json({ message: 'Error fetching awards', error: error.message }, { status: 500 });
   }
-}, [ADMIN, OPERATOR, GUARD]);
+}, [ADMIN, MANAGER, OPERATOR, GUARD]);
 
 export const POST = withAuth(async (req: AuthenticatedRequest, { params }: Params) => {
   try {
@@ -43,4 +43,4 @@ export const POST = withAuth(async (req: AuthenticatedRequest, { params }: Param
     }
     return NextResponse.json({ message: 'Error creating award', error: error.message }, { status: 500 });
   }
-}, [ADMIN, OPERATOR]);
+}, [ADMIN, MANAGER, OPERATOR]);

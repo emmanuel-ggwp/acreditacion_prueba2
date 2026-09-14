@@ -5,7 +5,7 @@ import { participantAwardService } from '@/services/participantAwardService';
 import { AuthenticatedRequest } from '@/types/auth';
 import { ROLES } from '@/utils/constants';
 
-const { ADMIN, OPERATOR, GUARD} = ROLES;
+const { ADMIN, MANAGER, OPERATOR } = ROLES;
 
 interface Params {
   params: Promise<{ participantAwardId: string }>;
@@ -23,4 +23,4 @@ export const DELETE = withAuth(async (req: AuthenticatedRequest, { params }: Par
     console.error('Error cancelling award assignment:', error);
     return NextResponse.json({ message: 'Error cancelling award assignment', error: error.message }, { status: 500 });
   }
-}, [ADMIN, OPERATOR]);
+}, [ADMIN, MANAGER, OPERATOR]);

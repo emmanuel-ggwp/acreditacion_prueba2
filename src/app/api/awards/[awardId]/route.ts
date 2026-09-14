@@ -6,7 +6,7 @@ import { AuthenticatedRequest } from '@/types/auth';
 import { z } from 'zod';
 import { ROLES } from '@/utils/constants';
 
-const { ADMIN, OPERATOR, GUARD} = ROLES;
+const { ADMIN, MANAGER, OPERATOR } = ROLES;
 
 interface Params {
   params: Promise<{ awardId: string }>;
@@ -23,7 +23,7 @@ export const GET = withAuth(async (req: AuthenticatedRequest, { params }: Params
   } catch (error: any) {
     return NextResponse.json({ message: error.message }, { status: 500 });
   }
-}, [ADMIN, OPERATOR]);
+}, [ADMIN, MANAGER, OPERATOR]);
 
 export const PUT = withAuth(async (req: AuthenticatedRequest, { params }: Params) => {
   try {
@@ -38,7 +38,7 @@ export const PUT = withAuth(async (req: AuthenticatedRequest, { params }: Params
     }
     return NextResponse.json({ message: error.message }, { status: 500 });
   }
-}, [ADMIN, OPERATOR]);
+}, [ADMIN, MANAGER, OPERATOR]);
 
 export const DELETE = withAuth(async (req: AuthenticatedRequest, { params }: Params) => {
   try {
@@ -49,4 +49,4 @@ export const DELETE = withAuth(async (req: AuthenticatedRequest, { params }: Par
   } catch (error: any) {
     return NextResponse.json({ message: error.message }, { status: 500 });
   }
-}, [ADMIN]);
+}, [ADMIN, MANAGER]);

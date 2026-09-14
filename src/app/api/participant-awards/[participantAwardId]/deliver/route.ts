@@ -5,7 +5,7 @@ import { participantAwardService } from '@/services/participantAwardService';
 import { AuthenticatedRequest } from '@/types/auth';
 import { ROLES } from '@/utils/constants';
 
-const { ADMIN, OPERATOR, GUARD } = ROLES;
+const { ADMIN, MANAGER, OPERATOR, GUARD } = ROLES;
 
 interface Params {
   params: Promise<{ participantAwardId: string }>;
@@ -24,4 +24,4 @@ export const PATCH = withAuth(async (req: AuthenticatedRequest, { params }: Para
     console.error('Error delivering award:', error);
     return NextResponse.json({ message: 'Error delivering award', error: error.message }, { status: 500 });
   }
-}, [ADMIN, OPERATOR, GUARD]);
+}, [ADMIN, MANAGER, OPERATOR, GUARD]);
