@@ -50,14 +50,16 @@ export class ReportService {
             ['event_schedule_id', 'eventScheduleId'],
             [fn('COUNT', col('id')), 'total'],
             [fn('COUNT', fn('DISTINCT', col('participant_id'))), 'participants'],
-            [fn('COUNT', fn('DISTINCT', col('guest_id'))), 'guests']
+            [fn('COUNT', fn('DISTINCT', col('guest_id'))), 'guests'],
+            // Invitados NUMÉRICOS que llegaron (modos count/companion; no crean fila Guest).
+            [fn('COALESCE', fn('SUM', col('guest_count')), 0), 'numericGuests']
         ],
         where: {
             eventScheduleId: { [Op.in]: scheduleIds }
         },
         group: ['event_schedule_id'],
         raw: true
-    }) as unknown as Array<{ eventScheduleId: string, total: number, participants: number, guests: number }>;
+    }) as unknown as Array<{ eventScheduleId: string, total: number, participants: number, guests: number, numericGuests: number }>;
 
     const accMap = new Map(accreditationCounts.map(a => [a.eventScheduleId, a]));
 
@@ -97,6 +99,22 @@ export class ReportService {
     
     const guestRegMap = new Map(guestRegistrationCounts.map(r => [r.scheduleId, r.count]));
 
+    // 3c. Invitados NUMÉRICOS registrados por fecha (Participant.guestCount de los modos
+    // count/companion; no crean fila Guest). Se suma el declarado de cada participante
+    // inscrito en la fecha, para que "registrados" sea comparable con "acreditados".
+    const numericRegQuery = `
+        SELECT ps.schedule_id as "scheduleId", COALESCE(SUM(p.guest_count), 0)::int as count
+        FROM participant_schedules ps
+        INNER JOIN participants p ON p.id = ps.participant_id
+        WHERE ps.schedule_id IN (:scheduleIds) AND p.deleted_at IS NULL
+        GROUP BY ps.schedule_id
+    `;
+    const numericRegCounts = await sequelize.query<{ scheduleId: string; count: number }>(numericRegQuery, {
+        replacements: { scheduleIds },
+        type: QueryTypes.SELECT
+    });
+    const numericRegMap = new Map(numericRegCounts.map(r => [r.scheduleId, r.count]));
+
     // 4. Batch: Get Awards Delivered per schedule
     const awardsQuery = `
         SELECT ps.schedule_id as "scheduleId", COUNT(pa.id)::int as count
@@ -118,12 +136,16 @@ export class ReportService {
 
     // 5. Build Schedule Details
     const scheduleDetails = schedules.map(s => {
-        const accData = accMap.get(s.id) || { total: 0, participants: 0, guests: 0 };
+        const accData = accMap.get(s.id) || { total: 0, participants: 0, guests: 0, numericGuests: 0 };
         const registeredParticipants = Number(regMap.get(s.id) || 0);
-        const registeredGuests = Number(guestRegMap.get(s.id) || 0);
+        // Invitados registrados = con nombre (filas) + numéricos declarados.
+        const registeredGuests = Number(guestRegMap.get(s.id) || 0) + Number(numericRegMap.get(s.id) || 0);
         const registeredTotal = registeredParticipants + registeredGuests;
         const awardsDelivered = Number(awardMap.get(s.id) || 0);
-        const accTotal = Number(accData.total) || 0;
+        // Acreditados = filas (participantes + invitados con nombre) + invitados numéricos.
+        const accNumericGuests = Number(accData.numericGuests) || 0;
+        const accreditedGuests = Number(accData.guests || 0) + accNumericGuests;
+        const accTotal = (Number(accData.total) || 0) + accNumericGuests;
         const capacity = s.maxCapacity ?? event.maxCapacity ?? 0;
 
         return {
@@ -137,7 +159,7 @@ export class ReportService {
             registeredGuests,
             accreditedTotal: accTotal,
             accreditedParticipants: Number(accData.participants) || 0,
-            accreditedGuests: Number(accData.guests) || 0,
+            accreditedGuests,
             awardsDelivered,
             capacityUsedPercentage: capacity > 0 ? (accTotal / capacity) * 100 : 0,
         };
@@ -166,7 +188,20 @@ export class ReportService {
           WHERE es.event_id = :eventId AND g.deleted_at IS NULL`,
         { replacements: { eventId }, type: QueryTypes.SELECT }
     );
-    const totalRegisteredGuests = Number(guestEventRows[0]?.count) || 0;
+    // Invitados NUMÉRICOS registrados en el evento: guestCount de cada participante
+    // inscrito, contado UNA vez por participante (no por fecha) para no inflar el total.
+    const numericRegEventRows = await sequelize.query<{ count: number }>(
+        `SELECT COALESCE(SUM(p.guest_count), 0)::int as count
+           FROM participants p
+          WHERE p.deleted_at IS NULL
+            AND EXISTS (
+              SELECT 1 FROM participant_schedules ps
+              INNER JOIN event_schedules es ON es.id = ps.schedule_id
+              WHERE ps.participant_id = p.id AND es.event_id = :eventId
+            )`,
+        { replacements: { eventId }, type: QueryTypes.SELECT }
+    );
+    const totalRegisteredGuests = (Number(guestEventRows[0]?.count) || 0) + (Number(numericRegEventRows[0]?.count) || 0);
 
     // Efficiently get unique accredited participants and guests across the entire event
     const uniqueEventStats = await Accreditation.findOne({
@@ -183,7 +218,15 @@ export class ReportService {
     }) as any;
 
     const totalAccreditedParticipants = parseInt(uniqueEventStats?.uniqueParticipants || '0', 10);
-    const totalAccreditedGuests = parseInt(uniqueEventStats?.uniqueGuests || '0', 10);
+    // Invitados acreditados = con nombre (distinct guest_id) + numéricos (suma guest_count).
+    const numericAccEventRows = await sequelize.query<{ count: number }>(
+        `SELECT COALESCE(SUM(a.guest_count), 0)::int as count
+           FROM accreditations a
+           INNER JOIN event_schedules es ON es.id = a.event_schedule_id
+          WHERE es.event_id = :eventId`,
+        { replacements: { eventId }, type: QueryTypes.SELECT }
+    );
+    const totalAccreditedGuests = parseInt(uniqueEventStats?.uniqueGuests || '0', 10) + (Number(numericAccEventRows[0]?.count) || 0);
 
     const awardsAssigned = await ParticipantAward.count({ include: [{ model: Award, where: { eventId }, attributes: [] }] });
     const awardsDeliveredTotal = await ParticipantAward.count({
