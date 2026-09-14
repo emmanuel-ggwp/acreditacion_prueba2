@@ -13,10 +13,15 @@ interface AuthState {
   accessToken: string | null;
   isAuthenticated: boolean;
   loading: boolean;
+  // Restauración inicial de sesión tras recargar: mientras es true, los guards
+  // esperan (no redirigen) porque el access token vive en memoria y hay que pedir
+  // uno nuevo con la cookie de refresh.
+  initializing: boolean;
   error: string | null;
   login: (credentials: z.infer<typeof loginSchema>) => Promise<void>;
   logout: () => Promise<void>;
   refreshAuthToken: () => Promise<void>;
+  initAuth: () => Promise<void>;
   setUser: (user: FrontendUser | null) => void;
   checkAuth: () => void;
 }
@@ -43,6 +48,7 @@ const useAuthStore = create<AuthState>()(
         accessToken: null,
         isAuthenticated: false,
         loading: false,
+        initializing: true,
         error: null,
 
         login: async (credentials) => {
@@ -124,6 +130,34 @@ const useAuthStore = create<AuthState>()(
           return refreshInFlight;
         },
 
+        initAuth: async () => {
+          // Al recargar, el access token (en memoria) se perdió. Si hay un usuario
+          // recordado, intentamos restaurar la sesión con la cookie HttpOnly del
+          // refresh token (el JS no la ve, pero el navegador la envía sola). Sin
+          // usuario recordado no hay sesión que restaurar: es un visitante anónimo.
+          if (!get().user) {
+            set({ initializing: false, isAuthenticated: false });
+            return;
+          }
+          try {
+            const res = await fetch(API_ENDPOINTS.REFRESH_TOKEN, {
+              method: 'POST',
+              credentials: 'same-origin',
+              headers: { 'Content-Type': 'application/json' },
+              body: '{}',
+            });
+            if (!res.ok) throw new Error('No active session');
+            const json = await res.json();
+            const accessToken = json?.data?.accessToken;
+            if (!accessToken) throw new Error('No access token in refresh response');
+            set({ accessToken, isAuthenticated: true, initializing: false });
+          } catch {
+            // Sin sesión válida (cookie ausente/expirada/revocada): limpiar en
+            // silencio, sin POST a /logout (no hay nada que revocar).
+            set({ user: null, accessToken: null, isAuthenticated: false, initializing: false });
+          }
+        },
+
         setUser: (user) => {
           set({ user });
         },
@@ -144,11 +178,12 @@ const useAuthStore = create<AuthState>()(
       {
         name: 'auth-storage',
         storage: createJSONStorage(() => localStorage),
-        // Ya NO se persiste el refresh token: vive en la cookie HttpOnly, fuera del
-        // alcance del JS (hallazgo #4 / F3-08). El access token (corto) sigue en
-        // localStorage para sobrevivir a la recarga; moverlo a memoria es la mejora
-        // siguiente (ver nota en la PR).
-        partialize: (state) => ({ accessToken: state.accessToken, user: state.user }),
+        // El access token YA NO se persiste: vive solo en memoria (hallazgo #4 /
+        // Stage 3b), así un XSS no puede leerlo de localStorage. Al recargar se
+        // restaura con la cookie HttpOnly del refresh token (initAuth). Solo se
+        // persiste `user` (dato no sensible) para mostrar la sesión al instante y
+        // decidir si intentar restaurar; si la restauración falla, se limpia.
+        partialize: (state) => ({ user: state.user }),
       }
     )
   )

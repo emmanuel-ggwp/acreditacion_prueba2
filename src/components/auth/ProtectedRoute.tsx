@@ -16,6 +16,9 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles 
   const user = useAuthStore((state) => state.user);
   const checkAuth = useAuthStore((state) => state.checkAuth);
   const loading = useAuthStore((state) => state.loading);
+  // La restauración inicial de sesión la maneja AuthProvider (initAuth); aquí se
+  // espera a que termine para no redirigir a /login una sesión que aún se restaura.
+  const initializing = useAuthStore((state) => state.initializing);
   const router = useRouter();
 
   useEffect(() => {
@@ -23,14 +26,14 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles 
   }, [checkAuth]);
 
   useEffect(() => {
-    if (!loading && !isAuthenticated) {
+    if (!initializing && !loading && !isAuthenticated) {
       router.push('/login');
     }
-  }, [isAuthenticated, loading, router]);
+  }, [isAuthenticated, loading, initializing, router]);
 
   const userHasRequiredRole = allowedRoles ? canAccess(user?.role, allowedRoles) : true;
 
-  if (loading || !isAuthenticated) {
+  if (initializing || loading || !isAuthenticated) {
     return (
       <div className="flex items-center justify-center h-screen">
         <div className="animate-spin rounded-full h-32 w-32 border-t-2 border-b-2 border-indigo-500"></div>

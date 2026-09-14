@@ -9,15 +9,17 @@ import { Role } from '@/utils/constants';
 const publicRoutes = ['/login', '/register'];
 
 const AuthProvider = ({ children }: { children: React.ReactNode }) => {
-  const { user, accessToken, loading, checkAuth, setUser, logout, refreshAuthToken } = useAuthStore();
+  const { user, accessToken, loading, initializing, initAuth, setUser, logout, refreshAuthToken } = useAuthStore();
   const pathname = usePathname();
   const router = useRouter();
   const [isMounted, setIsMounted] = useState(false);
 
   useEffect(() => {
     setIsMounted(true);
-    checkAuth();
-  }, [checkAuth]);
+    // Restaura la sesión tras recargar: el access token vive en memoria, así que se
+    // pide uno nuevo con la cookie de refresh antes de decidir autenticado/redirigir.
+    initAuth();
+  }, [initAuth]);
 
   useEffect(() => {
     if (!isMounted) return;
@@ -60,28 +62,30 @@ const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   }, [loading]);
 
   useEffect(() => {
-    if (!loading && isMounted) {
-      const isPublicRoute = publicRoutes.includes(pathname);
-      const isPublicLanding = pathname?.startsWith('/public');
+    // Esperar a que termine la restauración inicial (initAuth) antes de redirigir:
+    // si no, se rebota a /login una sesión válida cuyo token aún se está pidiendo.
+    if (!isMounted || initializing || loading) return;
 
-      // Las landings públicas no requieren autenticación: no redirigir.
-      if (isPublicLanding) {
-        return;
-      }
+    const isPublicRoute = publicRoutes.includes(pathname);
+    const isPublicLanding = pathname?.startsWith('/public');
 
-      // Prevent redirect loop: if we have a token but no user, wait for the other effect to restore the user
-      if (accessToken && !user) {
-        return;
-      }
-
-      if (!user && !isPublicRoute) {
-        router.push('/login');
-      }
-      if (user && isPublicRoute) {
-        router.push('/dashboard');
-      }
+    // Las landings públicas no requieren autenticación: no redirigir.
+    if (isPublicLanding) {
+      return;
     }
-  }, [user, loading, pathname, router, isMounted, accessToken]);
+
+    // Prevent redirect loop: if we have a token but no user, wait for the other effect to restore the user
+    if (accessToken && !user) {
+      return;
+    }
+
+    if (!user && !isPublicRoute) {
+      router.push('/login');
+    }
+    if (user && isPublicRoute) {
+      router.push('/dashboard');
+    }
+  }, [user, loading, pathname, router, isMounted, accessToken, initializing]);
 
   // Las páginas públicas (landing de inscripción) se renderizan sin el guard de auth.
   if (pathname?.startsWith('/public')) {
@@ -98,7 +102,9 @@ const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   if (!isMounted) {
     return <div className="flex items-center justify-center h-screen">Autenticando...</div>;
   }
-  if (loading && !isPublicRoute) {
+  // Mientras se restaura la sesión (initAuth) en una ruta protegida, mostrar el gate
+  // y NO montar la página: evita que sus fetches salgan sin token (401 → logout).
+  if ((initializing || loading) && !isPublicRoute) {
     return <div className="flex items-center justify-center h-screen">Autenticando...</div>;
   }
 
