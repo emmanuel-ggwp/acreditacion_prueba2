@@ -1,4 +1,6 @@
 import { GiftCampaign, GiftType, GiftEmployee, GiftDelivery } from '@/models/index';
+import { sequelize } from '@/lib/sequelize';
+import { Op } from 'sequelize';
 
 type Basis = 'FAMILY' | 'CHILD' | 'CARGA';
 
@@ -35,7 +37,28 @@ export class GiftService {
   async deleteCampaign(id: string) {
     const c = await GiftCampaign.findByPk(id);
     if (!c) throw new Error('Campaña no encontrada');
-    await c.destroy();
+    // Cascada en transacción: sin esto quedaban tipos, empleados y entregas colgando de
+    // una campaña "eliminada" (GiftDelivery no es paranoid y no había onDelete).
+    const tx = await sequelize.transaction();
+    try {
+      const [types, employees] = await Promise.all([
+        GiftType.findAll({ where: { campaignId: id }, attributes: ['id'], transaction: tx, paranoid: false }),
+        GiftEmployee.findAll({ where: { campaignId: id }, attributes: ['id'], transaction: tx, paranoid: false }),
+      ]);
+      const typeIds = types.map((t: any) => t.id);
+      const empIds = employees.map((e: any) => e.id);
+      const orConds: any[] = [];
+      if (typeIds.length) orConds.push({ giftTypeId: { [Op.in]: typeIds } });
+      if (empIds.length) orConds.push({ employeeId: { [Op.in]: empIds } });
+      if (orConds.length) await GiftDelivery.destroy({ where: { [Op.or]: orConds }, force: true, transaction: tx });
+      await GiftType.destroy({ where: { campaignId: id }, force: true, transaction: tx });
+      await GiftEmployee.destroy({ where: { campaignId: id }, force: true, transaction: tx });
+      await c.destroy({ force: true, transaction: tx });
+      await tx.commit();
+    } catch (e) {
+      await tx.rollback();
+      throw e;
+    }
     return { ok: true };
   }
 
@@ -57,7 +80,16 @@ export class GiftService {
   async deleteType(id: string) {
     const t = await GiftType.findByPk(id);
     if (!t) throw new Error('Tipo de regalo no encontrado');
-    await t.destroy();
+    // Borrar primero sus entregas (no dejar GiftDelivery colgando).
+    const tx = await sequelize.transaction();
+    try {
+      await GiftDelivery.destroy({ where: { giftTypeId: id }, force: true, transaction: tx });
+      await t.destroy({ transaction: tx });
+      await tx.commit();
+    } catch (e) {
+      await tx.rollback();
+      throw e;
+    }
     return { ok: true };
   }
 
@@ -109,7 +141,16 @@ export class GiftService {
   async deleteEmployee(id: string) {
     const e = await GiftEmployee.findByPk(id);
     if (!e) throw new Error('Empleado no encontrado');
-    await e.destroy();
+    // Borrar primero sus entregas (no dejar GiftDelivery colgando de un empleado oculto).
+    const tx = await sequelize.transaction();
+    try {
+      await GiftDelivery.destroy({ where: { employeeId: id }, force: true, transaction: tx });
+      await e.destroy({ transaction: tx });
+      await tx.commit();
+    } catch (err) {
+      await tx.rollback();
+      throw err;
+    }
     return { ok: true };
   }
 
@@ -137,7 +178,23 @@ export class GiftService {
 
   // ---- Entrega ----
   async setDelivery(employeeId: string, giftTypeId: string, deliveredQty: number, deliveredBy?: string) {
-    const qty = Math.max(0, Number(deliveredQty) || 0);
+    // Validar pertenencia: empleado y tipo deben existir y ser de la MISMA campaña
+    // (sin esto, una llamada directa podía cruzar entidades de campañas distintas).
+    const [employee, giftType] = await Promise.all([
+      GiftEmployee.findByPk(employeeId),
+      GiftType.findByPk(giftTypeId),
+    ]);
+    if (!employee) throw new Error('Empleado no encontrado');
+    if (!giftType) throw new Error('Tipo de regalo no encontrado');
+    if ((employee as any).campaignId !== (giftType as any).campaignId) {
+      throw new Error('El empleado y el tipo de regalo no pertenecen a la misma campaña.');
+    }
+
+    // Topar al total que le corresponde (entitlement por basis/cargas): la API no debe
+    // permitir registrar más entregas de las debidas (la UI ya lo limitaba, la API no).
+    const total = totalFor((giftType as any).basis as Basis, employee as any);
+    const qty = Math.min(Math.max(0, Number(deliveredQty) || 0), total);
+
     const [d] = await GiftDelivery.findOrCreate({
       where: { employeeId, giftTypeId },
       defaults: { employeeId, giftTypeId, deliveredQty: 0 } as any,
