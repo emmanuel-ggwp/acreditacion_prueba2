@@ -41,7 +41,13 @@ export class EventScheduleService {
       throw new Error('Schedule not found');
     }
 
-    if (validatedData.startDateTime || validatedData.endDateTime) {
+    // Solo se bloquea si las fechas CAMBIAN de verdad (el formulario reenvía siempre
+    // start/endDateTime, así que comparar por presencia impedía editar cualquier otro
+    // campo —cupo, aforo, ubicación— de un horario con acreditaciones).
+    const sameTime = (a: any, b: any) => a != null && b != null && new Date(a).getTime() === new Date(b).getTime();
+    const changingStart = validatedData.startDateTime != null && !sameTime(validatedData.startDateTime, (schedule as any).startDateTime);
+    const changingEnd = validatedData.endDateTime != null && !sameTime(validatedData.endDateTime, (schedule as any).endDateTime);
+    if (changingStart || changingEnd) {
         const accreditedCount = await Accreditation.count({ where: { eventScheduleId: scheduleId }});
         if (accreditedCount > 0) {
             throw new Error('Cannot change dates of a schedule with existing accreditations.');
