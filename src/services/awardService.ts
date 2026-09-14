@@ -82,31 +82,11 @@ export class AwardService {
   async getAwardById(awardId: string) {
     return Award.findByPk(awardId);
   }
-
-  async getAvailableStock(awardId: string): Promise<number> {
-    const award = await Award.findByPk(awardId);
-    if (!award) {
-      throw new Error('Award not found');
-    }
-    const assignedCount = await ParticipantAward.count({ where: { awardId } });
-    return award.quantity - assignedCount;
-  }
-
-  async assignAwardToParticipant(awardId: string, participantId: string, assignedBy: string, notes?: string) {
-    const availableStock = await this.getAvailableStock(awardId);
-    if (availableStock <= 0) {
-      throw new Error('No available stock for this award.');
-    }
-
-    const newAssignment = await ParticipantAward.create({
-      awardId,
-      participantId,
-      assignedBy,
-      notes,
-    });
-
-    return newAssignment;
-  }
+  // Nota: la asignación de premios vive en participantAwardService.assignAward, que
+  // bloquea la fila del Award (LOCK.UPDATE), valida stock/duplicado/pertenencia y ahora
+  // se apoya en el índice único (participant_id, award_id). Se eliminaron las versiones
+  // muertas assignAwardToParticipant/getAvailableStock de este servicio (check-then-act
+  // inseguro, sin uso).
 }
 
 export const awardService = new AwardService();

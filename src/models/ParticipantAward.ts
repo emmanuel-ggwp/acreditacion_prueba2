@@ -81,6 +81,15 @@ ParticipantAward.init(
     modelName: 'ParticipantAward',
     tableName: 'participant_awards',
     timestamps: true,
+    indexes: [
+      // Defensa en profundidad: un participante no puede tener el MISMO premio dos veces
+      // (evita doble asignación aunque el chequeo de la app tenga una carrera).
+      {
+        unique: true,
+        fields: ['participant_id', 'award_id'],
+        name: 'unique_participant_award',
+      },
+    ],
   }
 );
 

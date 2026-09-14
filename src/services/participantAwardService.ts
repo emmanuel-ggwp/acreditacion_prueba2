@@ -50,19 +50,23 @@ export class ParticipantAwardService {
   }
 
   async deliverAward(participantAwardId: string, deliveredBy: string) {
-    const participantAward = await ParticipantAward.findByPk(participantAwardId);
-    if (!participantAward) {
-      throw new Error('Award assignment not found.');
-    }
-    if (participantAward.deliveredAt) {
-      throw new Error('Award has already been delivered.');
-    }
+    // Transacción + lock de la fila: dos entregas concurrentes del mismo premio se
+    // serializan y la segunda ve deliveredAt ya puesto (antes ambas pasaban el chequeo).
+    return sequelize.transaction(async (transaction) => {
+      const participantAward = await ParticipantAward.findByPk(participantAwardId, { lock: transaction.LOCK.UPDATE, transaction });
+      if (!participantAward) {
+        throw new Error('Award assignment not found.');
+      }
+      if (participantAward.deliveredAt) {
+        throw new Error('Award has already been delivered.');
+      }
 
-    participantAward.deliveredAt = new Date();
-    participantAward.deliveredBy = deliveredBy;
-    await participantAward.save();
+      participantAward.deliveredAt = new Date();
+      participantAward.deliveredBy = deliveredBy;
+      await participantAward.save({ transaction });
 
-    return participantAward;
+      return participantAward;
+    });
   }
 
   async cancelAwardAssignment(participantAwardId: string, userId: string) {
