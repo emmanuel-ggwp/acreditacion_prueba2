@@ -276,7 +276,10 @@ export class AccreditationService {
       ],
       limit,
       offset: (page - 1) * limit,
-      order: [['checkInTime', 'DESC']],
+      // Desempate estable por id: varias acreditaciones con el mismo checkInTime
+      // (check-ins rápidos/bulk caen en el mismo instante) no deben saltarse ni
+      // duplicarse entre páginas.
+      order: [['checkInTime', 'DESC'], ['id', 'DESC']],
     });
     return { accreditations: rows, total: count, page, limit };
   }

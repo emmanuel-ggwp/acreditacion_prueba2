@@ -50,16 +50,22 @@ const ParticipantCard: React.FC<ParticipantCardProps> = ({ person, type, schedul
   const { verifyAccreditation, accreditParticipant, accreditGuest, unaccredit, setGuestCount, loading } = useAccreditationStore();
   const { user } = useAuthStore();
 
+  // Guardia de secuencia: al cambiar de persona rápido, solo aplica la recarga MÁS
+  // nueva; una verificación lenta anterior no debe pisar el estado del actual.
+  const reloadSeqRef = useRef(0);
   // Carga el estado del participante y, si está acreditado, el de cada invitado.
   const reloadStatus = useCallback(async () => {
     if (!person || !scheduleId) return;
+    const mySeq = ++reloadSeqRef.current;
     const status = await verifyAccreditation(type, person.id, scheduleId);
+    if (mySeq !== reloadSeqRef.current) return; // llegó una recarga más nueva
     setAccreditationStatus(status);
     const guests = (type === 'participant' ? (person as any)?.guests : []) || [];
     if (status.isAccredited && guests.length) {
       const entries = await Promise.all(
         guests.map(async (g: any) => [g.id, (await verifyAccreditation('guest', g.id, scheduleId)).isAccredited] as const)
       );
+      if (mySeq !== reloadSeqRef.current) return;
       setGuestStatuses(Object.fromEntries(entries));
     } else {
       setGuestStatuses({});
@@ -71,6 +77,8 @@ const ParticipantCard: React.FC<ParticipantCardProps> = ({ person, type, schedul
     setGuestsToAccredit([]);
     setArrivedGuests(Number((person as any)?.guestCount) || 0);
     setEditingCount(false);
+    // Limpiar la nota al cambiar de persona: no debe arrastrarse al siguiente.
+    setNotes('');
   }, [reloadStatus]);
 
   const handleGuestToggle = (guestId: string) => {
