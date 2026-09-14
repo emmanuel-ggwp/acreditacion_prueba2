@@ -173,7 +173,6 @@ const AccreditationPanel = ({ eventId: eventIdProp, scheduleId: scheduleIdProp }
                 const guestN = est ? est.guests : 0;
                 const partPct = partCap > 0 ? Math.min(100, Math.round((partN / partCap) * 100)) : 0;
                 const partFull = partCap > 0 && partN >= partCap;
-                const aforoPct = aforoCap > 0 ? Math.min(100, Math.round((bodies / aforoCap) * 100)) : 0;
                 const aforoFull = aforoCap > 0 && bodies >= aforoCap;
                 return (
                   <div key={s.id} className={`rounded-lg border p-3 transition ${sel ? 'border-indigo-500 ring-2 ring-indigo-200 bg-indigo-50/40' : 'border-gray-200 bg-white hover:border-indigo-300'}`}>
@@ -195,12 +194,11 @@ const AccreditationPanel = ({ eventId: eventIdProp, scheduleId: scheduleIdProp }
                         {partCap > 0 && <div className="w-full bg-gray-200 rounded-full h-1.5"><div className={`h-1.5 rounded-full ${partFull ? 'bg-red-500' : 'bg-indigo-600'}`} style={{ width: `${partPct}%` }} /></div>}
                       </div>
                       <div>
-                        <div className="flex items-center justify-between text-xs text-gray-600 mb-0.5">
+                        <div className="flex items-center justify-between text-xs text-gray-600">
                           <span>Aforo (personas)</span>
                           <span className={`font-medium ${aforoFull ? 'text-red-600' : ''}`}>{bodies}{aforoCap > 0 ? ` / ${aforoCap}` : ''}</span>
                         </div>
-                        {aforoCap > 0 && <div className="w-full bg-gray-200 rounded-full h-1.5"><div className={`h-1.5 rounded-full ${aforoFull ? 'bg-red-500' : 'bg-teal-600'}`} style={{ width: `${aforoPct}%` }} /></div>}
-                        {guestN > 0 && <p className="mt-1 text-[11px] text-gray-500">incluye {guestN} invitado{guestN === 1 ? '' : 's'}</p>}
+                        <p className="mt-0.5 text-[11px] text-gray-500">{partN} participante{partN === 1 ? '' : 's'}{guestN > 0 ? ` + ${guestN} invitado${guestN === 1 ? '' : 's'}` : ''}</p>
                       </div>
                     </div>
                     <div className="mt-3 flex items-center gap-2">
