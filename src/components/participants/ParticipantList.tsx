@@ -1,11 +1,13 @@
 'use client';
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import useParticipantStore from '@/store/participantStore';
 import useEventStore from '@/store/eventStore';
 import useAuthStore from '@/store/authStore';
-import { PlusCircle, FileDown, FileUp, Edit, Trash2, Award, X, CheckCircle2, Clock, Search, ChevronLeft, ChevronRight, UserCheck, Undo2, HelpCircle, Mail, MailCheck, MailX } from 'lucide-react';
+import { PlusCircle, FileDown, FileUp, Edit, Trash2, Award, X, CheckCircle2, Clock, Search, ChevronLeft, ChevronRight, UserCheck, Undo2, HelpCircle, Mail, MailCheck, MailX, Send, Loader2 } from 'lucide-react';
+import { sendConfirmationEmail } from '@/lib/emailjs';
+import apiClient from '@/utils/apiClient';
 import Participant from '@/models/Participant';
 import ParticipantForm from './ParticipantForm';
 import ParticipantImport from './ParticipantImport';
@@ -118,6 +120,72 @@ const ParticipantList = ({ eventId }: { eventId: string }) => {
   const reload = useCallback(() => {
     fetchParticipantsByEvent(eventId, page, PAGE_SIZE, currentFilters);
   }, [eventId, page, currentFilters, fetchParticipantsByEvent]);
+
+  // ---- Reenvío del correo de confirmación (best-effort, desde el navegador con EmailJS) ----
+  const [resending, setResending] = useState(false);
+  const [resendProg, setResendProg] = useState<{ done: number; total: number; ok: number; fail: number } | null>(null);
+  const templateInfoRef = useRef<{ templateId: string | null; eventName: string; location: string } | null>(null);
+
+  const getTemplateInfo = useCallback(async () => {
+    if (templateInfoRef.current) return templateInfoRef.current;
+    const info = await apiClient.get<{ templateId: string | null; eventName: string; location: string }>(`/api/events/${eventId}/email-template`);
+    templateInfoRef.current = info;
+    return info;
+  }, [eventId]);
+
+  const resendTo = useCallback(async (targets: any[]) => {
+    if (resending) return;
+    const withEmail = targets.filter((p) => (p.email || '').trim());
+    if (!withEmail.length) { showToast.error('Ninguno de los elegidos tiene correo.'); return; }
+    let info: any;
+    try { info = await getTemplateInfo(); } catch { showToast.error('No se pudo leer la plantilla del evento.'); return; }
+    if (!info?.templateId) { showToast.error('El evento no tiene una plantilla de correo configurada.'); return; }
+    setResending(true);
+    setResendProg({ done: 0, total: withEmail.length, ok: 0, fail: 0 });
+    let ok = 0, fail = 0;
+    for (let i = 0; i < withEmail.length; i++) {
+      const p = withEmail[i];
+      const nombre = `${p.firstName} ${p.lastName}`.trim();
+      const r = await sendConfirmationEmail(info.templateId, {
+        to_email: p.email, email: p.email,
+        participant_name: nombre, nombre,
+        event_name: info.eventName,
+        schedule_name: '', fechaEvento: '', lugarEvento: info.location || '',
+        guests_count: String(p.guestCount || 0), guests_summary: '',
+      });
+      await apiClient.patch(`/api/participants/${p.id}/email-status`, { ok: r.ok, skipped: r.skipped, error: r.error }).catch(() => {});
+      if (r.ok) ok++; else fail++;
+      setResendProg({ done: i + 1, total: withEmail.length, ok, fail });
+    }
+    setResending(false);
+    setResendProg(null);
+    if (fail && !ok) showToast.error(`No se pudo enviar ningún correo (${fail}). Revisa la configuración de EmailJS.`);
+    else showToast.success(`Reenvío listo: ${ok} enviado(s)${fail ? `, ${fail} con error` : ''}.`);
+    reload();
+  }, [resending, getTemplateInfo, reload]);
+
+  const fetchAllTargets = useCallback(async (onlyUnsent: boolean) => {
+    const data = await apiClient.get<{ participants: any[] }>(`/api/events/${eventId}/participants?limit=0`);
+    let list: any[] = (data.participants || []).filter((p: any) => (p.email || '').trim());
+    if (onlyUnsent) list = list.filter((p: any) => p.emailStatus !== 'sent');
+    return list;
+  }, [eventId]);
+
+  const resendAll = useCallback(async () => {
+    const t = await fetchAllTargets(false);
+    if (!t.length) { showToast.error('No hay participantes con correo.'); return; }
+    if (window.confirm(`¿Reenviar el correo a ${t.length} participante(s) con correo? Se envía desde este navegador: no cierres la página hasta terminar.`)) resendTo(t);
+  }, [fetchAllTargets, resendTo]);
+
+  const resendUnsent = useCallback(async () => {
+    const t = await fetchAllTargets(true);
+    if (!t.length) { showToast.error('No hay pendientes: los que tienen correo ya se enviaron.'); return; }
+    if (window.confirm(`¿Reenviar a ${t.length} participante(s) sin envío exitoso? Se envía desde este navegador: no cierres la página hasta terminar.`)) resendTo(t);
+  }, [fetchAllTargets, resendTo]);
+
+  const resendSelected = useCallback(() => {
+    resendTo(participants.filter((p: any) => selectedIds.includes(p.id)));
+  }, [participants, selectedIds, resendTo]);
 
   // Cambiar la búsqueda o el filtro vuelve a la página 1.
   useEffect(() => { setPage(1); }, [filter, showOnlyAwarded, statusFilter]);
@@ -294,6 +362,35 @@ const ParticipantList = ({ eventId }: { eventId: string }) => {
             <FileDown size={18} />
             {exporting ? 'Exportando…' : 'Exportar'}
           </button>
+          <button
+            onClick={resendAll}
+            disabled={resending}
+            className="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-50 flex items-center gap-2 text-sm font-medium transition-colors disabled:opacity-50"
+            title="Reenviar el correo de confirmación a todos los participantes con correo"
+          >
+            {resending ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
+            Reenviar a todos
+          </button>
+          <button
+            onClick={resendUnsent}
+            disabled={resending}
+            className="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-50 flex items-center gap-2 text-sm font-medium transition-colors disabled:opacity-50"
+            title="Reenviar solo a los que no tienen un envío exitoso (fallidos y no enviados)"
+          >
+            <Send size={18} />
+            Reenviar no enviados
+          </button>
+          {selectedIds.length > 0 && (
+            <button
+              onClick={resendSelected}
+              disabled={resending}
+              className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 flex items-center gap-2 text-sm font-medium transition-colors disabled:opacity-50"
+              title="Reenviar el correo a los participantes seleccionados"
+            >
+              <Send size={18} />
+              Reenviar ({selectedIds.length})
+            </button>
+          )}
           {selectedIds.length > 0 && (
             <button
               onClick={handleDeleteSelected}
@@ -316,6 +413,15 @@ const ParticipantList = ({ eventId }: { eventId: string }) => {
           </button>
         </div>
       </div>
+
+      {resendProg && (
+        <div className="mb-4 flex items-center gap-2 text-sm text-gray-600 bg-indigo-50 border border-indigo-100 rounded-lg px-3 py-2">
+          <Loader2 size={16} className="animate-spin text-indigo-600" />
+          Reenviando correos… {resendProg.done}/{resendProg.total}
+          <span className="text-green-700">· {resendProg.ok} enviado(s)</span>
+          {resendProg.fail > 0 && <span className="text-red-600">· {resendProg.fail} con error</span>}
+        </div>
+      )}
 
       <div className="mb-6 flex flex-col sm:flex-row sm:items-center gap-3">
         {/* Filtra la TABLA en el servidor (todos los participantes del evento, no solo
@@ -456,6 +562,16 @@ const ParticipantList = ({ eventId }: { eventId: string }) => {
                       >
                         <Award size={16} />
                       </button>
+                      {participant.email && (
+                        <button
+                          onClick={() => resendTo([participant])}
+                          disabled={resending}
+                          className="text-gray-400 hover:text-indigo-700 p-1 hover:bg-indigo-50 rounded disabled:opacity-40"
+                          title="Reenviar correo de confirmación a esta persona"
+                        >
+                          <Send size={16} />
+                        </button>
+                      )}
                       <button
                         onClick={() => handleEdit(participant as any)}
                         className="text-indigo-600 hover:text-indigo-900 p-1 hover:bg-indigo-50 rounded"
