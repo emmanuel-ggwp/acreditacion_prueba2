@@ -43,11 +43,12 @@ const ScheduleForm: React.FC<ScheduleFormProps> = ({ eventId, schedule, onClose 
         endDateTime: new Date(schedule.endDateTime).toISOString(),
         location: schedule.location || '',
         maxCapacity: schedule.maxCapacity || 0,
+        maxAttendees: (schedule as any).maxAttendees || 0,
         blockType: (schedule.blockType as any) || 'SINGLE',
         label: schedule.label || '',
         imageUrl: schedule.imageUrl || '',
       }
-      : { eventId, maxCapacity: 0, location: '', blockType: 'SINGLE', label: '', imageUrl: '' },
+      : { eventId, maxCapacity: 0, maxAttendees: 0, location: '', blockType: 'SINGLE', label: '', imageUrl: '' },
   });
 
   const [uploadingImg, setUploadingImg] = useState(false);
@@ -190,18 +191,37 @@ const ScheduleForm: React.FC<ScheduleFormProps> = ({ eventId, schedule, onClose 
           </div>
         </div>
 
-        <div>
-          <label htmlFor="maxCapacity" className="block text-sm font-medium text-gray-700 mb-1">Capacidad Máxima (Opcional)</label>
-          <input
-            type="number"
-            id="maxCapacity"
-            {...register('maxCapacity', {
-              setValueAs: v => v === '' ? 0 : parseInt(v, 10)
-            })}
-            className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border"
-            placeholder="Déjalo vacío para heredar del evento"
-          />
-          {errors.maxCapacity && <p className="mt-1 text-sm text-red-500">{errors.maxCapacity.message}</p>}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <label htmlFor="maxCapacity" className="block text-sm font-medium text-gray-700 mb-1">Cupo de participantes (Opcional)</label>
+            <input
+              type="number"
+              id="maxCapacity"
+              min={0}
+              {...register('maxCapacity', {
+                setValueAs: v => v === '' ? 0 : parseInt(v, 10)
+              })}
+              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border"
+              placeholder="Déjalo vacío para heredar del evento"
+            />
+            <p className="mt-1 text-xs text-gray-500">Solo participantes (no cuenta invitados).</p>
+            {errors.maxCapacity && <p className="mt-1 text-sm text-red-500">{errors.maxCapacity.message}</p>}
+          </div>
+          <div>
+            <label htmlFor="maxAttendees" className="block text-sm font-medium text-gray-700 mb-1">Aforo total (Opcional)</label>
+            <input
+              type="number"
+              id="maxAttendees"
+              min={0}
+              {...register('maxAttendees', {
+                setValueAs: v => v === '' ? 0 : parseInt(v, 10)
+              })}
+              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 border"
+              placeholder="Déjalo vacío para no limitar el aforo"
+            />
+            <p className="mt-1 text-xs text-gray-500">Participantes + invitados. Debe ser ≥ cupo de participantes.</p>
+            {errors.maxAttendees && <p className="mt-1 text-sm text-red-500">{errors.maxAttendees.message as any}</p>}
+          </div>
         </div>
 
         <div>

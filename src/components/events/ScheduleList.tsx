@@ -115,7 +115,14 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ eventId }) => {
                   <div className="h-4 w-px bg-gray-300"></div>
                   <div className="flex items-center">
                     <Users size={16} className="mr-1.5 text-indigo-500" />
-                    <span>{(schedule as any).displayMaxCapacity ? `${(schedule as any).displayMaxCapacity} de capacidad` : 'Capacidad ilimitada'}</span>
+                    <span>{(() => {
+                      const cupo = (schedule as any).maxCapacity || (schedule as any).displayMaxCapacity || 0;
+                      const aforo = (schedule as any).maxAttendees || 0;
+                      const parts: string[] = [];
+                      if (cupo > 0) parts.push(`${cupo} participantes`);
+                      if (aforo > 0) parts.push(`aforo ${aforo}`);
+                      return parts.length ? parts.join(' · ') : 'Capacidad ilimitada';
+                    })()}</span>
                   </div>
                   {((schedule as any).displayLocation || schedule.location) && (
                     <>
