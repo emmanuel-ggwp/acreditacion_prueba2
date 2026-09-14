@@ -9,20 +9,24 @@ export async function GET(
     const { slug } = await params;
 
     const event = await Event.findOne({
-      where: { 
+      where: {
         publicSlug: slug,
         isActive: true,
         isPublic: true
       },
+      // La asociación se declara como `Event.hasMany(EventSchedule, { as: 'schedules' })`
+      // (ver EventSchedule.ts). Sin el `as`, Sequelize lanza EagerLoadingError y el
+      // endpoint respondía siempre 500. `required: false` para no descartar eventos sin
+      // fechas. Se ordenan cronológicamente, igual que la landing (page.tsx).
       include: [
         {
           model: EventSchedule,
-          // Sequelize default alias for hasMany is the plural of the model name if not specified
-          // But since we didn't specify 'as' in the definition, it might be 'EventSchedules'
-          // Let's try without 'as' first or use the standard naming convention
+          as: 'schedules',
+          required: false,
         }
       ],
-      attributes: ['id', 'name', 'description', 'location', 'registrationConfig', 'allowGuests', 'registrationOpen', 'allowMultipleSchedules', 'logoUrl', 'backgroundImageUrl']
+      order: [[{ model: EventSchedule, as: 'schedules' }, 'startDateTime', 'ASC']],
+      attributes: ['id', 'name', 'description', 'location', 'registrationConfig', 'allowGuests', 'registrationOpen', 'allowMultipleSchedules', 'publicTemplate', 'logoUrl', 'backgroundImageUrl'],
     });
 
     if (!event) {
