@@ -56,6 +56,10 @@ class Participant extends Model {
   declare public isAwarded: boolean;
   declare public awardReason: string | null;
   declare public allowMultipleSchedules: boolean;
+  // Estado del correo de confirmación: 'sent' | 'failed' | 'skipped'; null = no enviado.
+  declare public emailStatus: 'sent' | 'failed' | 'skipped' | null;
+  declare public emailError: string | null;
+  declare public emailSentAt: Date | null;
   declare public createdBy: string;
 
   declare public readonly createdAt: Date;
@@ -207,6 +211,23 @@ Participant.init(
       type: DataTypes.BOOLEAN,
       defaultValue: false,
       comment: 'Override: este participante puede inscribirse en varias fechas aunque el evento no lo permita',
+    },
+    // Estado del correo de confirmación (el envío es best-effort desde el navegador y el
+    // cliente reporta el resultado). null = nunca se intentó / no enviado.
+    emailStatus: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      comment: "Estado del correo: 'sent' | 'failed' | 'skipped'; null = no enviado",
+    },
+    emailError: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+      comment: 'Último error de envío de correo (si emailStatus = failed)',
+    },
+    emailSentAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      comment: 'Fecha del último envío correcto',
     },
     createdBy: {
       type: DataTypes.UUID,

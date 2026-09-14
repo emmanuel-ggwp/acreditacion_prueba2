@@ -399,7 +399,7 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
             companion,
             loads: Math.min(loads, serverCap),
           });
-          await sendConfirmationEmail(templateId, {
+          const emailRes = await sendConfirmationEmail(templateId, {
             to_email: form.email,
             email: form.email,
             participant_name: nombre,
@@ -411,6 +411,14 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
             guests_count: String(gs.count),
             guests_summary: gs.summary,
           });
+          // Reportar el resultado del envío para guardarlo en el participante (best-effort).
+          if (ok?.participantId) {
+            fetch(`/api/public/events/${slug}/register/email-status`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ participantId: ok.participantId, ok: emailRes.ok, skipped: emailRes.skipped, error: emailRes.error }),
+            }).catch(() => {});
+          }
         }
       } catch (_) {
         // Silencioso: no afecta la inscripción ya guardada.

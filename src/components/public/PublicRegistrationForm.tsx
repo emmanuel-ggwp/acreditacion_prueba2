@@ -268,7 +268,7 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
             companion,
             loads: Math.min(loads, serverCap),
           });
-          await sendConfirmationEmail(templateId, {
+          const emailRes = await sendConfirmationEmail(templateId, {
             to_email: data.email,
             email: data.email,
             participant_name: nombre,
@@ -280,6 +280,14 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
             guests_count: String(gs.count),
             guests_summary: gs.summary,
           });
+          // Reportar el resultado del envío para guardarlo en el participante (best-effort).
+          if (result?.participantId) {
+            fetch(`/api/public/events/${slug}/register/email-status`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ participantId: result.participantId, ok: emailRes.ok, skipped: emailRes.skipped, error: emailRes.error }),
+            }).catch(() => {});
+          }
         }
       } catch (_) {
         // Silencioso: el correo es best-effort y no afecta la inscripción.

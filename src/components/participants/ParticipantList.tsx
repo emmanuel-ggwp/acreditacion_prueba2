@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import useParticipantStore from '@/store/participantStore';
 import useEventStore from '@/store/eventStore';
 import useAuthStore from '@/store/authStore';
-import { PlusCircle, FileDown, FileUp, Edit, Trash2, Award, X, CheckCircle2, Clock, Search, ChevronLeft, ChevronRight, UserCheck, Undo2, HelpCircle } from 'lucide-react';
+import { PlusCircle, FileDown, FileUp, Edit, Trash2, Award, X, CheckCircle2, Clock, Search, ChevronLeft, ChevronRight, UserCheck, Undo2, HelpCircle, Mail, MailCheck, MailX } from 'lucide-react';
 import Participant from '@/models/Participant';
 import ParticipantForm from './ParticipantForm';
 import ParticipantImport from './ParticipantImport';
@@ -20,6 +20,38 @@ const fmtAccreditedAt = (d?: string | null) => {
   try {
     return new Date(d).toLocaleString('es-CL', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
   } catch { return null; }
+};
+
+// Celda de estado del correo de confirmación. Si falló, el error va en el tooltip (title).
+const EmailStatusCell = ({ p }: { p: any }) => {
+  const status = p.emailStatus as string | null | undefined;
+  if (status === 'sent') {
+    const sentAt = fmtAccreditedAt(p.emailSentAt);
+    return (
+      <span className="inline-flex items-center gap-1 text-xs font-medium text-green-700" title={sentAt ? `Enviado ${sentAt}` : 'Correo enviado'}>
+        <MailCheck size={14} /> Enviado
+      </span>
+    );
+  }
+  if (status === 'failed') {
+    return (
+      <span className="inline-flex items-center gap-1 text-xs font-medium text-red-600 cursor-help" title={p.emailError || 'Error al enviar el correo'}>
+        <MailX size={14} /> Falló
+      </span>
+    );
+  }
+  if (status === 'skipped') {
+    return (
+      <span className="inline-flex items-center gap-1 text-xs text-gray-500 cursor-help" title="No se envió: el evento no tiene plantilla de correo o el participante no tiene correo">
+        <Mail size={14} /> No enviado
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 text-xs text-gray-400" title={p.email ? 'Todavía no se ha enviado' : 'Sin correo'}>
+      <Mail size={14} /> {p.email ? 'No enviado' : 'Sin correo'}
+    </span>
+  );
 };
 
 // Tamaño de página de la tabla (la búsqueda y los filtros corren en el servidor).
@@ -349,6 +381,7 @@ const ParticipantList = ({ eventId }: { eventId: string }) => {
               </th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nombre</th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Correo</th>
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Envío correo</th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Documento</th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Hora acreditación</th>
@@ -372,6 +405,7 @@ const ParticipantList = ({ eventId }: { eventId: string }) => {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{`${participant.firstName} ${participant.lastName}`}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{participant.email}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm"><EmailStatusCell p={participant} /></td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{participant.documentNumber || '-'}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm">
                     {(participant as any).registered ? (
@@ -440,7 +474,7 @@ const ParticipantList = ({ eventId }: { eventId: string }) => {
               ))
             ) : (
               <tr>
-                <td colSpan={8} className="px-6 py-10 text-center text-gray-500">
+                <td colSpan={9} className="px-6 py-10 text-center text-gray-500">
                   {filter.trim() || showOnlyAwarded || statusFilter !== 'all'
                     ? <>No se encontraron participantes{statusFilter === 'preloaded' ? ' precargados' : statusFilter === 'registered' ? ' inscritos' : ''} para este filtro{filter.trim() ? <>: <b>&quot;{filter.trim()}&quot;</b></> : ''}.</>
                     : 'No se encontraron participantes. Agrega uno para comenzar.'}
