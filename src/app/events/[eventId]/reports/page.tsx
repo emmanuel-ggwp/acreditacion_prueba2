@@ -9,7 +9,7 @@ interface PageProps {
 export default async function EventReportsPage({ params }: PageProps) {
   const { eventId } = await params;
   return (
-    <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.MANAGER]}>
+    <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.MANAGER, ROLES.OPERATOR]}>
       <EventReport eventId={eventId} />
     </RoleGuard>
   );

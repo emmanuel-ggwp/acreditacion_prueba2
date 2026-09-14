@@ -5,7 +5,7 @@ import { reportService } from '@/services/reportService';
 import { AuthenticatedRequest } from '@/types/auth';
 import { ROLES } from '@/utils/constants';
 
-const { ADMIN, OPERATOR, GUARD} = ROLES;
+const { ADMIN, MANAGER, OPERATOR } = ROLES;
 
 interface Params {
   params: Promise<{ eventId: string }>;
@@ -40,4 +40,4 @@ export const GET = withAuth(async (req: AuthenticatedRequest, { params }: Params
     console.error('Error generating event report:', error);
     return NextResponse.json({ message: 'Error generating event report', error: error.message }, { status: 500 });
   }
-}, [ADMIN, OPERATOR]);
+}, [ADMIN, MANAGER, OPERATOR]);
