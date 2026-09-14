@@ -6,7 +6,7 @@ import { AuthenticatedRequest } from '@/types/auth';
 import { z } from 'zod';
 import { ROLES } from '@/utils/constants';
 
-const { ADMIN, OPERATOR, GUARD } = ROLES;
+const { ADMIN, MANAGER, OPERATOR, GUARD } = ROLES;
 
 export const POST = withAuth(async (req: AuthenticatedRequest) => {
   try {
@@ -27,7 +27,7 @@ export const POST = withAuth(async (req: AuthenticatedRequest) => {
   } catch (error: any) {
     return NextResponse.json({ message: error.message }, { status: 400 });
   }
-}, [ADMIN, OPERATOR, GUARD]);
+}, [ADMIN, MANAGER, OPERATOR, GUARD]);
 
 export const GET = withAuth(async (req: AuthenticatedRequest) => {
   try {
@@ -47,7 +47,7 @@ export const GET = withAuth(async (req: AuthenticatedRequest) => {
     }
     return NextResponse.json({ message: error.message }, { status: 500 });
   }
-}, [ADMIN, OPERATOR]);
+}, [ADMIN, MANAGER, OPERATOR]);
 
 // Des-acreditar (corregir errores): elimina la acreditación de un participante (y sus invitados) o de un invitado.
 export const DELETE = withAuth(async (req: AuthenticatedRequest) => {
@@ -70,7 +70,7 @@ export const DELETE = withAuth(async (req: AuthenticatedRequest) => {
   } catch (error: any) {
     return NextResponse.json({ message: error.message }, { status: 400 });
   }
-}, [ADMIN, OPERATOR, GUARD]);
+}, [ADMIN, MANAGER, OPERATOR, GUARD]);
 
 // Editar cuántos invitados llegaron (modos numéricos count/companion).
 export const PATCH = withAuth(async (req: AuthenticatedRequest) => {
@@ -86,7 +86,7 @@ export const PATCH = withAuth(async (req: AuthenticatedRequest) => {
   } catch (error: any) {
     return NextResponse.json({ message: error.message }, { status: 400 });
   }
-}, [ADMIN, OPERATOR, GUARD]);
+}, [ADMIN, MANAGER, OPERATOR, GUARD]);
 
 export const PUT = withAuth(async (req: AuthenticatedRequest) => {
   try {
@@ -103,4 +103,4 @@ export const PUT = withAuth(async (req: AuthenticatedRequest) => {
     }
     return NextResponse.json({ message: error.message }, { status: 500 });
   }
-}, [ADMIN, OPERATOR, GUARD]);
+}, [ADMIN, MANAGER, OPERATOR, GUARD]);

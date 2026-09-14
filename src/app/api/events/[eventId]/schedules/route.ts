@@ -6,7 +6,7 @@ import { eventScheduleService } from '@/services/eventScheduleService';
 import { AuthenticatedRequest } from '@/types/auth';
 import { ROLES } from '@/utils/constants';
 
-const { ADMIN, OPERATOR, GUARD} = ROLES;
+const { ADMIN, MANAGER, OPERATOR, GUARD} = ROLES;
 
 interface Params {
   params: Promise<{ eventId: string }>;
@@ -42,4 +42,4 @@ export const GET = withAuth(async (req: AuthenticatedRequest, { params }: Params
     console.error(`Error fetching schedules for event:`, error);
     return NextResponse.json({ message: 'Error fetching schedules', error: error.message }, { status: 500 });
   }
-}, [ADMIN, OPERATOR, GUARD]);
+}, [ADMIN, MANAGER, OPERATOR, GUARD]);

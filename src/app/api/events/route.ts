@@ -7,7 +7,7 @@ import { eventScheduleService } from '@/services/eventScheduleService';
 import { AuthenticatedRequest } from '@/types/auth';
 import { ROLES } from '@/utils/constants';
 
-const { ADMIN, OPERATOR, GUARD} = ROLES;
+const { ADMIN, MANAGER, OPERATOR, GUARD} = ROLES;
 
 export const POST = withAuth(async (req: AuthenticatedRequest) => {
   try {
@@ -53,4 +53,4 @@ export const GET = withAuth(async (req: AuthenticatedRequest) => {
     }
     return NextResponse.json({ message: 'Error fetching events', error: error.message }, { status: 500 });
   }
-}, [ADMIN, OPERATOR, GUARD]);
+}, [ADMIN, MANAGER, OPERATOR, GUARD]);
