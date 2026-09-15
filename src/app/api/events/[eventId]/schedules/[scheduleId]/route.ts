@@ -33,14 +33,25 @@ export const PUT = withAuth(async (req: AuthenticatedRequest, { params }: Params
 }, [ADMIN, OPERATOR]);
 
 // Abrir / cerrar acreditación de un horario (cambia solo el estado).
+// GUARDIA (rol de puerta) SOLO puede abrir/cerrar acreditación
+// (published/accrediting/accredited). Cancelar un horario y cambiar su imagen son
+// acciones administrativas reservadas a ADMIN/OPERATOR.
+const GUARD_ALLOWED_STATUSES = ['published', 'accrediting', 'accredited'];
 export const PATCH = withAuth(async (req: AuthenticatedRequest, { params }: Params) => {
   try {
     const { scheduleId } = await params;
     const body = await req.json();
+    const isGuard = req.user?.role === GUARD;
     let updated;
     if (typeof body.imageUrl !== 'undefined') {
+      if (isGuard) {
+        return NextResponse.json({ message: 'No autorizado para cambiar la imagen del horario' }, { status: 403 });
+      }
       updated = await eventScheduleService.setImage(scheduleId, body.imageUrl, req.user?.id);
     } else if (body.status) {
+      if (isGuard && !GUARD_ALLOWED_STATUSES.includes(body.status)) {
+        return NextResponse.json({ message: 'No autorizado para cambiar a ese estado' }, { status: 403 });
+      }
       updated = await eventScheduleService.setStatus(scheduleId, body.status, req.user?.id);
     } else {
       return NextResponse.json({ message: 'Nada que actualizar' }, { status: 400 });

@@ -26,6 +26,13 @@ export async function GET(
     if (!event) {
       return NextResponse.json({ error: 'Event not found or not public' }, { status: 404 });
     }
+    // El lookup por RUT SOLO aplica al flujo modo "rut" (padrón precargado). En modo
+    // abierto no existe esa puerta: se responde 404 para que el RUT no sea enumerable
+    // ni sirva para cosechar PII del padrón en un evento donde nunca debió consultarse.
+    // El cliente solo llama a este endpoint en modo "rut", así que no rompe la landing.
+    if ((event as any).registrationConfig?.mode !== 'rut') {
+      return NextResponse.json({ error: 'Event not found or not public' }, { status: 404 });
+    }
     if (!rut.trim()) {
       return NextResponse.json({ error: 'RUT requerido' }, { status: 400 });
     }
