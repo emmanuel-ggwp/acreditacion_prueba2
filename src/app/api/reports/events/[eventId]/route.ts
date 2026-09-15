@@ -28,7 +28,7 @@ export const GET = withAuth(async (req: AuthenticatedRequest, { params }: Params
         return new NextResponse(csv, {
             status: 200,
             headers: {
-                'Content-Type': 'text/csv',
+                'Content-Type': 'text/csv; charset=utf-8',
                 'Content-Disposition': `attachment; filename="event_report_${eventId}.csv"`,
             },
         });

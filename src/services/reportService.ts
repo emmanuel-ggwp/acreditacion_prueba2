@@ -385,10 +385,10 @@ export class ReportService {
             es.start_date_time as "eventDate",
             CASE WHEN acc.id IS NOT NULL THEN 'Sí' ELSE 'No' END as "Asistencia",
             acc.check_in_time as "checkInTime",
-            (SELECT COUNT(*) FROM guests g WHERE g.participant_id = p.id) as "Cant. Invitados",
-            (SELECT COUNT(*) FROM accreditations acc_g 
-             INNER JOIN guests g ON acc_g.guest_id = g.id 
-             WHERE g.participant_id = p.id AND acc_g.event_schedule_id = es.id) as "Cant. Invitados Asistentes",
+            (SELECT COUNT(*) FROM guests g WHERE g.participant_id = p.id AND g.deleted_at IS NULL) as "Cant. Invitados",
+            (SELECT COUNT(*) FROM accreditations acc_g
+             INNER JOIN guests g ON acc_g.guest_id = g.id
+             WHERE g.participant_id = p.id AND acc_g.event_schedule_id = es.id AND g.deleted_at IS NULL) as "Cant. Invitados Asistentes",
             (SELECT STRING_AGG(a.name, ', ')
              FROM participant_awards pa
              INNER JOIN awards a ON pa.award_id = a.id
@@ -397,7 +397,7 @@ export class ReportService {
         INNER JOIN participant_schedules ps ON p.id = ps.participant_id
         INNER JOIN event_schedules es ON ps.schedule_id = es.id
         LEFT JOIN accreditations acc ON p.id = acc.participant_id AND es.id = acc.event_schedule_id
-        WHERE es.event_id = :eventId
+        WHERE es.event_id = :eventId AND p.deleted_at IS NULL
         ORDER BY p.last_name, p.first_name, es.start_date_time
     `;
 
@@ -430,7 +430,20 @@ export class ReportService {
       return '';
     }
     const columns = Object.keys(data[0]);
-    return stringify(data, { header: true, columns });
+    return stringify(data, {
+      header: true,
+      columns,
+      // BOM UTF-8: sin él, Excel en Windows abre el CSV como Windows-1252 y rompe los
+      // acentos/ñ ("Muñoz" → "MuÃ±oz", "Teléfono" → "TelÃ©fono").
+      bom: true,
+      cast: {
+        // Anti "inyección de fórmulas" (CSV injection): Excel/Sheets EJECUTAN una celda
+        // que empieza por = + - @ (o tab/retorno). Como Nombre/Apellido/Email/Comentarios
+        // salen de texto que escribe el público, se antepone un apóstrofo para que se
+        // muestre como TEXTO y no se ejecute al abrir el reporte.
+        string: (value: string) => (/^[=+\-@\t\r]/.test(value) ? `'${value}` : value),
+      },
+    });
   }
 }
 
