@@ -8,11 +8,13 @@ interface Props {
   itemName?: string;
   description?: string;
   confirmLabel?: string;
+  // Contenido extra (ej.: detalle de todo lo que se eliminará) mostrado antes del motivo.
+  children?: React.ReactNode;
   onConfirm: (reason: string) => void | Promise<void>;
   onClose: () => void;
 }
 
-const DeleteReasonModal: React.FC<Props> = ({ title = 'Eliminar', itemName, description, confirmLabel = 'Eliminar', onConfirm, onClose }) => {
+const DeleteReasonModal: React.FC<Props> = ({ title = 'Eliminar', itemName, description, confirmLabel = 'Eliminar', children, onConfirm, onClose }) => {
   const [reason, setReason] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -41,6 +43,7 @@ const DeleteReasonModal: React.FC<Props> = ({ title = 'Eliminar', itemName, desc
               <>Vas a eliminar {itemName ? <b>{itemName}</b> : 'este registro'}. Esta acción quedará registrada. Indica el motivo:</>
             )}
           </p>
+          {children}
           <textarea
             autoFocus
             value={reason}

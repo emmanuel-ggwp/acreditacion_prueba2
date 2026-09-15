@@ -6,7 +6,7 @@ import Link from 'next/link';
 import Event from '@/models/Event';
 import RoleGuard from '../auth/RoleGuard';
 import { ROLES } from '@/utils/constants';
-import useEventStore from '@/store/eventStore';
+import useEventStore, { EventDeletionSummary } from '@/store/eventStore';
 import { formatCapacity, formatEventDate } from '@/utils/formatters';
 import { EventStatusBadge } from './EventStatusBadge';
 import toast from 'react-hot-toast';
@@ -20,8 +20,12 @@ interface EventCardProps {
 const EventCard: React.FC<EventCardProps> = ({ event }) => {
   const deleteEvent = useEventStore((state) => state.deleteEvent);
   const updateEvent = useEventStore((state) => state.updateEvent);
+  const getEventDeletionSummary = useEventStore((state) => state.getEventDeletionSummary);
   const [menuOpen, setMenuOpen] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  // Resumen de todo lo que se eliminará (se muestra en la confirmación de borrado).
+  const [delSummary, setDelSummary] = useState<EventDeletionSummary | null>(null);
+  const [delSummaryLoading, setDelSummaryLoading] = useState(false);
 
   // Estado de publicación / inscripción del evento
   const isPublic = (event as any).isPublic as boolean;
@@ -29,7 +33,16 @@ const EventCard: React.FC<EventCardProps> = ({ event }) => {
   const isActive = (event as any).isActive !== false;
   const publicSlug = (event as any).publicSlug as string | null;
 
-  const openDelete = () => { setMenuOpen(false); setShowDeleteModal(true); };
+  const openDelete = () => {
+    setMenuOpen(false);
+    setShowDeleteModal(true);
+    setDelSummary(null);
+    setDelSummaryLoading(true);
+    getEventDeletionSummary(event.id)
+      .then((s) => setDelSummary(s))
+      .catch(() => setDelSummary(null))
+      .finally(() => setDelSummaryLoading(false));
+  };
   const confirmDelete = async (reason: string) => {
     try {
       await deleteEvent(event.id, reason);
@@ -208,9 +221,33 @@ const EventCard: React.FC<EventCardProps> = ({ event }) => {
         <DeleteReasonModal
           title="Eliminar evento"
           itemName={event.name}
+          confirmLabel="Eliminar definitivamente"
           onConfirm={confirmDelete}
           onClose={() => setShowDeleteModal(false)}
-        />
+        >
+          <div className="mb-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm">
+            <p className="font-semibold text-red-700 mb-1">
+              Esta acción es irreversible. Junto al evento se eliminará:
+            </p>
+            {delSummaryLoading ? (
+              <p className="text-red-600/80">Calculando lo que se eliminará…</p>
+            ) : delSummary ? (
+              <ul className="list-disc list-inside text-red-700 space-y-0.5">
+                <li><b>{delSummary.schedules}</b> {delSummary.schedules === 1 ? 'fecha' : 'fechas'} del evento</li>
+                <li><b>{delSummary.participants}</b> {delSummary.participants === 1 ? 'participante' : 'participantes'}</li>
+                <li><b>{delSummary.guests}</b> {delSummary.guests === 1 ? 'invitado' : 'invitados'}</li>
+                <li><b>{delSummary.accreditations}</b> {delSummary.accreditations === 1 ? 'acreditación registrada' : 'acreditaciones registradas'}</li>
+                {delSummary.awards > 0 && (
+                  <li><b>{delSummary.awards}</b> {delSummary.awards === 1 ? 'premio' : 'premios'} del evento</li>
+                )}
+              </ul>
+            ) : (
+              <p className="text-red-600/80">
+                No se pudo calcular el detalle, pero el borrado eliminará el evento y todo lo asociado (fechas, participantes, invitados, premios y acreditaciones).
+              </p>
+            )}
+          </div>
+        </DeleteReasonModal>
       )}
     </div>
   );

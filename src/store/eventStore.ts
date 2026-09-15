@@ -17,6 +17,15 @@ export interface FetchEventsParams {
   filter?: 'all' | 'accredited' | 'accrediting' | 'upcoming' | 'cancelled';
 }
 
+export interface EventDeletionSummary {
+  eventName: string;
+  schedules: number;
+  participants: number;
+  guests: number;
+  awards: number;
+  accreditations: number;
+}
+
 interface EventState {
   events: Event[];
   EventSchedules: EventSchedule[];
@@ -34,6 +43,7 @@ interface EventState {
   createEvent: (eventData: z.infer<typeof createEventSchema>) => Promise<Event | void>;
   updateEvent: (id: string, eventData: z.infer<typeof updateEventSchema>) => Promise<void>;
   deleteEvent: (id: string, reason?: string) => Promise<void>;
+  getEventDeletionSummary: (id: string) => Promise<EventDeletionSummary>;
   createSchedule: (scheduleData: z.infer<typeof createScheduleSchema>) => Promise<void>;
   updateSchedule: (id: string, eventId: string, scheduleData: z.infer<typeof updateScheduleSchema>) => Promise<void>;
   deleteSchedule: (id: string, eventId: string, reason?: string) => Promise<void>;
@@ -147,6 +157,10 @@ const useEventStore = create<EventState>()(
           set({ error: error.message, loading: false });
           throw error;
         }
+      },
+
+      getEventDeletionSummary: async (id: string) => {
+        return apiClient.get<EventDeletionSummary>(`/api/events/${id}?deletionSummary=true`);
       },
 
       deleteEvent: async (id: string, reason?: string) => {

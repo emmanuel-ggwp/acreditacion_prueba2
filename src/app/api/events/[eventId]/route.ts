@@ -23,6 +23,13 @@ export const GET = withAuth(async (req: AuthenticatedRequest, { params }: Params
     if (!eventId?.length) {
       return NextResponse.json({ message: 'Invalid event ID' }, { status: 400 });
     }
+
+    // Resumen de lo que se eliminaría (para la confirmación de borrado en cascada).
+    if (searchParams.get('deletionSummary') === 'true') {
+      const summary = await eventService.getDeletionSummary(eventId);
+      return NextResponse.json(summary);
+    }
+
     const event = await eventService.getEventById(eventId, includeSchedules);
     return NextResponse.json(event);
   } catch (error: any) {

@@ -83,6 +83,35 @@ export class EventService {
     return event;
   }
 
+  // Resumen de TODO lo que se eliminará al borrar el evento (para la confirmación en la
+  // interfaz). Cuenta lo visible/vivo, que es lo que el usuario reconoce; deleteEvent
+  // además limpia por dentro los registros ya soft-deleted.
+  async getDeletionSummary(eventId: string) {
+    const event = await Event.findByPk(eventId);
+    if (!event) {
+      throw new Error('Event not found');
+    }
+    const schedules = await EventSchedule.findAll({ where: { eventId }, attributes: ['id'] });
+    const scheduleIds = schedules.map((s: any) => s.id);
+    const participants = await Participant.findAll({ where: { eventId }, attributes: ['id'] });
+    const participantIds = participants.map((p: any) => p.id);
+
+    const [guests, awards, accreditations] = await Promise.all([
+      participantIds.length ? Guest.count({ where: { participantId: { [Op.in]: participantIds } } }) : Promise.resolve(0),
+      Award.count({ where: { eventId } }),
+      scheduleIds.length ? Accreditation.count({ where: { eventScheduleId: { [Op.in]: scheduleIds } } }) : Promise.resolve(0),
+    ]);
+
+    return {
+      eventName: (event as any).name,
+      schedules: scheduleIds.length,
+      participants: participantIds.length,
+      guests,
+      awards,
+      accreditations,
+    };
+  }
+
   async deleteEvent(eventId: string, userId?: string, reason?: string) {
     const event = await Event.findByPk(eventId);
     if (!event) {
