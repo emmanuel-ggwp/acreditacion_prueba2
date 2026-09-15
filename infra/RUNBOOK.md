@@ -44,7 +44,8 @@ Orden de pasos. Los E# son las preguntas de la fase 2 aún abiertas
    privado** de la VPC, el usuario de aplicación y **sin `?sslmode=...`** (el
    arranque la rechaza si lo trae — P07-D7.10). Las `NEXT_PUBLIC_*` antes del
    build. Los secretos JWT ya los generó provision.sh: no tocarlos.
-8. **Desplegar el código** (fase 4) y arrancar: `systemctl start tuacreditacion`.
+8. **Desplegar el código** (fase 4), **aplicar las migraciones** (§7) y
+   arrancar: `systemctl start tuacreditacion`.
 9. **Pasar la lista de comprobación posterior** (plan 07, fase 5): Host
    desconocido rechazado, puertos internos cerrados, `.php` en uploads no
    servido, imagen legítima con nosniff, `x-forwarded-for` falsificado
@@ -113,3 +114,44 @@ un fallo: son los pasos que exigen consola o credenciales (trusted sources,
 CA, usuario de aplicación, DATABASE_URL, certificado si faltaba el DNS). El
 script se re-ejecuta sin miedo después de completarlas: es idempotente y no
 regenera secretos.
+
+## 7. Migraciones en el droplet (`npm run db:migrate`)
+
+Dos identidades (§1, paso 6): el **servicio** conecta con el usuario de
+aplicación (la `DATABASE_URL` de `/etc/tuacreditacion.env`) y las
+**migraciones** con `doadmin`. El script `scripts/migrate.ts` **no** pasa por
+systemd, así que no ve `/etc/tuacreditacion.env` solo: lee un `.env` del
+directorio actual si existe (desarrollo) y, si no, lo que haya exportado en la
+shell. Hay que cargar el fichero del servicio a mano y exportar encima la URL
+de doadmin:
+
+```bash
+read -rsp 'Contraseña de doadmin: ' PW; echo
+sudo env DOADMIN_PW="$PW" bash -c '
+  set -a; . /etc/tuacreditacion.env; set +a
+  export DATABASE_URL="postgresql://doadmin:${DOADMIN_PW}@<host-privado-vpc>:25060/<basedatos>"
+  cd /srv/tuacreditacion/app && npm run db:migrate:status && npm run db:migrate
+'
+unset PW
+```
+
+- **Sin `?sslmode=require`.** La URL que copia la consola de DigitalOcean lo
+  trae; con nuestro stack ese parámetro **pisa** la configuración SSL real
+  (`rejectUnauthorized` y la CA) y el driver acaba validando el certificado
+  sin la CA del cluster: `self-signed certificate in certificate chain`
+  (P07-D7.10). Desde el 2026-09-15 el script aplica la **misma validación que
+  la app** y aborta nombrando el problema antes de conectar. El SSL lo deciden
+  `DB_SSL=true` y `DB_CA_CERT`, que vienen del fichero cargado con `set -a`.
+- **Mismo host privado** de la VPC que usa el servicio (trusted sources solo
+  admite el droplet). Si la contraseña lleva `@ : / # ? %`, va percent-encoded.
+- **`sudo`** porque `/etc/tuacreditacion.env` es 600 del usuario de servicio.
+  La contraseña se pide con `read -s` para que no quede en el historial de la
+  shell (R2). Solo `migrate.ts` tiene esta validación: `db:sync` y los seeds
+  siguen sin ella y no se ejecutan en el droplet.
+- **Comprobar antes que no hay un `.env` en `/srv/tuacreditacion/app`**
+  (`ls -la /srv/tuacreditacion/app/.env`). Un `.env` pegado desde la consola
+  no pisa las variables exportadas, pero es configuración fuera de sitio: el
+  entorno del servidor vive en `/etc/tuacreditacion.env` y solo ahí (F6-01).
+- El **primer** comando (`status`) no toca nada: lista ejecutadas y pendientes.
+  Revertir es `npx tsx scripts/migrate.ts down` con el mismo entorno y
+  revierte **solo la última**; la línea base `0001` se niega a revertirse.

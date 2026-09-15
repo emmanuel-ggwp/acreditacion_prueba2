@@ -30,7 +30,12 @@ const signingSecret = isProduction
       .min(32, 'debe tener al menos 32 caracteres en producción')
   : z.string({ error: 'obligatoria: sin ella nadie puede autenticarse' }).min(1);
 
-const envSchema = z.object({
+// Las variables de la BASE van en un objeto aparte: son la parte del contrato
+// que comparten la aplicación (validateEnv) y los scripts tsx que conectan sin
+// arrancar Next (validateDbEnv, abajo). Un solo sitio para las reglas de
+// DATABASE_URL, DB_SSL y DB_CA_CERT: si divergieran, la migración aceptaría
+// lo que la app rechaza (que es justo lo que pasó el 2026-09-15).
+const dbEnvShape = {
   // No basta con que exista: `DATABASE_URL=acreditacion` (olvidar el esquema)
   // pasaba un min(1) y Sequelize reventaba con un TypeError en la PRIMERA
   // PETICIÓN — systemd daba el servicio por activo y el primer usuario recibía
@@ -78,6 +83,29 @@ const envSchema = z.object({
           'lo deciden DB_SSL y DB_CA_CERT)',
       }
     ),
+
+  // La cadena vacía se acepta explícitamente: `DB_SSL=` en un fichero de entorno
+  // llega como '' y no como undefined, y es la forma natural de escribir "sin SSL"
+  // en un EnvironmentFile de systemd. Sin este `literal('')` el arranque abortaría
+  // por la configuración que la propia plantilla recomienda.
+  DB_SSL: z.union([z.enum(['true', 'false']), z.literal('')]).optional(),
+
+  // Ruta al certificado de la CA de la base administrada, en PEM (P07-D7.9 /
+  // SB-09). En la Standard Edition de DigitalOcean el certificado del servidor
+  // lo firma una CA propia del cluster que Node NO lleva en su almacén: con
+  // DB_SSL=true y `rejectUnauthorized: true` (sequelize.ts), SIN esta CA la
+  // aplicación no conecta. La exigencia condicionada (DB_SSL=true ⇒ CA legible)
+  // se comprueba tras el parse, en validateEnv. Si el cluster resultara ser
+  // Advanced Edition (pregunta E1, plan 07), el certificado se valida contra el
+  // almacén del sistema y esta variable pasaría a ser opcional también con SSL:
+  // esa relajación es quitar el bloque condicionado de validateEnv, no tocar
+  // sequelize.ts (que ya tolera la ausencia).
+  DB_CA_CERT: z.string().optional(),
+};
+
+const envSchema = z.object({
+  ...dbEnvShape,
+
   JWT_SECRET: signingSecret,
   JWT_REFRESH_SECRET: signingSecret,
 
@@ -118,24 +146,6 @@ const envSchema = z.object({
       message: 'debe estar entre 1 y 65535',
     })
     .optional(),
-
-  // La cadena vacía se acepta explícitamente: `DB_SSL=` en un fichero de entorno
-  // llega como '' y no como undefined, y es la forma natural de escribir "sin SSL"
-  // en un EnvironmentFile de systemd. Sin este `literal('')` el arranque abortaría
-  // por la configuración que la propia plantilla recomienda.
-  DB_SSL: z.union([z.enum(['true', 'false']), z.literal('')]).optional(),
-
-  // Ruta al certificado de la CA de la base administrada, en PEM (P07-D7.9 /
-  // SB-09). En la Standard Edition de DigitalOcean el certificado del servidor
-  // lo firma una CA propia del cluster que Node NO lleva en su almacén: con
-  // DB_SSL=true y `rejectUnauthorized: true` (sequelize.ts), SIN esta CA la
-  // aplicación no conecta. La exigencia condicionada (DB_SSL=true ⇒ CA legible)
-  // se comprueba tras el parse, en validateEnv. Si el cluster resultara ser
-  // Advanced Edition (pregunta E1, plan 07), el certificado se valida contra el
-  // almacén del sistema y esta variable pasaría a ser opcional también con SSL:
-  // esa relajación es quitar el bloque condicionado de validateEnv, no tocar
-  // sequelize.ts (que ya tolera la ausencia).
-  DB_CA_CERT: z.string().optional(),
 
   // Obligatorias en producción pese a tener respaldo en `jwt.ts`: ese respaldo son
   // 7 días de access token y 30 de refresco, y un access token de 7 días no se
@@ -185,10 +195,13 @@ function assertUploadsDirWritable(dir: string): void {
  * certificado PEM): valida el error de configuración típico (ruta a otro
  * fichero), no la cadena criptográfica — eso lo hace el handshake.
  */
-function assertDbCaCertReadable(rutaCa: string | undefined): void {
+function assertDbCaCertReadable(
+  rutaCa: string | undefined,
+  consecuencia = 'La aplicación no arranca'
+): void {
   const abort = (motivo: string): never => {
     console.error(
-      `\nDB_SSL=true exige una CA verificable y DB_CA_CERT ${motivo}. La aplicación no arranca.\n\n` +
+      `\nDB_SSL=true exige una CA verificable y DB_CA_CERT ${motivo}. ${consecuencia}.\n\n` +
         '  - La base administrada de DigitalOcean (Standard Edition) firma con una CA\n' +
         '    propia del cluster: descárgala desde la consola (Connection Details →\n' +
         '    Download CA certificate) y apunta DB_CA_CERT a esa ruta (PEM).\n' +
@@ -244,15 +257,44 @@ export function validateEnv(): void {
     return;
   }
 
-  // R2: se nombra la variable y el motivo, nunca el valor.
-  const detalle = result.error.issues
+  abortInvalid(result.error.issues, 'La aplicación no arranca');
+}
+
+// R2: se nombra la variable y el motivo, nunca el valor.
+function abortInvalid(issues: z.core.$ZodIssue[], consecuencia: string): never {
+  const detalle = issues
     .map((issue) => `  - ${issue.path.join('.')}: ${issue.message}`)
     .join('\n');
 
   console.error(
-    `\nConfiguración de entorno inválida. La aplicación no arranca.\n\n${detalle}\n\n` +
+    `\nConfiguración de entorno inválida. ${consecuencia}.\n\n${detalle}\n\n` +
       'Revisa .example.env: declara todas las variables que la aplicación lee.\n'
   );
 
   process.exit(1);
+}
+
+/**
+ * Validación de SOLO la base, para los scripts tsx que conectan sin arrancar
+ * Next (scripts/migrate.ts). Mismo contrato que la aplicación para
+ * DATABASE_URL, DB_SSL y DB_CA_CERT — y nada más: exigir aquí JWT_*,
+ * UPLOADS_DIR o ALLOWED_ORIGIN obligaría a cargar el entorno completo del
+ * servicio para migrar, y la prueba de escritura de UPLOADS_DIR, corrida con
+ * sudo, dejaría un directorio de root donde el servicio espera el suyo.
+ *
+ * Motivo (2026-09-15): `npm run db:migrate` en el droplet fallaba con «self-
+ * signed certificate in certificate chain». La causa era una DATABASE_URL
+ * con `?sslmode=require` (la de la consola de DigitalOcean): la app la rechaza
+ * en el arranque nombrando el problema, pero el script la aceptaba en silencio
+ * y el fallo salía como un error TLS opaco en el handshake (P07-D7.10).
+ *
+ * Debe llamarse ANTES de importar sequelize.ts: ese módulo construye el pool
+ * (y lee la CA) en el momento de importarse.
+ */
+export function validateDbEnv(): void {
+  const result = z.object(dbEnvShape).safeParse(process.env);
+  if (!result.success) abortInvalid(result.error.issues, 'El script no continúa');
+  if (result.data.DB_SSL === 'true') {
+    assertDbCaCertReadable(result.data.DB_CA_CERT, 'El script no continúa');
+  }
 }
