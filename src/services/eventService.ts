@@ -1,8 +1,11 @@
 import { z } from 'zod';
 import { Op, fn, col, literal } from 'sequelize';
+import { sequelize } from '@/lib/sequelize';
 import Event from '@/models/Event';
 import EventSchedule from '@/models/EventSchedule';
 import Participant from '@/models/Participant';
+import Guest from '@/models/Guest';
+import ParticipantSchedule from '@/models/ParticipantSchedule';
 import Accreditation from '@/models/Accreditation';
 import Award from '@/models/Award';
 import ParticipantAward from '@/models/ParticipantAward';
@@ -86,8 +89,57 @@ export class EventService {
       throw new Error('Event not found');
     }
     const name = (event as any).name;
-    // Soft delete
-    await event.destroy();
+
+    // Borrado en cascada dentro de una transacción. Antes `deleteEvent` solo hacía el
+    // soft-delete de la fila del evento y dejaba VIVOS sus horarios, inscripciones,
+    // invitados, premios y acreditaciones: quedaban huérfanos (participantes apuntando a
+    // un evento muerto) y el panel/estadísticas los seguían contando, además de que
+    // `_updateScheduleStatuses` seguía cambiando el estado de esos horarios para siempre.
+    // Mismo patrón que bulkDeleteParticipants: los hijos se BORRAN de verdad (force);
+    // el evento se conserva como soft-delete (recuperable, y su slug queda reservado).
+    // Orden respetando las FKs: acreditaciones → premios asignados → inscripciones
+    // (join) → invitados → participantes → premios → horarios → evento.
+    const tx = await sequelize.transaction();
+    try {
+      // Incluye soft-deleted (paranoid:false): sus hijos también deben limpiarse.
+      const schedules = await EventSchedule.findAll({ where: { eventId }, attributes: ['id'], transaction: tx });
+      const scheduleIds = schedules.map((s: any) => s.id);
+      const participants = await Participant.findAll({ where: { eventId }, attributes: ['id'], transaction: tx, paranoid: false });
+      const participantIds = participants.map((p: any) => p.id);
+      const awards = await Award.findAll({ where: { eventId }, attributes: ['id'], transaction: tx });
+      const awardIds = awards.map((a: any) => a.id);
+
+      // 1. Acreditaciones: toda acreditación referencia un horario del evento.
+      if (scheduleIds.length) {
+        await Accreditation.destroy({ where: { eventScheduleId: { [Op.in]: scheduleIds } }, transaction: tx });
+      }
+      if (participantIds.length) {
+        // 2. Premios asignados (join participante↔premio).
+        await ParticipantAward.destroy({ where: { participantId: { [Op.in]: participantIds } }, transaction: tx });
+        // 3. Inscripciones (join participante↔horario).
+        await ParticipantSchedule.destroy({ where: { participantId: { [Op.in]: participantIds } }, transaction: tx });
+        // 4. Invitados.
+        await Guest.destroy({ where: { participantId: { [Op.in]: participantIds } }, force: true, transaction: tx });
+        // 5. Participantes.
+        await Participant.destroy({ where: { id: { [Op.in]: participantIds } }, force: true, transaction: tx });
+      }
+      // 6. Premios del evento (ya sin filas en participant_awards).
+      if (awardIds.length) {
+        await Award.destroy({ where: { id: { [Op.in]: awardIds } }, transaction: tx });
+      }
+      // 7. Horarios (no es paranoid: borrado real).
+      if (scheduleIds.length) {
+        await EventSchedule.destroy({ where: { id: { [Op.in]: scheduleIds } }, transaction: tx });
+      }
+      // 8. Evento: soft-delete (recuperable, slug reservado).
+      await event.destroy({ transaction: tx });
+
+      await tx.commit();
+    } catch (e) {
+      await tx.rollback();
+      throw e;
+    }
+
     // Registro de auditoría: qué se eliminó, el motivo y quién lo hizo.
     if (userId) {
       await auditLogService.log({
