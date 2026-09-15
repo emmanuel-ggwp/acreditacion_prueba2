@@ -127,9 +127,10 @@ de doadmin:
 
 ```bash
 read -rsp 'Contraseña de doadmin: ' PW; echo
-sudo env DOADMIN_PW="$PW" bash -c '
+DBH=<host-del-cluster>          # el mismo host que usa el servicio; echo "$DBH" para ver que está entero
+sudo env DOADMIN_PW="$PW" DBH="$DBH" bash -c '
   set -a; . /etc/tuacreditacion.env; set +a
-  export DATABASE_URL="postgresql://doadmin:${DOADMIN_PW}@<host-privado-vpc>:25060/<basedatos>"
+  export DATABASE_URL="postgresql://doadmin:${DOADMIN_PW}@${DBH}:25060/defaultdb"
   cd /srv/tuacreditacion/app && npm run db:migrate:status && npm run db:migrate
 '
 unset PW
@@ -142,8 +143,13 @@ unset PW
   (P07-D7.10). Desde el 2026-09-15 el script aplica la **misma validación que
   la app** y aborta nombrando el problema antes de conectar. El SSL lo deciden
   `DB_SSL=true` y `DB_CA_CERT`, que vienen del fichero cargado con `set -a`.
-- **Mismo host privado** de la VPC que usa el servicio (trusted sources solo
-  admite el droplet). Si la contraseña lleva `@ : / # ? %`, va percent-encoded.
+- **El host va en una variable aparte** porque la línea completa de la URL se
+  corta al pegarla en la terminal (2026-09-15: el script intentó resolver
+  `dbaa`). Es el mismo host que usa el servicio (trusted sources solo admite
+  el droplet). Si la contraseña lleva `@ : / # ? %`, va percent-encoded.
+- **La URL de doadmin NO se guarda en ningún sitio**: ni en `/etc/environment`
+  (legible por todos y heredado por sudo: así llegó el `?sslmode=require` a la
+  migración el 2026-09-15), ni en `.bashrc`, ni en el repo. Se pide cada vez.
 - **`sudo`** porque `/etc/tuacreditacion.env` es 600 del usuario de servicio.
   La contraseña se pide con `read -s` para que no quede en el historial de la
   shell (R2). Solo `migrate.ts` tiene esta validación: `db:sync` y los seeds
