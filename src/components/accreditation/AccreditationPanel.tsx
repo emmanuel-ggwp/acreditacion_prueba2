@@ -9,6 +9,7 @@ import AwardedModal from './AwardedModal';
 import DietaryModal from './DietaryModal';
 import Participant from '@/models/Participant';
 import Guest from '@/models/Guest';
+import { getAccreditationFields } from '@/utils/formFields';
 import { Clock, MapPin, Users, UserCheck, UsersRound, Award, DoorOpen, DoorClosed, Calendar, ChevronRight, Utensils } from 'lucide-react';
 
 interface AccreditationPanelProps {
@@ -106,6 +107,9 @@ const AccreditationPanel = ({ eventId: eventIdProp, scheduleId: scheduleIdProp }
   const schedules = EventSchedules as any[];
   const selectedSchedule = schedules.find((s: any) => s.id === scheduleId);
   const selectedScheduleLabel = selectedSchedule?.label || selectedSchedule?.scheduleName;
+  // Campos extra que este evento eligió mostrar en la acreditación (además de los fijos).
+  const currentEvent = events.find((e) => e.id === eventId);
+  const accreditationFields = getAccreditationFields((currentEvent as any)?.registrationConfig);
 
   return (
     <div className="p-4 sm:p-6 md:p-8 max-w-4xl mx-auto space-y-6">
@@ -271,7 +275,7 @@ const AccreditationPanel = ({ eventId: eventIdProp, scheduleId: scheduleIdProp }
 
           {selectedPerson && (
             <div ref={personCardRef} className="scroll-mt-4">
-              <ParticipantCard person={selectedPerson.data} type={selectedPerson.type} scheduleId={scheduleId} scheduleLabel={selectedScheduleLabel} onAccredited={onAccredited} />
+              <ParticipantCard person={selectedPerson.data} type={selectedPerson.type} scheduleId={scheduleId} scheduleLabel={selectedScheduleLabel} accreditationFields={accreditationFields} onAccredited={onAccredited} />
             </div>
           )}
         </div>

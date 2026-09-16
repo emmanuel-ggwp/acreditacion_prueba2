@@ -5,7 +5,7 @@ import Participant from '@/models/Participant';
 import Guest from '@/models/Guest';
 import useAccreditationStore from '@/store/accreditationStore';
 import useAuthStore from '@/store/authStore';
-import { Check, X, User, Users, Award, Mail, FileText, Loader2, CalendarClock, Utensils, RotateCcw } from 'lucide-react';
+import { Check, X, User, Users, Award, Mail, FileText, Loader2, CalendarClock, Utensils, RotateCcw, Phone, Building2, Briefcase, Hash } from 'lucide-react';
 import { dietaryFull, dietaryLabel } from '@/utils/dietary';
 import { describeStoredAnswers } from '@/utils/customQuestions';
 import { showToast } from '@/components/ui/Toast';
@@ -15,6 +15,9 @@ interface ParticipantCardProps {
   type: 'participant' | 'guest';
   scheduleId: string;
   scheduleLabel?: string;
+  // Campos EXTRA a mostrar en la ficha (además de nombre/RUT/dieta/premiado/edad),
+  // según lo que el organizador eligió en el evento. Ver getAccreditationFields.
+  accreditationFields?: Record<string, boolean>;
   onAccredited?: () => void;
 }
 
@@ -34,7 +37,7 @@ const traducirError = (msg?: string): string => {
   return m || 'Ocurrió un error.';
 };
 
-const ParticipantCard: React.FC<ParticipantCardProps> = ({ person, type, scheduleId, scheduleLabel, onAccredited }) => {
+const ParticipantCard: React.FC<ParticipantCardProps> = ({ person, type, scheduleId, scheduleLabel, accreditationFields = {}, onAccredited }) => {
   const [guestsToAccredit, setGuestsToAccredit] = useState<string[]>([]);
   const [accreditationStatus, setAccreditationStatus] = useState<{isAccredited: boolean, accreditation?: any}>({ isAccredited: false });
   const [notes, setNotes] = useState('');
@@ -284,9 +287,25 @@ const ParticipantCard: React.FC<ParticipantCardProps> = ({ person, type, schedul
         <div>
           <h3 className="font-semibold text-lg mb-3">Detalles</h3>
           <div className="space-y-2 text-gray-700">
-            <p className="flex items-center"><Mail size={16} className="mr-2" /> {email}</p>
+            {/* Siempre: RUT y preferencia alimenticia. */}
             <p className="flex items-center"><FileText size={16} className="mr-2" /> {documentNumber || 'No proporcionado'}</p>
             <p className="flex items-center"><Utensils size={16} className="mr-2" /> <span className="text-gray-500 mr-1">Preferencia:</span> {dietaryText || 'Ninguna'}</p>
+            {/* Extra: solo los campos que el evento eligió mostrar en la acreditación y que tienen valor. */}
+            {isParticipant && accreditationFields.email && participant?.email && (
+              <p className="flex items-center"><Mail size={16} className="mr-2" /> {participant.email}</p>
+            )}
+            {isParticipant && accreditationFields.phone && (participant as any)?.phone && (
+              <p className="flex items-center"><Phone size={16} className="mr-2" /> {(participant as any).phone}</p>
+            )}
+            {isParticipant && accreditationFields.company && (participant as any)?.company && (
+              <p className="flex items-center"><Building2 size={16} className="mr-2" /> {(participant as any).company}</p>
+            )}
+            {isParticipant && accreditationFields.position && (participant as any)?.position && (
+              <p className="flex items-center"><Briefcase size={16} className="mr-2" /> {(participant as any).position}</p>
+            )}
+            {isParticipant && accreditationFields.numeroSap && (participant as any)?.numeroSap && (
+              <p className="flex items-center"><Hash size={16} className="mr-2" /> <span className="text-gray-500 mr-1">SAP:</span> {(participant as any).numeroSap}</p>
+            )}
             {isParticipant && describeStoredAnswers((participant as any)?.customData).map((a) => (
               <p key={a.key} className="text-sm"><span className="text-gray-500">{a.label}:</span> <span className="font-medium">{a.text}</span></p>
             ))}
@@ -332,7 +351,14 @@ const ParticipantCard: React.FC<ParticipantCardProps> = ({ person, type, schedul
               return (
               <div key={g.id} className="flex items-center justify-between bg-gray-50 p-3 rounded-md gap-2">
                 <div className="min-w-0">
-                  <span className="block truncate">{g.firstName} {g.lastName}</span>
+                  <span className="block truncate">
+                    {g.firstName} {g.lastName}
+                    {(g as any).guestType && (
+                      <span className="ml-1 align-middle text-[10px] px-1.5 py-0.5 rounded-full bg-indigo-100 text-indigo-700">
+                        {(g as any).guestType === 'CARGA' ? 'Carga' : (g as any).guestType === 'ACOMPANANTE' ? 'Acompañante' : (g as any).guestType}
+                      </span>
+                    )}
+                  </span>
                   {((g as any).documentNumber || (g as any).age != null) && (
                     <span className="block text-xs text-gray-500 truncate">
                       {[(g as any).documentNumber ? `RUT: ${(g as any).documentNumber}` : null, ((g as any).age != null && (g as any).age !== '') ? `${(g as any).age} años` : null].filter(Boolean).join(' · ')}

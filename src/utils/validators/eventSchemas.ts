@@ -132,6 +132,10 @@ export const registrationConfigSchema = z.object({
   fields: z.array(formFieldConfigSchema).optional(),
   // Config de campos predefinidos: { phone: {enabled,required}, numeroSap: {...}, dietary: {...}, ... }
   formFields: z.record(z.string(), fieldToggleSchema).optional(),
+  // Qué campos EXTRA del participante mostrar en la pantalla de acreditación (la puerta):
+  // { email: true, phone: false, ... }. Nombre/RUT/dieta/premiado/edad se muestran siempre.
+  // Ver getAccreditationFields (utils/formFields.ts).
+  accreditationFields: z.record(z.string(), z.boolean()).optional(),
   // Opciones de preferencia alimenticia personalizadas por evento (etiquetas).
   dietaryOptions: z.array(z.string()).optional(),
   guests: guestsConfigSchema.optional(),

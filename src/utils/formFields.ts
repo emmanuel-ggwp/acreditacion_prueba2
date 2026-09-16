@@ -42,6 +42,33 @@ export function getFormFields(registrationConfig: any): FormFieldsConfig {
   return out;
 }
 
+// Campos OPCIONALES del participante que se pueden mostrar en la pantalla de
+// ACREDITACIÓN (la puerta). Nombre, RUT, preferencia alimenticia, premiado y la edad
+// del invitado se muestran SIEMPRE; esto controla los extra que el organizador elija.
+export const CONFIGURABLE_ACCREDITATION_FIELDS: FieldDef[] = [
+  { key: 'email', label: 'Correo' },
+  { key: 'phone', label: 'Teléfono' },
+  { key: 'company', label: 'Empresa' },
+  { key: 'position', label: 'Cargo' },
+  { key: 'numeroSap', label: 'Código SAP' },
+];
+
+/**
+ * Qué campos EXTRA mostrar en la acreditación, por evento
+ * (registrationConfig.accreditationFields: { <campo>: boolean }).
+ * Default: se muestran los que el evento habilitó en el formulario de inscripción
+ * (getFormFields), para que "funcione solo"; el organizador puede ajustarlo.
+ */
+export function getAccreditationFields(registrationConfig: any): Record<string, boolean> {
+  const cfg = registrationConfig?.accreditationFields || {};
+  const formFields = getFormFields(registrationConfig);
+  const out: Record<string, boolean> = {};
+  for (const { key } of CONFIGURABLE_ACCREDITATION_FIELDS) {
+    out[key] = typeof cfg[key] === 'boolean' ? cfg[key] : !!formFields[key]?.enabled;
+  }
+  return out;
+}
+
 /** ¿Se pide preferencia alimenticia a cada invitado? (solo modo 'named') */
 export function guestDietaryEnabled(registrationConfig: any): boolean {
   return getGuestMode(registrationConfig) === 'named' && !!registrationConfig?.guests?.dietary;

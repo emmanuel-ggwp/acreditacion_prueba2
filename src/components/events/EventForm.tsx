@@ -6,7 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import useEventStore from '@/store/eventStore';
 import { createEventSchema, updateEventSchema } from '@/utils/validators/eventSchemas';
-import { CONFIGURABLE_FIELDS, getFormFields, CONFIGURABLE_GUEST_FIELDS, getGuestFields } from '@/utils/formFields';
+import { CONFIGURABLE_FIELDS, getFormFields, CONFIGURABLE_GUEST_FIELDS, getGuestFields, CONFIGURABLE_ACCREDITATION_FIELDS, getAccreditationFields } from '@/utils/formFields';
 import { DEFAULT_DIET_LABELS } from '@/utils/dietary';
 import { TITLE_FONTS, googleFontHref } from '@/utils/fonts';
 import { errorHandler } from '@/utils/errors';
@@ -207,6 +207,7 @@ const EventForm: React.FC<EventFormProps> = ({ event, onClose, onSuccess }) => {
           ...((event?.registrationConfig?.theme) || {}),
         },
         formFields: getFormFields(event?.registrationConfig),
+        accreditationFields: getAccreditationFields(event?.registrationConfig),
         guests: {
           ...(event?.registrationConfig?.guests || {}),
           mode: event?.registrationConfig?.guests?.mode || 'named',
@@ -1039,6 +1040,23 @@ const EventForm: React.FC<EventFormProps> = ({ event, onClose, onSuccess }) => {
                         ⚠️ Este evento envía <b>correo de confirmación</b>, así que el <b>Correo</b> queda activado y obligatorio (no se puede desmarcar): sin correo no habría a dónde enviarlo. Si quieres poder desmarcarlo, primero quita la plantilla de correo más abajo.
                       </div>
                     )}
+                  </div>
+
+                  {/* Datos a mostrar en la pantalla de ACREDITACIÓN (la puerta) */}
+                  <div>
+                    <label className="flex items-center text-sm font-semibold text-gray-700 mb-2">
+                      Datos a mostrar en la acreditación
+                      <InfoTooltip text="Elige qué datos extra ve el acreditador en la puerta. Siempre se muestran: nombre, RUT, preferencia alimenticia, premiado y la edad del invitado (si se pide)." />
+                    </label>
+                    <div className="rounded-xl border border-gray-200 divide-y">
+                      {CONFIGURABLE_ACCREDITATION_FIELDS.map((f) => (
+                        <label key={f.key} className="flex items-center gap-2 text-sm text-gray-700 px-3 py-2.5 cursor-pointer">
+                          <input type="checkbox" {...register(`registrationConfig.accreditationFields.${f.key}` as any)} className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
+                          {f.label}
+                        </label>
+                      ))}
+                    </div>
+                    <p className="mt-1 text-xs text-gray-500">Siempre se muestran: <b>nombre</b>, <b>RUT</b>, <b>preferencia alimenticia</b>, <b>premiado</b> y la <b>edad</b> del invitado (si el evento la pide).</p>
                   </div>
 
                   {/* Opciones de preferencia alimenticia (cuando la dieta está activa) */}
