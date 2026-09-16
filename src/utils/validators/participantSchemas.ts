@@ -4,11 +4,13 @@ import { z } from 'zod';
 // Validadores de campos de participante (teléfono, documento). Antes vivían en
 // `userSchemas.ts`, que se eliminó al unificar los esquemas de auth (SB-31); este
 // es su único consumidor, así que se trajeron aquí.
-const phoneRegex = /^[+]?[(]?[0-9]{3}[)]?[-\s.]?[0-9]{3}[-\s.]?[0-9]{4,6}$/;
 const documentNumberRegex = /^[a-zA-Z0-9-]{5,20}$/;
 
 const customValidators = {
-  phone: z.string().regex(phoneRegex, 'Formato de número de teléfono inválido'),
+  // Teléfono SIN formato estricto: antes un regex rígido rechazaba números válidos
+  // (p. ej. el celular chileno de 9 dígitos "926417843"). Ahora es texto libre acotado,
+  // igual que en la landing pública; el teléfono nunca bloquea al guardar.
+  phone: z.string().trim().max(40),
   documentNumber: z.string().regex(documentNumberRegex, 'Formato de número de documento inválido'),
 };
 
