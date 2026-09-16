@@ -80,6 +80,23 @@ etc.). Claves relevantes: `DATABASE_URL`, `JWT_SECRET`, `JWT_REFRESH_SECRET`,
 `JWT_EXPIRES_IN`, y las **públicas** de correo `NEXT_PUBLIC_EMAILJS_*` (el correo se envía
 desde el cliente). No comitear `.env.local`.
 
+## Consola de base de datos (solo lectura)
+
+Herramienta de ADMIN en **Configuración** para ejecutar consultas `SELECT` y ver resultados
+(`src/app/api/admin/db-query/route.ts` + `src/components/settings/DbConsole.tsx`). Capas:
+rol ADMIN, habilitación por entorno, passphrase, y **transacción `READ ONLY`** con
+`statement_timeout` y tope de 1000 filas (siempre hace rollback). Rechaza `;`, todo lo que
+no sea `SELECT`/`WITH…SELECT`, y palabras de escritura. Está **apagada por defecto**; para
+usarla hay que definir en el entorno:
+
+```
+DB_CONSOLE_ENABLED="true"
+DB_CONSOLE_PASSPHRASE="<una frase secreta larga>"
+```
+
+Sin ambas variables el endpoint responde 403. La passphrase se compara en tiempo constante
+y no se guarda en el código.
+
 ## Notas / mejoras conocidas (no implementadas)
 
 - El validador no exige que `JWT_SECRET !== JWT_REFRESH_SECRET` (si un operador los iguala,
