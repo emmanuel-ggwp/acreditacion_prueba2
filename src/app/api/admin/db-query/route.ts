@@ -10,9 +10,10 @@ import { sequelize } from '@/lib/sequelize';
 //
 // Capas de seguridad (todas deben pasar):
 //   1. Rol ADMIN (withAuth).
-//   2. Habilitada explícitamente por entorno: DB_CONSOLE_ENABLED === 'true'
-//      (apagada por defecto; si no está, responde 403).
-//   3. Passphrase secreta: DB_CONSOLE_PASSPHRASE (comparación en tiempo constante).
+//   2. Habilitada por defecto (el proyecto la trae lista); se puede APAGAR con
+//      DB_CONSOLE_ENABLED="false" en el servidor.
+//   3. Passphrase: por defecto la del proyecto (DEFAULT_PASSPHRASE); el servidor
+//      puede sobreescribirla con DB_CONSOLE_PASSPHRASE (comparación en tiempo constante).
 //   4. Solo UNA sentencia SELECT / WIT...SELECT; se rechaza ';' y palabras de escritura.
 //   5. Se ejecuta en una transacción READ ONLY con statement_timeout y tope de filas,
 //      y SIEMPRE se hace rollback. La transacción READ ONLY es la garantía real: la BD
@@ -20,6 +21,13 @@ import { sequelize } from '@/lib/sequelize';
 
 const MAX_ROWS = 1000;
 const TIMEOUT_MS = 8000;
+
+// ⚠️ Passphrase POR DEFECTO incluida en el proyecto (a pedido del dueño), para que el
+// despliegue la traiga sin configurar el servidor. Queda en el repo/historial de git:
+// quien vea el código puede usar la consola (que LEE toda la base). Para rotarla sin
+// tocar el código, define DB_CONSOLE_PASSPHRASE en el entorno del servidor
+// (/etc/tuacreditacion.env) — esa tiene prioridad sobre este valor.
+const DEFAULT_PASSPHRASE = '25723266';
 
 // Palabras de escritura/administración que no deben aparecer (defensa en profundidad).
 const FORBIDDEN = /\b(insert|update|delete|drop|alter|truncate|create|grant|revoke|copy|merge|vacuum|reindex|cluster|attach|execute|prepare|call|refresh|lock|listen|notify|pg_read_file|pg_read_binary_file|lo_import|lo_export|pg_sleep|pg_terminate_backend|pg_cancel_backend|dblink)\b/i;
@@ -32,13 +40,12 @@ function safeEqual(a: string, b: string): boolean {
 }
 
 export const POST = withAuth(async (req: AuthenticatedRequest) => {
-  if (process.env.DB_CONSOLE_ENABLED !== 'true') {
+  // Habilitada por defecto; apagable con DB_CONSOLE_ENABLED="false".
+  if ((process.env.DB_CONSOLE_ENABLED ?? 'true').toLowerCase() === 'false') {
     return NextResponse.json({ error: 'La consola de base de datos está deshabilitada.' }, { status: 403 });
   }
-  const expected = process.env.DB_CONSOLE_PASSPHRASE || '';
-  if (!expected) {
-    return NextResponse.json({ error: 'La consola no tiene passphrase configurada (DB_CONSOLE_PASSPHRASE).' }, { status: 403 });
-  }
+  // El entorno del servidor tiene prioridad sobre la passphrase por defecto del proyecto.
+  const expected = process.env.DB_CONSOLE_PASSPHRASE || DEFAULT_PASSPHRASE;
 
   let body: any;
   try {

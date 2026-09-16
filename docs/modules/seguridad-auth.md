@@ -84,18 +84,22 @@ desde el cliente). No comitear `.env.local`.
 
 Herramienta de ADMIN en **Configuración** para ejecutar consultas `SELECT` y ver resultados
 (`src/app/api/admin/db-query/route.ts` + `src/components/settings/DbConsole.tsx`). Capas:
-rol ADMIN, habilitación por entorno, passphrase, y **transacción `READ ONLY`** con
-`statement_timeout` y tope de 1000 filas (siempre hace rollback). Rechaza `;`, todo lo que
-no sea `SELECT`/`WITH…SELECT`, y palabras de escritura. Está **apagada por defecto**; para
-usarla hay que definir en el entorno:
+rol ADMIN, passphrase, y **transacción `READ ONLY`** con `statement_timeout` y tope de
+1000 filas (siempre hace rollback). Rechaza `;`, todo lo que no sea `SELECT`/`WITH…SELECT`,
+y palabras de escritura.
+
+Por decisión del dueño, viene **habilitada por defecto** y con una **passphrase por defecto
+en el código** (`DEFAULT_PASSPHRASE` en el route), para que el despliegue la traiga lista.
+⚠️ Eso implica que la clave queda en el repo/historial de git y quien vea el código puede
+usar la consola (que lee toda la base). Overrides por entorno (runtime, prioridad sobre el
+código):
 
 ```
-DB_CONSOLE_ENABLED="true"
-DB_CONSOLE_PASSPHRASE="<una frase secreta larga>"
+DB_CONSOLE_ENABLED="false"     # apaga la consola
+DB_CONSOLE_PASSPHRASE="..."    # rota la clave sin tocar el código (recomendado en prod)
 ```
 
-Sin ambas variables el endpoint responde 403. La passphrase se compara en tiempo constante
-y no se guarda en el código.
+La passphrase se compara en tiempo constante.
 
 ## Notas / mejoras conocidas (no implementadas)
 
