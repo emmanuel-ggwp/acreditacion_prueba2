@@ -392,7 +392,14 @@ export class ReportService {
             (SELECT STRING_AGG(a.name, ', ')
              FROM participant_awards pa
              INNER JOIN awards a ON pa.award_id = a.id
-             WHERE pa.participant_id = p.id AND a.event_id = :eventId AND pa.delivered_at IS NOT NULL) as "awardName"
+             WHERE pa.participant_id = p.id AND a.event_id = :eventId AND pa.delivered_at IS NOT NULL) as "awardName",
+            (SELECT STRING_AGG(
+                CONCAT_WS(' · ',
+                  NULLIF(TRIM(COALESCE(g2.first_name, '') || ' ' || COALESCE(g2.last_name, '')), ''),
+                  NULLIF(g2.document_number, ''),
+                  CASE WHEN g2.age IS NOT NULL THEN g2.age || ' años' END
+                ), '; ' ORDER BY g2.first_name)
+             FROM guests g2 WHERE g2.participant_id = p.id AND g2.deleted_at IS NULL) as "guestsDetail"
         FROM participants p
         INNER JOIN participant_schedules ps ON p.id = ps.participant_id
         INNER JOIN event_schedules es ON ps.schedule_id = es.id
@@ -421,7 +428,44 @@ export class ReportService {
         "Hora Acreditación": row["checkInTime"] ? format(new Date(row["checkInTime"]), 'HH:mm:ss') : '',
         "Cant. Invitados": row["Cant. Invitados"],
         "Cant. Invitados Asistentes": row["Cant. Invitados Asistentes"],
+        "Invitados (detalle)": row["guestsDetail"] || '',
         "Premio": row["awardName"] || 'No'
+    }));
+  }
+
+  // Reporte de INVITADOS: una fila por invitado con nombre, RUT, edad, dieta y asistencia.
+  // El reporte general es por participante (solo cuenta invitados); este da el detalle por carga.
+  async getGuestsReport(eventId: string) {
+    const query = `
+        SELECT
+            TRIM(COALESCE(p.first_name, '') || ' ' || COALESCE(p.last_name, '')) as "Participante",
+            TRIM(COALESCE(g.first_name, '') || ' ' || COALESCE(g.last_name, '')) as "Invitado",
+            g.document_number as "RUT",
+            g.age as "Edad",
+            g.guest_type as "Tipo",
+            g.dietary_preference as "Dieta",
+            CASE WHEN EXISTS (SELECT 1 FROM accreditations acc WHERE acc.guest_id = g.id) THEN 'Sí' ELSE 'No' END as "Asistió",
+            (SELECT MIN(acc.check_in_time) FROM accreditations acc WHERE acc.guest_id = g.id) as "checkInTime"
+        FROM guests g
+        INNER JOIN participants p ON p.id = g.participant_id
+        WHERE p.event_id = :eventId AND g.deleted_at IS NULL AND p.deleted_at IS NULL
+        ORDER BY p.last_name, p.first_name, g.first_name
+    `;
+
+    const results = await sequelize.query(query, {
+        replacements: { eventId },
+        type: QueryTypes.SELECT
+    });
+
+    return results.map((row: any) => ({
+        "Participante": row["Participante"],
+        "Invitado": row["Invitado"],
+        "RUT": row["RUT"] || '',
+        "Edad": row["Edad"] ?? '',
+        "Tipo": row["Tipo"] === 'CARGA' ? 'Carga' : row["Tipo"] === 'ACOMPANANTE' ? 'Acompañante' : (row["Tipo"] || ''),
+        "Dieta": row["Dieta"] && row["Dieta"] !== 'NONE' ? row["Dieta"] : '',
+        "Asistió": row["Asistió"],
+        "Hora Acreditación": row["checkInTime"] ? format(new Date(row["checkInTime"]), 'dd/MM/yyyy HH:mm') : '',
     }));
   }
 

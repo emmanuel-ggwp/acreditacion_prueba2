@@ -24,12 +24,25 @@ export const GET = withAuth(async (req: AuthenticatedRequest, { params }: Params
     if (type === 'general') {
         const reportData = await reportService.getGeneralReport(eventId);
         const csv = await reportService.generateCsv(reportData);
-        
+
         return new NextResponse(csv, {
             status: 200,
             headers: {
                 'Content-Type': 'text/csv; charset=utf-8',
                 'Content-Disposition': `attachment; filename="event_report_${eventId}.csv"`,
+            },
+        });
+    }
+
+    if (type === 'guests') {
+        const reportData = await reportService.getGuestsReport(eventId);
+        const csv = await reportService.generateCsv(reportData);
+
+        return new NextResponse(csv, {
+            status: 200,
+            headers: {
+                'Content-Type': 'text/csv; charset=utf-8',
+                'Content-Disposition': `attachment; filename="event_guests_${eventId}.csv"`,
             },
         });
     }
