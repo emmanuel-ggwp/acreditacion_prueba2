@@ -97,6 +97,7 @@ const GuestList: React.FC<GuestListProps> = ({ participantId, allowedGuests, gue
                 </p>
                 <p className="text-sm text-gray-500">
                   {guest.documentNumber || 'Sin documento'}
+                  {(guest as any).age != null && (guest as any).age !== '' && <span> · {(guest as any).age} años</span>}
                   {guestDietary && (guest as any).dietaryPreference && (guest as any).dietaryPreference !== 'NONE' && (
                     <span className="ml-2 text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">{dietaryLabel((guest as any).dietaryPreference)}</span>
                   )}

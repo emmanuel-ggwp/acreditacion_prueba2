@@ -46,6 +46,7 @@ const GuestForm: React.FC<GuestFormProps> = ({ participantId, guest, guestDietar
       firstName: guest?.firstName || '',
       lastName: guest?.lastName || '',
       documentNumber: guest?.documentNumber || '',
+      age: (guest as any)?.age ?? null,
       guestType: (guest as any)?.guestType || '',
       dietaryPreference: basePref,
     } as any,
@@ -62,12 +63,13 @@ const GuestForm: React.FC<GuestFormProps> = ({ participantId, guest, guestDietar
           firstName: data.firstName,
           lastName: data.lastName,
           documentNumber: data.documentNumber,
+          age: (data as any).age ?? null,
           guestType: (data as any).guestType || null,
           dietaryPreference,
         } as any);
       } else {
         await createGuest(participantId, { ...data, dietaryPreference } as any);
-        reset({ participantId, firstName: '', lastName: '', documentNumber: '', guestType: '', dietaryPreference: 'NONE' } as any);
+        reset({ participantId, firstName: '', lastName: '', documentNumber: '', age: null, guestType: '', dietaryPreference: 'NONE' } as any);
         setAllergyText('');
       }
       onSaved();
@@ -102,16 +104,32 @@ const GuestForm: React.FC<GuestFormProps> = ({ participantId, guest, guestDietar
           {errors.lastName && <p className="mt-1 text-sm text-red-600">{errors.lastName.message}</p>}
         </div>
       </div>
-      <div>
-        <label htmlFor="guestDocumentNumber" className="block text-sm font-medium text-gray-700">
-          Número de documento
-        </label>
-        <input
-          id="guestDocumentNumber"
-          {...register('documentNumber')}
-          className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-        />
-        {errors.documentNumber && <p className="mt-1 text-sm text-red-600">{errors.documentNumber.message}</p>}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="md:col-span-2">
+          <label htmlFor="guestDocumentNumber" className="block text-sm font-medium text-gray-700">
+            Número de documento
+          </label>
+          <input
+            id="guestDocumentNumber"
+            {...register('documentNumber')}
+            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+          />
+          {errors.documentNumber && <p className="mt-1 text-sm text-red-600">{errors.documentNumber.message}</p>}
+        </div>
+        <div>
+          <label htmlFor="guestAge" className="block text-sm font-medium text-gray-700">
+            Edad
+          </label>
+          <input
+            id="guestAge"
+            type="number"
+            min={0}
+            max={120}
+            {...register('age' as any, { setValueAs: (v: any) => (v === '' || v == null ? null : Number(v)) })}
+            className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+          />
+          {(errors as any).age && <p className="mt-1 text-sm text-red-600">{(errors as any).age.message}</p>}
+        </div>
       </div>
       <div>
         <label htmlFor="guestType" className="block text-sm font-medium text-gray-700">Tipo de invitado</label>

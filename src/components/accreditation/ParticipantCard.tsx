@@ -333,6 +333,11 @@ const ParticipantCard: React.FC<ParticipantCardProps> = ({ person, type, schedul
               <div key={g.id} className="flex items-center justify-between bg-gray-50 p-3 rounded-md gap-2">
                 <div className="min-w-0">
                   <span className="block truncate">{g.firstName} {g.lastName}</span>
+                  {((g as any).documentNumber || (g as any).age != null) && (
+                    <span className="block text-xs text-gray-500 truncate">
+                      {[(g as any).documentNumber ? `RUT: ${(g as any).documentNumber}` : null, ((g as any).age != null && (g as any).age !== '') ? `${(g as any).age} años` : null].filter(Boolean).join(' · ')}
+                    </span>
+                  )}
                   {(g as any).dietaryPreference && dietaryLabel((g as any).dietaryPreference) !== 'Ninguna' && (
                     <span className="mt-0.5 inline-flex items-center gap-1 text-xs text-orange-700">
                       <Utensils size={11} /> {dietaryLabel((g as any).dietaryPreference)}
