@@ -48,17 +48,17 @@ export const DEFAULT_DIET_LABELS: string[] = DEFAULT_DIET.map((o) => o.label);
  */
 export function getDietaryOptions(registrationConfig: any): DietOption[] {
   const custom = registrationConfig?.dietaryOptions;
-  const base: DietOption[] = Array.isArray(custom) && custom.length
+  const cleaned: DietOption[] = Array.isArray(custom)
     ? custom
         .filter((s: any) => typeof s === 'string' && s.trim())
         .map((s: string) => ({ value: s.trim(), label: s.trim() }))
-    : DEFAULT_DIET;
-  const opts = [...base];
-  // Garantiza la opción "Alergia" (texto libre) en todos los eventos, aun con opciones personalizadas.
-  if (!opts.some((o) => o.value === 'ALERGIA' || /alerg/i.test(o.label))) {
-    opts.push({ value: 'ALERGIA', label: 'Alergia' });
-  }
-  return [{ value: 'NONE', label: 'Ninguna' }, ...opts];
+    : [];
+  // Con opciones PERSONALIZADAS se respeta EXACTAMENTE la lista del organizador: si no
+  // incluyó "Alergia", NO se agrega (antes se forzaba en todos los eventos, así que
+  // aparecía aunque no se hubiera seleccionado). Sin lista propia, se usan las opciones
+  // por defecto (que ya incluyen Alergia).
+  const base: DietOption[] = cleaned.length ? cleaned : DEFAULT_DIET;
+  return [{ value: 'NONE', label: 'Ninguna' }, ...base];
 }
 
 /**
