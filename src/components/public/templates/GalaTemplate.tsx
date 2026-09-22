@@ -124,7 +124,9 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
   const [step, setStep] = useState<'welcome' | 'rut' | 'fecha' | 'form' | 'already'>('welcome');
   const [allowMultiple, setAllowMultiple] = useState<boolean>(!!event.allowMultipleSchedules);
   const [registeredScheduleIds, setRegisteredScheduleIds] = useState<string[]>([]);
-  const [selectedScheduleId, setSelectedScheduleId] = useState<string>(schedules.length === 1 && !schedules[0].full ? schedules[0].id : '');
+  // Fechas elegidas (varias si el evento lo permite). Si solo hay una fecha disponible,
+  // queda preseleccionada. La UI usa casillas cuando `allowMultiple` está activo.
+  const [selectedScheduleIds, setSelectedScheduleIds] = useState<string[]>(schedules.length === 1 && !schedules[0].full ? [schedules[0].id] : []);
   const [form, setForm] = useState({ firstName: '', lastName: '', documentNumber: '', phone: '', email: '', company: '', position: '', numeroSap: '', dietaryPreference: 'NONE', dietaryComments: '' });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -226,8 +228,8 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
       setRegisteredScheduleIds(regIds);
       // Ya inscrito y NO puede varias fechas → pantalla informativa.
       if (regIds.length > 0 && !data.allowMultiple) { setStep('already'); return; }
-      // Si puede varias fechas, no preseleccionar una fecha en la que ya está inscrito.
-      if (regIds.includes(selectedScheduleId)) setSelectedScheduleId('');
+      // Si puede varias fechas, no preseleccionar ninguna en la que ya está inscrito.
+      setSelectedScheduleIds((prev) => prev.filter((id) => !regIds.includes(id)));
       setStep(schedules.length ? 'fecha' : 'form');
     } catch (e: any) {
       setLookupError(e.message || 'Error al validar el RUT.');
@@ -240,7 +242,7 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    if (!selectedScheduleId) { setError('Selecciona una fecha de asistencia.'); return; }
+    if (!selectedScheduleIds.length) { setError('Selecciona al menos una fecha de asistencia.'); return; }
 
     let payload: any;
     if (mode === 'rut') {
@@ -297,7 +299,7 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
         position: form.position.trim() || undefined, numeroSap: form.numeroSap.trim() || undefined,
         ...(ff.dietary.enabled ? { dietaryPreference: form.dietaryPreference, dietaryComments: form.dietaryComments.trim() || undefined } : {}),
         customData: customAnswers,
-        scheduleIds: [selectedScheduleId],
+        scheduleIds: selectedScheduleIds,
         guests,
       };
     } else {
@@ -351,7 +353,7 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
         ...(ff.dietary.enabled ? { dietaryPreference: form.dietaryPreference, dietaryComments: form.dietaryComments.trim() || undefined } : {}),
         ...guestData,
         customData: customAnswers,
-        scheduleIds: [selectedScheduleId],
+        scheduleIds: selectedScheduleIds,
         guests: openGuestList,
       };
     }
@@ -369,9 +371,11 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
           return;
         }
         if (data.code === 'ALREADY_REGISTERED_DATE') {
-          setRegisteredScheduleIds(data.registeredScheduleIds || []);
-          setSelectedScheduleId('');
-          setError('Ya estás inscrito para esa fecha. Elige otra.');
+          const regIds: string[] = data.registeredScheduleIds || [];
+          setRegisteredScheduleIds(regIds);
+          // Quita de la selección las fechas en las que ya estaba inscrito y deja elegir otras.
+          setSelectedScheduleIds((prev) => prev.filter((id) => !regIds.includes(id)));
+          setError('Ya estás inscrito en una de las fechas elegidas. Revisa la selección.');
           setStep('fecha');
           return;
         }
@@ -391,7 +395,12 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
       try {
         const templateId = form.email.trim() ? event.emailTemplate?.templateId : null;
         if (templateId) {
-          const schedule = schedules.find((s) => s.id === selectedScheduleId);
+          // Con varias fechas, el correo muestra la más temprana (la plantilla tiene un
+          // único campo de fecha/lugar), igual criterio que el reenvío del panel.
+          const schedule = schedules
+            .filter((s) => selectedScheduleIds.includes(s.id))
+            .slice()
+            .sort((a, b) => new Date(a.startDateTime).getTime() - new Date(b.startDateTime).getTime())[0];
           // Solo se nombran los invitados que el servidor CONFIRMÓ. Los que ya existían
           // (cargas seleccionadas por id) se guardan siempre; los nuevos, hasta el cupo.
           const existingNames = mode === 'rut'
@@ -446,7 +455,19 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
 
   const overlayNode = <div className="absolute inset-0" style={{ backgroundColor: hexToRgba(overlayColor, overlay) }} aria-hidden="true" />;
 
-  const selectedSchedule = schedules.find((s) => s.id === selectedScheduleId);
+  // Fechas elegidas, ordenadas por inicio (para el resumen del formulario).
+  const selectedSchedules = schedules
+    .filter((s) => selectedScheduleIds.includes(s.id))
+    .slice()
+    .sort((a, b) => new Date(a.startDateTime).getTime() - new Date(b.startDateTime).getTime());
+
+  // Marca/desmarca una fecha. Con `allowMultiple` acumula varias; si no, reemplaza.
+  const toggleDate = (id: string) => {
+    setSelectedScheduleIds((prev) => {
+      if (allowMultiple) return prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id];
+      return [id];
+    });
+  };
 
   // Adder reutilizable de invitados nuevos (modo 'named'): hasta `maxGuests`, con nombre,
   // apellido y preferencia alimenticia. Se usa en el flujo RUT y en el abierto para que
@@ -497,7 +518,7 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
   );
 
   const renderDateCard = (s: any) => {
-    const selected = s.id === selectedScheduleId;
+    const selected = selectedScheduleIds.includes(s.id);
     const already = registeredScheduleIds.includes(s.id);
     const full = !!s.full;
     const blocked = already || full;
@@ -522,7 +543,7 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
     const monthName = validDate ? d.toLocaleDateString('es-CL', { month: 'long' }) : '';
 
     return (
-      <button key={s.id} type="button" disabled={blocked} onClick={() => { if (!blocked) setSelectedScheduleId(s.id); }} className="w-full sm:w-[18rem] text-left rounded-2xl overflow-hidden transition shadow-lg disabled:cursor-not-allowed" style={{ outline: selected ? `3px solid ${dateSelectedColor}` : '3px solid transparent', backgroundColor: s.imageUrl ? 'rgba(0,0,0,0.5)' : hexToRgba(dateCardColor, dateCardOpacity), border: '1px solid rgba(255,255,255,0.15)', opacity: blocked ? 0.55 : 1 }}>
+      <button key={s.id} type="button" disabled={blocked} onClick={() => { if (!blocked) toggleDate(s.id); }} className="w-full sm:w-[18rem] text-left rounded-2xl overflow-hidden transition shadow-lg disabled:cursor-not-allowed" style={{ outline: selected ? `3px solid ${dateSelectedColor}` : '3px solid transparent', backgroundColor: s.imageUrl ? 'rgba(0,0,0,0.5)' : hexToRgba(dateCardColor, dateCardOpacity), border: '1px solid rgba(255,255,255,0.15)', opacity: blocked ? 0.55 : 1 }}>
         {s.imageUrl ? (
           <>
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -747,10 +768,13 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
               // eslint-disable-next-line @next/next/no-img-element
               <img src={event.logoUrl} alt={event.name} className="h-16 w-auto mx-auto mb-4 drop-shadow" />
             )}
-            <h1 className="text-2xl sm:text-3xl font-bold break-words" style={{ color: datesTitleColor }}>Elige una fecha de asistencia</h1>
-            <p className="mt-2" style={{ color: hexToRgba(datesSubtitleColor, 0.8) }}>Selecciona la fecha y lugar al que asistirás.</p>
+            <h1 className="text-2xl sm:text-3xl font-bold break-words" style={{ color: datesTitleColor }}>{allowMultiple ? 'Elige tus fechas de asistencia' : 'Elige una fecha de asistencia'}</h1>
+            <p className="mt-2" style={{ color: hexToRgba(datesSubtitleColor, 0.8) }}>{allowMultiple ? 'Marca todas las fechas a las que asistirás.' : 'Selecciona la fecha y lugar al que asistirás.'}</p>
+            {allowMultiple && selectedScheduleIds.length > 0 && (
+              <p className="mt-1 text-sm" style={{ color: hexToRgba(datesSubtitleColor, 0.9) }}>{selectedScheduleIds.length} fecha(s) seleccionada(s).</p>
+            )}
             {allowMultiple && registeredScheduleIds.length > 0 && (
-              <p className="text-emerald-200/90 mt-2 text-sm">Ya estás inscrito en {registeredScheduleIds.length} fecha(s). Puedes elegir una nueva — las que ya tienes aparecen marcadas.</p>
+              <p className="text-emerald-200/90 mt-2 text-sm">Ya estás inscrito en {registeredScheduleIds.length} fecha(s). Puedes elegir una o varias nuevas — las que ya tienes aparecen marcadas.</p>
             )}
             {error && <p className="mt-3 text-sm text-red-300">{error}</p>}
           </header>
@@ -764,7 +788,7 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
           </div>
 
           <div className="mt-8 flex justify-center">
-            <button type="button" disabled={!selectedScheduleId} onClick={() => setStep('form')} className="inline-flex items-center gap-2 rounded-full px-8 py-3 text-white font-semibold shadow-lg hover:brightness-110 transition disabled:opacity-50" style={{ backgroundColor: buttonColor, color: buttonTextColor }}>
+            <button type="button" disabled={!selectedScheduleIds.length} onClick={() => setStep('form')} className="inline-flex items-center gap-2 rounded-full px-8 py-3 text-white font-semibold shadow-lg hover:brightness-110 transition disabled:opacity-50" style={{ backgroundColor: buttonColor, color: buttonTextColor }}>
               Continuar <ArrowRight className="h-5 w-5" />
             </button>
           </div>
@@ -788,17 +812,21 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
           <p className="text-white/80 mt-2">Completa la información para registrarte en el evento.</p>
         </header>
 
-        {/* Resumen de la fecha elegida (con opción de cambiarla) */}
-        {selectedSchedule && (
+        {/* Resumen de la(s) fecha(s) elegida(s) (con opción de cambiarlas) */}
+        {selectedSchedules.length > 0 && (
           <div className="mb-6 rounded-2xl p-4 flex items-center justify-between gap-3" style={{ backgroundColor: 'rgba(0,0,0,0.4)', border: '1px solid rgba(255,255,255,0.15)' }}>
-            <div className="text-white text-sm min-w-0">
-              <p className="font-semibold flex items-center gap-1">
-                <Calendar className="h-4 w-4 flex-shrink-0" />
-                <span className="truncate">{selectedSchedule.label || selectedSchedule.scheduleName}{blockTypeLabel(selectedSchedule.blockType) ? ` · ${blockTypeLabel(selectedSchedule.blockType)}` : ''}</span>
-              </p>
-              <p className="text-white/75 capitalize mt-0.5">{fmtDate(selectedSchedule.startDateTime)} · {fmtTime(selectedSchedule.startDateTime)}{selectedSchedule.location ? ` · ${selectedSchedule.location}` : ''}</p>
+            <div className="text-white text-sm min-w-0 space-y-2">
+              {selectedSchedules.map((sc) => (
+                <div key={sc.id}>
+                  <p className="font-semibold flex items-center gap-1">
+                    <Calendar className="h-4 w-4 flex-shrink-0" />
+                    <span className="truncate">{sc.label || sc.scheduleName}{blockTypeLabel(sc.blockType) ? ` · ${blockTypeLabel(sc.blockType)}` : ''}</span>
+                  </p>
+                  <p className="text-white/75 capitalize mt-0.5">{fmtDate(sc.startDateTime)} · {fmtTime(sc.startDateTime)}{sc.location ? ` · ${sc.location}` : ''}</p>
+                </div>
+              ))}
             </div>
-            <button type="button" onClick={() => setStep('fecha')} className="text-sm underline text-white/90 hover:text-white whitespace-nowrap flex-shrink-0">Cambiar fecha</button>
+            <button type="button" onClick={() => setStep('fecha')} className="text-sm underline text-white/90 hover:text-white whitespace-nowrap flex-shrink-0">{selectedSchedules.length > 1 ? 'Cambiar fechas' : 'Cambiar fecha'}</button>
           </div>
         )}
 
