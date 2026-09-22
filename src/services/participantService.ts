@@ -595,7 +595,12 @@ export class ParticipantService {
       include,
       attributes: {
         include: [
-            [fn('COUNT', col('guests.id')), 'guestCount'],
+            // Invitados CON NOMBRE (filas Guest). DISTINCT: el join con horarios haría
+            // un producto cartesiano y contaría de más si el participante tiene varias fechas.
+            [fn('COUNT', fn('DISTINCT', col('guests.id'))), 'guestCount'],
+            // TOTAL de invitados considerando TODAS las formas: con nombre (filas Guest) +
+            // numéricos (guest_count, de los modos "solo número" y "acompañante + cargas").
+            [sequelize.literal('(COUNT(DISTINCT "guests"."id") + COALESCE("Participant"."guest_count", 0))'), 'guestsTotal'],
             [fn('BOOL_OR', col('schedules.ParticipantSchedule.attended')), 'accredited'],
             [sequelize.literal('(EXISTS (SELECT 1 FROM "participant_schedules" ps WHERE ps."participant_id" = "Participant"."id"))'), 'registered'],
             // Hora de acreditación (la más temprana registrada en el evento).

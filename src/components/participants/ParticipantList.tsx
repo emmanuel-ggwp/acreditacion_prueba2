@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import useParticipantStore from '@/store/participantStore';
 import useEventStore from '@/store/eventStore';
 import useAuthStore from '@/store/authStore';
-import { PlusCircle, FileDown, FileUp, Edit, Trash2, Award, X, CheckCircle2, Clock, Search, ChevronLeft, ChevronRight, UserCheck, Undo2, HelpCircle, Mail, MailCheck, MailX, Send, Loader2 } from 'lucide-react';
+import { PlusCircle, FileDown, FileUp, Edit, Trash2, Award, X, CheckCircle2, Clock, Search, ChevronLeft, ChevronRight, UserCheck, Undo2, HelpCircle, Mail, MailCheck, MailX, Send, Loader2, Users } from 'lucide-react';
 import { sendConfirmationEmail } from '@/lib/emailjs';
 import apiClient from '@/utils/apiClient';
 import Participant from '@/models/Participant';
@@ -154,7 +154,7 @@ const ParticipantList = ({ eventId }: { eventId: string }) => {
         participant_name: nombre, nombre,
         event_name: info.eventName,
         schedule_name: '', fechaEvento: '', lugarEvento: info.location || '',
-        guests_count: String(p.guestCount || 0), guests_summary: '',
+        guests_count: String((p as any).guestsTotal ?? p.guestCount ?? 0), guests_summary: '',
       });
       await apiClient.patch(`/api/participants/${p.id}/email-status`, { ok: r.ok, skipped: r.skipped, error: r.error }).catch(() => {});
       if (r.ok) ok++; else fail++;
@@ -504,6 +504,7 @@ const ParticipantList = ({ eventId }: { eventId: string }) => {
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Correo</th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Envío correo</th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Documento</th>
+              <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Invitados</th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Hora acreditación</th>
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Premiado</th>
@@ -528,6 +529,15 @@ const ParticipantList = ({ eventId }: { eventId: string }) => {
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{participant.email}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm"><EmailStatusCell p={participant} /></td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{participant.documentNumber || '-'}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm">
+                    {Number((participant as any).guestsTotal) > 0 ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-teal-100 text-teal-700" title="Invitados con nombre + numéricos (cargas)">
+                        <Users size={12} /> {Number((participant as any).guestsTotal)}
+                      </span>
+                    ) : (
+                      <span className="text-gray-300 text-xs">—</span>
+                    )}
+                  </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm">
                     {(participant as any).registered ? (
                       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700" title="El participante ya se inscribió (tiene fecha)">
@@ -605,7 +615,7 @@ const ParticipantList = ({ eventId }: { eventId: string }) => {
               ))
             ) : (
               <tr>
-                <td colSpan={9} className="px-6 py-10 text-center text-gray-500">
+                <td colSpan={10} className="px-6 py-10 text-center text-gray-500">
                   {filter.trim() || showOnlyAwarded || statusFilter !== 'all'
                     ? <>No se encontraron participantes{statusFilter === 'preloaded' ? ' precargados' : statusFilter === 'registered' ? ' inscritos' : ''} para este filtro{filter.trim() ? <>: <b>&quot;{filter.trim()}&quot;</b></> : ''}.</>
                     : 'No se encontraron participantes. Agrega uno para comenzar.'}
