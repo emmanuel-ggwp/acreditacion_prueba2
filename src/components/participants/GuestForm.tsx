@@ -78,8 +78,19 @@ const GuestForm: React.FC<GuestFormProps> = ({ participantId, guest, guestDietar
     }
   };
 
+  // GuestForm se renderiza DENTRO del <form> de ParticipantForm; un <form> no puede
+  // anidarse en otro (HTML inválido → error de hidratación). Por eso este formulario
+  // es un <div> y envía con el botón. En Enter, se envía este (no el de arriba).
+  const submitGuest = handleSubmit(onSubmit);
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && (e.target as HTMLElement).tagName !== 'TEXTAREA') {
+      e.preventDefault();
+      submitGuest();
+    }
+  };
+
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 bg-gray-100 p-4 rounded-lg">
+    <div onKeyDown={onKeyDown} className="space-y-4 bg-gray-100 p-4 rounded-lg">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <label htmlFor="guestFirstName" className="block text-sm font-medium text-gray-700">
@@ -177,14 +188,15 @@ const GuestForm: React.FC<GuestFormProps> = ({ participantId, guest, guestDietar
           Cancelar
         </button>
           <button
-            type="submit"
+            type="button"
+            onClick={submitGuest}
             className="bg-blue-600 text-white px-3 py-1 rounded-lg hover:bg-blue-700 disabled:opacity-50 text-sm"
             disabled={loading}
           >
             {loading ? 'Guardando...' : guest ? 'Actualizar invitado' : 'Guardar invitado'}
           </button>
       </div>
-    </form>
+    </div>
   );
 };
 
