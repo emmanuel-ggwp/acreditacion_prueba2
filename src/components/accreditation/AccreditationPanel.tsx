@@ -270,7 +270,7 @@ const AccreditationPanel = ({ eventId: eventIdProp, scheduleId: scheduleIdProp }
 
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-2">3. Buscar participante</label>
-            <SearchParticipant eventId={eventId} onSelect={setSelectedPerson} />
+            <SearchParticipant eventId={eventId} onSelect={setSelectedPerson} scheduleId={scheduleId} />
           </div>
 
           {selectedPerson && (

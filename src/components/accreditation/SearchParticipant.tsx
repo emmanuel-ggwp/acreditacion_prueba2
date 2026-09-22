@@ -10,9 +10,11 @@ import Guest from '@/models/Guest';
 interface SearchParticipantProps {
   eventId: string;
   onSelect: (person: { type: 'participant' | 'guest', data: Participant | Guest }) => void;
+  // Fecha del check-in: filtra los invitados a los ligados a esa fecha (acreditación por fecha).
+  scheduleId?: string;
 }
 
-const SearchParticipant: React.FC<SearchParticipantProps> = ({ eventId, onSelect }) => {
+const SearchParticipant: React.FC<SearchParticipantProps> = ({ eventId, onSelect, scheduleId }) => {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<(Participant | Guest)[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -31,7 +33,7 @@ const SearchParticipant: React.FC<SearchParticipantProps> = ({ eventId, onSelect
     const mySeq = ++seqRef.current;
     setIsLoading(true);
     try {
-      const response = await searchParticipants(eventId, searchQuery);
+      const response = await searchParticipants(eventId, searchQuery, scheduleId);
       if (mySeq !== seqRef.current) return; // llegó una búsqueda más nueva: descartar esta
       setResults([...(response || [])]);
     } catch (error) {
@@ -42,7 +44,7 @@ const SearchParticipant: React.FC<SearchParticipantProps> = ({ eventId, onSelect
     }
   };
 
-  const debouncedSearch = useCallback(debounce(searchPeopleHandler, 400), [eventId]);
+  const debouncedSearch = useCallback(debounce(searchPeopleHandler, 400), [eventId, scheduleId]);
 
   useEffect(() => {
     debouncedSearch(query);

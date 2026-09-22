@@ -681,7 +681,7 @@ export class ParticipantService {
     return { participants: rows, total, page, limit };
   }
 
-  async searchParticipants(eventId: string, query: string) {
+  async searchParticipants(eventId: string, query: string, scheduleId?: string) {
     if (!query || query.trim().length < 3) {
         return [];
     }
@@ -703,13 +703,27 @@ export class ParticipantService {
         [Op.or]: orConds,
       },
       include: [
-        { model: Guest, as: 'guests' },
+        // Invitados + las fechas a las que están ligados (para filtrar por la fecha del check-in).
+        { model: Guest, as: 'guests', include: [{ model: EventSchedule, as: 'schedules', through: { attributes: [] }, attributes: ['id'] }] },
         // Fechas en que el participante se inscribió (para avisar si acredita en otra fecha).
         { model: EventSchedule, as: 'schedules', through: { attributes: [] } },
       ],
       limit: 10,
     });
-    return participants;
+
+    // Acreditación POR FECHA: si se acredita una fecha concreta, solo se muestran los
+    // invitados ligados a ESA fecha. Fallback: un invitado SIN ninguna fecha ligada
+    // (cargas antiguas / agregadas por admin) se muestra en todas, como antes.
+    const plain = participants.map((p: any) => p.get({ plain: true }));
+    if (scheduleId) {
+      for (const p of plain) {
+        p.guests = (p.guests || []).filter((g: any) => {
+          const links = g.schedules || [];
+          return links.length === 0 || links.some((s: any) => s.id === scheduleId);
+        });
+      }
+    }
+    return plain;
   }
 }
 

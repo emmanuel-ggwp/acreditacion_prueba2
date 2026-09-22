@@ -19,7 +19,7 @@ interface ParticipantState {
   total: number;
   fetchParticipantsByEvent: (eventId: string, page?: number, limit?: number, filters?: any) => Promise<void>;
   fetchParticipantById: (id: string, params?: { includeGuests?: boolean; includeAwards?: boolean; includeSchedules?: boolean }) => Promise<void>;
-  searchParticipants: (eventId: string, query: string) => Promise<Participant[]>;
+  searchParticipants: (eventId: string, query: string, scheduleId?: string) => Promise<Participant[]>;
   createParticipant: (participantData: z.infer<typeof createParticipantSchema>) => Promise<void>;
   updateParticipant: (id: string, participantData: z.infer<typeof updateParticipantSchema>) => Promise<void>;
   deleteParticipant: (id: string, reason?: string) => Promise<void>;
@@ -78,14 +78,15 @@ const useParticipantStore = create<ParticipantState>()(
         }
       },
 
-      searchParticipants: async (eventId, query) => {
+      searchParticipants: async (eventId, query, scheduleId) => {
         try {
+          const qs = `search=${encodeURIComponent(query)}${scheduleId ? `&scheduleId=${encodeURIComponent(scheduleId)}` : ''}`;
           const response = await apiClient.get<
             {
               participants: Participant[];
             }
           >(
-            `/api/events/${eventId}/participants?search=${encodeURIComponent(query)}`
+            `/api/events/${eventId}/participants?${qs}`
           );
           return response.participants;
         } catch (error: any) {

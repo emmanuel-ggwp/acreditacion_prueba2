@@ -4,6 +4,7 @@ import { sequelize } from '@/lib/sequelize';
 import Accreditation from '@/models/Accreditation';
 import Participant from '@/models/Participant';
 import Guest from '@/models/Guest';
+import GuestSchedule from '@/models/GuestSchedule';
 import EventSchedule from '@/models/EventSchedule';
 import Event from '@/models/Event';
 import { bulkAccreditationSchema } from '@/utils/validators/accreditationSchemas';
@@ -49,6 +50,18 @@ export class AccreditationService {
         const guestParticipant = (person as any)?.participant;
         if (!person || guestParticipant?.eventId !== schedule.eventId) {
             throw new Error('Guest not found or does not belong to this event.');
+        }
+        // Invitados POR FECHA: si el invitado está ligado a fechas concretas (GuestSchedule),
+        // solo se puede acreditar en una de ESAS fechas. Fallback seguro: un invitado SIN
+        // ninguna fecha ligada (cargas antiguas, agregadas por admin) se acredita en cualquier
+        // fecha, como antes. Así el check-in respeta "invitados distintos por fecha" sin
+        // bloquear datos previos a la funcionalidad.
+        const totalLinks = await GuestSchedule.count({ where: { guestId }, transaction });
+        if (totalLinks > 0) {
+            const forThisDate = await GuestSchedule.count({ where: { guestId, scheduleId: eventScheduleId }, transaction });
+            if (!forThisDate) {
+                throw new Error('Este invitado no está registrado para esta fecha.');
+            }
         }
     } else {
         throw new Error('Participant or Guest ID is required.');

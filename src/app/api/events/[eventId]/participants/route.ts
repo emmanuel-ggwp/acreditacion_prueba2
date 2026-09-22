@@ -31,7 +31,9 @@ export const GET = withAuth(async (
     const mail = (mailParam === 'sent' || mailParam === 'failed' || mailParam === 'unsent') ? mailParam : undefined;
 
     if (search) {
-      const results = await participantService.searchParticipants(eventId, search);
+      // scheduleId (opcional): filtra los invitados a los ligados a esa fecha (check-in por fecha).
+      const scheduleId = searchParams.get('scheduleId') || undefined;
+      const results = await participantService.searchParticipants(eventId, search, scheduleId);
       return NextResponse.json({ participants: results, total: results.length, page: 1, limit: results.length });
     }
 
