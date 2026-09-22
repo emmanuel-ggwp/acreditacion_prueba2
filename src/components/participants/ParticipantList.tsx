@@ -149,11 +149,23 @@ const ParticipantList = ({ eventId }: { eventId: string }) => {
     for (let i = 0; i < withEmail.length; i++) {
       const p = withEmail[i];
       const nombre = `${p.firstName} ${p.lastName}`.trim();
+      // El listado no trae la fecha/lugar del horario, así que se piden aquí (el GET del
+      // participante siempre incluye sus horarios). Se usa el más temprano, igual que el
+      // correo original de la landing; antes se enviaban schedule_name/fechaEvento vacíos.
+      let sched: any = null;
+      try {
+        const full = await apiClient.get<any>(`/api/participants/${p.id}`);
+        const scheds = ((full?.schedules as any[]) || []).slice()
+          .sort((a, b) => new Date(a.startDateTime).getTime() - new Date(b.startDateTime).getTime());
+        sched = scheds[0] || null;
+      } catch { /* sin horario accesible: se envía sin fecha/lugar */ }
       const r = await sendConfirmationEmail(info.templateId, {
         to_email: p.email, email: p.email,
         participant_name: nombre, nombre,
         event_name: info.eventName,
-        schedule_name: '', fechaEvento: '', lugarEvento: info.location || '',
+        schedule_name: sched ? (sched.label || sched.scheduleName || '') : '',
+        fechaEvento: sched ? new Date(sched.startDateTime).toLocaleDateString('es-CL') : '',
+        lugarEvento: sched?.location || info.location || '',
         guests_count: String((p as any).guestsTotal ?? p.guestCount ?? 0), guests_summary: '',
       });
       await apiClient.patch(`/api/participants/${p.id}/email-status`, { ok: r.ok, skipped: r.skipped, error: r.error }).catch(() => {});
