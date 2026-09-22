@@ -8,7 +8,7 @@ import { publicRegistrationSchema } from '@/utils/validators/participantSchemas'
 import { getFormFields, guestDietaryEnabled, getGuestMode, getGuestFields } from '@/utils/formFields';
 import { getDietaryOptions, isFreeTextDiet, dietaryFull, ensureDietOption, DIET_COMMENTS_MAX, GUEST_DIET_DETAIL_MAX } from '@/utils/dietary';
 import { sendConfirmationEmail } from '@/lib/emailjs';
-import { buildGuestSummary } from '@/utils/guests';
+import { buildGuestSummary, buildAttendanceDetail } from '@/utils/guests';
 import DateSelectModal from '@/components/public/DateSelectModal';
 import CustomQuestionFields from '@/components/public/CustomQuestionFields';
 import { getCustomQuestions, initCustomAnswers, missingRequiredCustom, type CustomAnswers } from '@/utils/customQuestions';
@@ -90,14 +90,36 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
   const [rutPassed, setRutPassed] = useState(false);
   const [lookupLoading, setLookupLoading] = useState(false);
   const [lookupError, setLookupError] = useState('');
-  // `id` presente = carga PRECARGADA por el organizador, traída por el lookup. Se envía
-  // por id para confirmarla, nunca como invitado nuevo: sin el id, el servidor creaba un
-  // DUPLICADO en cada inscripción (D1.4). El tope solo lo consumen los que no tienen id.
-  const [openGuests, setOpenGuests] = useState<{ id?: string; firstName: string; lastName: string; documentNumber?: string; age?: string; dietaryPreference?: string; dietaryComments?: string; selected?: boolean }[]>([]);
-  const newGuestCount = openGuests.filter((g) => !g.id).length;
-  const addGuest = () => setOpenGuests((g) => (g.filter((x) => !x.id).length < maxGuests ? [...g, { firstName: '', lastName: '', documentNumber: '', age: '', dietaryPreference: 'NONE', dietaryComments: '' }] : g));
-  const removeGuest = (i: number) => setOpenGuests((g) => g.filter((_, idx) => idx !== i));
-  const updateGuest = (i: number, k: string, v: string) => setOpenGuests((g) => g.map((x, idx) => (idx === i ? { ...x, [k]: v } : x)));
+  // Invitados POR FECHA (modo 'named'): el asistente puede llevar personas distintas en
+  // cada fecha. `cargas` = pool precargado por el organizador (se ofrece para marcar en
+  // cada fecha, nunca consume cupo). `dateState[scheduleId]` = qué cargas marcó y qué
+  // invitados NUEVOS agregó para ESA fecha. Las cargas se envían por id (confirmación),
+  // los nuevos con nombre; el servidor los liga a la fecha vía GuestSchedule.
+  type NewGuest = { firstName: string; lastName: string; documentNumber?: string; age?: string; dietaryPreference?: string; dietaryComments?: string };
+  const [cargas, setCargas] = useState<{ id: string; firstName: string; lastName: string; dietaryPreference?: string }[]>([]);
+  const [lockedIds, setLockedIds] = useState<string[]>([]);
+  const [lockedGuests, setLockedGuests] = useState<Record<string, string[]>>({});
+  const [dateState, setDateState] = useState<Record<string, { cargas: string[]; news: NewGuest[] }>>({});
+  const cargaById = (id: string) => cargas.find((c) => c.id === id);
+  const stateFor = (sid: string) => dateState[sid] || { cargas: [], news: [] };
+  const toggleCarga = (sid: string, cid: string) => setDateState((st) => {
+    const cur = st[sid] || { cargas: [], news: [] };
+    const has = cur.cargas.includes(cid);
+    return { ...st, [sid]: { ...cur, cargas: has ? cur.cargas.filter((x) => x !== cid) : [...cur.cargas, cid] } };
+  });
+  const addDateGuest = (sid: string) => setDateState((st) => {
+    const cur = st[sid] || { cargas: [], news: [] };
+    if (cur.news.length >= maxGuests) return st;
+    return { ...st, [sid]: { ...cur, news: [...cur.news, { firstName: '', lastName: '', documentNumber: '', age: '', dietaryPreference: 'NONE', dietaryComments: '' }] } };
+  });
+  const updateDateGuest = (sid: string, i: number, k: string, v: string) => setDateState((st) => {
+    const cur = st[sid] || { cargas: [], news: [] };
+    return { ...st, [sid]: { ...cur, news: cur.news.map((g, idx) => (idx === i ? { ...g, [k]: v } : g)) } };
+  });
+  const removeDateGuest = (sid: string, i: number) => setDateState((st) => {
+    const cur = st[sid] || { cargas: [], news: [] };
+    return { ...st, [sid]: { ...cur, news: cur.news.filter((_, idx) => idx !== i) } };
+  });
 
   const {
     register,
@@ -142,18 +164,13 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
       // Precargar dieta e invitados registrados en la precarga.
       setValue('dietaryPreference', p.dietaryPreference || 'NONE');
       setValue('dietaryComments', p.dietaryComments || '');
-      if (Array.isArray(data.guests) && data.guests.length) {
-        setOpenGuests(data.guests.map((g: any) => ({
-          // El id viaja de vuelta en el envío: identifica la fila que ya existe (D1.4).
-          id: g.id,
-          firstName: g.firstName || '',
-          lastName: g.lastName || '',
-          dietaryPreference: g.dietaryPreference || 'NONE',
-          dietaryComments: '',
-          // Cargas precargadas: MARCADAS por defecto; el asistente puede desmarcar.
-          selected: true,
-        })));
-      }
+      // Pool de cargas precargadas (se ofrecen para marcar en CADA fecha).
+      setCargas(Array.isArray(data.guests) ? data.guests.map((g: any) => ({
+        id: g.id, firstName: g.firstName || '', lastName: g.lastName || '', dietaryPreference: g.dietaryPreference || 'NONE',
+      })) : []);
+      // Fechas ya inscritas (bloqueadas) + sus invitados (solo lectura).
+      setLockedIds(Array.isArray(data.registeredScheduleIds) ? data.registeredScheduleIds : []);
+      setLockedGuests(data.registeredGuestsBySchedule || {});
       // Invitados en modos numéricos (count / companion).
       if (p.guestCount != null) setCountGuests(Number(p.guestCount) || 0);
       if (p.guestCompanion != null) setCompanion(!!p.guestCompanion);
@@ -177,6 +194,18 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [Array.isArray(watchedScheduleIds) ? watchedScheduleIds.join(',') : String(watchedScheduleIds)]);
 
+  // Crea el estado de invitados por cada fecha seleccionada (modo 'named').
+  useEffect(() => {
+    const ids: string[] = (watchedScheduleIds as string[]) || [];
+    setDateState((st) => {
+      let changed = false;
+      const nx = { ...st };
+      for (const id of ids) { if (!nx[id]) { nx[id] = { cargas: [], news: [] }; changed = true; } }
+      return changed ? nx : st;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [Array.isArray(watchedScheduleIds) ? watchedScheduleIds.join(',') : String(watchedScheduleIds)]);
+
   const onSubmit = async (data: PublicRegistrationFormData) => {
     setIsSubmitting(true);
     setError(null);
@@ -196,8 +225,15 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
       missing.push(...missingRequiredCustom(customQuestions, customAnswers));
       if (missing.length) { setError('Completa los campos obligatorios: ' + missing.join(', ') + '.'); setIsSubmitting(false); return; }
 
-      // Invitados según el modo del evento.
-      let guests: any[] = [];
+      // Solo se inscriben fechas NUEVAS: las ya inscritas (bloqueadas) se excluyen para no
+      // recibir un 409 ALREADY_REGISTERED_DATE y para no tocar esas inscripciones.
+      const selectedIds: string[] = ((data.scheduleIds as string[]) || []).filter((id) => !lockedIds.includes(id));
+      if (selectedIds.length === 0) {
+        setError('Elige al menos una fecha nueva para inscribirte.');
+        setIsSubmitting(false);
+        return;
+      }
+      let guestsBySchedule: Record<string, any[]> | undefined;
       const guestData: any = {};
       if (allowGuests && maxGuests > 0) {
         if (guestMode === 'count') {
@@ -208,25 +244,29 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
           guestData.guestLoads = Math.max(0, loads);
           guestData.guestCount = Math.min(total, maxGuests);
         } else {
-          guests = openGuests
-            // Precargadas: solo las MARCADAS. Invitados nuevos: los que tengan nombre.
-            .filter((g) => (g.id ? g.selected !== false : g.firstName.trim()))
-            .map((g) => {
-              // Carga precargada: se confirma por id. Reenviarla como invitado nuevo era
-              // lo que la duplicaba en cada inscripción (D1.4).
-              if (g.id) return { id: g.id };
-              const gd: any = {};
-              if (guestDiet) {
-                // El invitado no tiene columna de comentarios: si eligió Alergia/Otro y escribió,
-                // guardamos el detalle dentro de dietaryPreference (ej.: "Alergia: maní").
-                gd.dietaryPreference = isFreeTextDiet(g.dietaryPreference) && (g.dietaryComments || '').trim()
-                  ? dietaryFull(g.dietaryPreference, g.dietaryComments)
-                  : (g.dietaryPreference || 'NONE');
-              }
-              if (guestFields.documentNumber.enabled && (g.documentNumber || '').trim()) gd.documentNumber = g.documentNumber!.trim();
-              if (guestFields.age.enabled && String(g.age ?? '').trim()) gd.age = Number(g.age);
-              return { firstName: g.firstName.trim(), lastName: g.lastName.trim() || undefined, guestType: 'ACOMPANANTE', ...gd };
-            });
+          // Modo 'named': invitados POR FECHA. Por cada fecha elegida se arman las cargas
+          // marcadas (por id) + los invitados nuevos (con nombre) de esa fecha.
+          guestsBySchedule = {};
+          for (const sid of selectedIds) {
+            const stt = stateFor(sid);
+            guestsBySchedule[sid] = [
+              // Carga precargada: se confirma por id. El servidor la liga a esta fecha.
+              ...stt.cargas.map((id) => ({ id })),
+              ...stt.news.filter((g) => g.firstName.trim()).map((g) => {
+                const gd: any = {};
+                if (guestDiet) {
+                  // El invitado no tiene columna de comentarios: si eligió Alergia/Otro y escribió,
+                  // guardamos el detalle dentro de dietaryPreference (ej.: "Alergia: maní").
+                  gd.dietaryPreference = isFreeTextDiet(g.dietaryPreference) && (g.dietaryComments || '').trim()
+                    ? dietaryFull(g.dietaryPreference, g.dietaryComments)
+                    : (g.dietaryPreference || 'NONE');
+                }
+                if (guestFields.documentNumber.enabled && (g.documentNumber || '').trim()) gd.documentNumber = g.documentNumber!.trim();
+                if (guestFields.age.enabled && String(g.age ?? '').trim()) gd.age = Number(g.age);
+                return { firstName: g.firstName.trim(), lastName: g.lastName.trim() || undefined, guestType: 'ACOMPANANTE', ...gd };
+              }),
+            ];
+          }
         }
       }
       const response = await fetch(`/api/public/events/${slug}/register`, {
@@ -237,7 +277,7 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
         // Correo vacío → undefined: el esquema del modo RUT valida formato de email y
         // rechaza "" (optional/nullable no eximen a la cadena vacía), lo que bloqueaba a
         // un precargado sin correo. Enviar undefined es válido en ambos modos.
-        body: JSON.stringify({ ...data, email: String((data as any).email ?? '').trim() || undefined, ...guestData, guests, customData: customAnswers, ...(registrationMode === 'rut' && rutParticipantId ? { participantId: rutParticipantId } : {}) }),
+        body: JSON.stringify({ ...data, scheduleIds: selectedIds, email: String((data as any).email ?? '').trim() || undefined, ...guestData, ...(guestsBySchedule ? { guestsBySchedule } : {}), customData: customAnswers, ...(registrationMode === 'rut' && rutParticipantId ? { participantId: rutParticipantId } : {}) }),
       });
 
       const result = await response.json();
@@ -252,37 +292,56 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
       try {
         const templateId = (event as any).emailTemplate?.templateId;
         if (templateId && data.email) {
-          const schedule = ((event as any).schedules || []).find((s: any) => s.id === (data.scheduleIds || [])[0]);
+          const selDates = selectedIds
+            .map((id) => allSchedules.find((s: any) => s.id === id))
+            .filter(Boolean)
+            .sort((a: any, b: any) => new Date(a.startDateTime).getTime() - new Date(b.startDateTime).getTime());
+          const primary: any = selDates[0];
           const nombre = `${data.firstName} ${data.lastName}`.trim();
-          // Invitados según el modo del evento (un solo texto sirve para los 3 modos).
-          // Solo se nombra lo que el servidor confirmó: las cargas que ya existían
-          // (enviadas por id) y los invitados nuevos que cupieron en el cupo (D1.3).
-          // El array `guests` ya no sirve para esto: las cargas viajan solo con su id.
-          const createdGuests = Number.isFinite(Number(result?.guestsCreated)) ? Number(result.guestsCreated) : Number.MAX_SAFE_INTEGER;
           const serverCap = Number.isFinite(Number(result?.guestCap)) ? Number(result.guestCap) : maxGuests;
-          // Solo cargas precargadas MARCADAS + invitados nuevos que cupieron.
-          const shown = openGuests.filter((g) => (g.id ? g.selected !== false : g.firstName.trim()));
-          const names = [
-            ...shown.filter((g) => g.id).map((g) => `${g.firstName} ${g.lastName || ''}`.trim()),
-            ...shown.filter((g) => !g.id).slice(0, createdGuests).map((g) => `${g.firstName} ${g.lastName || ''}`.trim()),
-          ];
+          const fmtWhen = (s: any) => {
+            try {
+              return new Date(s.startDateTime).toLocaleDateString('es-CL', { weekday: 'short', day: '2-digit', month: 'long' })
+                + ', ' + new Date(s.startDateTime).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' });
+            } catch { return ''; }
+          };
+          // Nombres de invitados de una fecha (cargas marcadas + invitados nuevos con nombre).
+          const namesForDate = (sid: string) => {
+            const stt = stateFor(sid);
+            return [
+              ...stt.cargas.map((cid) => { const c = cargaById(cid); return c ? `${c.firstName} ${c.lastName || ''}`.trim() : ''; }).filter(Boolean),
+              ...stt.news.filter((g) => g.firstName.trim()).map((g) => `${g.firstName} ${g.lastName || ''}`.trim()),
+            ];
+          };
+          // Resumen compatible (correo antiguo): invitados de la PRIMERA fecha o números.
           const gs = buildGuestSummary(guestMode, {
-            names,
+            names: guestMode === 'named' && primary ? namesForDate(primary.id) : [],
             count: Math.min(Number(guestData.guestCount) || 0, serverCap),
             companion,
             loads: Math.min(loads, serverCap),
           });
+          // Detalle POR FECHA (modo 'named'): un solo bloque {{detalle_asistencia}}. Una
+          // fecha → formato simple; varias → desglose con los invitados de cada una.
+          const detalle = guestMode === 'named'
+            ? buildAttendanceDetail(selDates.map((s: any) => ({
+                name: s.label || s.scheduleName,
+                when: fmtWhen(s),
+                location: s.location || event.location || '',
+                guestNames: namesForDate(s.id),
+              })))
+            : '';
           const emailRes = await sendConfirmationEmail(templateId, {
             to_email: data.email,
             email: data.email,
             participant_name: nombre,
             nombre,
             event_name: event.name,
-            schedule_name: schedule ? (schedule.label || schedule.scheduleName) : '',
-            fechaEvento: schedule ? new Date(schedule.startDateTime).toLocaleDateString('es-CL') : '',
-            lugarEvento: schedule?.location || event.location || '',
+            schedule_name: primary ? (primary.label || primary.scheduleName) : '',
+            fechaEvento: primary ? new Date(primary.startDateTime).toLocaleDateString('es-CL') : '',
+            lugarEvento: primary?.location || event.location || '',
             guests_count: String(gs.count),
             guests_summary: gs.summary,
+            detalle_asistencia: detalle,
           });
           // Reportar el resultado del envío para guardarlo en el participante (best-effort).
           if (result?.participantId) {
@@ -412,6 +471,7 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
       onChange={(ids) => setValue('scheduleIds', ids, { shouldValidate: true })}
       variant={variant}
       accent={btnColor}
+      registeredIds={lockedIds}
     />
     <form onSubmit={handleSubmit(onSubmit as any)} className="space-y-6 apf-form">
       {error && (
@@ -619,74 +679,105 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
       )}
 
       {allowGuests && maxGuests > 0 && guestMode === 'named' && (
-        <div className="border-t border-gray-200 pt-5">
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Invitados <span className="text-gray-400 font-normal">(hasta {maxGuests})</span>
-          </label>
-          <div className="space-y-2">
-            {openGuests.map((g, i) => (
-              <div key={g.id || i} className="border border-gray-200 rounded-md p-2 space-y-2">
-                {g.id ? (
-                  // Carga precargada por el organizador: viene MARCADA por defecto; el
-                  // asistente puede desmarcarla si esa persona no asistirá.
-                  <label className="flex items-center gap-2 cursor-pointer py-1">
-                    <input
-                      type="checkbox"
-                      checked={g.selected !== false}
-                      onChange={(e) => setOpenGuests((arr) => arr.map((x, idx) => (idx === i ? { ...x, selected: e.target.checked } : x)))}
-                      className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                    />
-                    <span className="text-sm text-gray-700">
-                      {`${g.firstName} ${g.lastName || ''}`.trim()}
-                      <span className="text-xs text-gray-400"> · Registrado por el organizador</span>
-                    </span>
-                  </label>
-                ) : (
-                  <>
-                    <div className="flex gap-2">
-                      <input required value={g.firstName} onChange={(e) => updateGuest(i, 'firstName', e.target.value)} placeholder={`Nombre del invitado ${i + 1} *`} className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" />
-                      {guestFields.lastName.enabled && (
-                        <input value={g.lastName} onChange={(e) => updateGuest(i, 'lastName', e.target.value)} required={guestFields.lastName.required} placeholder={`Apellido${guestFields.lastName.required ? ' *' : ''}`} className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" />
-                      )}
-                      <button type="button" onClick={() => removeGuest(i)} title="Quitar" className="px-3 text-gray-400 hover:text-red-600 border border-gray-300 rounded-md flex-shrink-0">✕</button>
+        <div className="border-t border-gray-200 pt-5 space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Invitados por fecha</label>
+            <p className="text-xs text-gray-500 mt-0.5">Marca las cargas registradas y agrega invitados nuevos para <strong>cada fecha</strong>. Puedes llevar personas distintas en cada una (hasta {maxGuests} invitados nuevos por fecha).</p>
+          </div>
+
+          {/* Fechas ya inscritas: solo lectura (para cambiarlas se contacta al organizador). */}
+          {lockedIds.map((sid) => {
+            const s = allSchedules.find((x: any) => x.id === sid);
+            if (!s) return null;
+            const names = lockedGuests[sid] || [];
+            return (
+              <div key={`locked-${sid}`} className="rounded-md border border-emerald-200 bg-emerald-50 p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-sm font-semibold text-gray-800">{s.label || s.scheduleName}</p>
+                  <span className="text-xs font-semibold text-emerald-700 whitespace-nowrap">✓ Ya inscrito</span>
+                </div>
+                <p className="text-xs text-gray-600 mt-1">{names.length ? `Invitados: ${names.join(', ')}` : 'Sin invitados adicionales'}</p>
+                <p className="text-[11px] text-gray-400 mt-1">Para cambiar los invitados de esta fecha, escríbenos a {CONTACT_EMAIL}.</p>
+              </div>
+            );
+          })}
+
+          {selIds.filter((id) => !lockedIds.includes(id)).length === 0 && lockedIds.length === 0 && (
+            <p className="text-sm text-gray-400 rounded-md border border-dashed border-gray-200 p-3">Elige una fecha (más abajo) para agregar sus invitados.</p>
+          )}
+
+          {/* Panel editable por cada fecha NUEVA seleccionada. */}
+          {selIds.filter((id) => !lockedIds.includes(id)).map((sid) => {
+            const s = allSchedules.find((x: any) => x.id === sid);
+            if (!s) return null;
+            const stt = stateFor(sid);
+            return (
+              <div key={sid} className="rounded-md border border-gray-200 p-3 space-y-3">
+                <p className="text-sm font-semibold text-gray-800">
+                  {s.label || s.scheduleName}
+                  <span className="text-xs font-normal text-gray-400"> · {new Date(s.startDateTime).toLocaleDateString('es-CL')}</span>
+                </p>
+
+                {cargas.length > 0 && (
+                  <div>
+                    <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-1">Cargas registradas — marca quién asiste</p>
+                    <div className="space-y-1.5">
+                      {cargas.map((c) => (
+                        <label key={c.id} className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={stt.cargas.includes(c.id)}
+                            onChange={() => toggleCarga(sid, c.id)}
+                            className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                          />
+                          <span className="text-sm text-gray-700">{`${c.firstName} ${c.lastName || ''}`.trim()}</span>
+                        </label>
+                      ))}
                     </div>
-                    {(guestFields.documentNumber.enabled || guestFields.age.enabled) && (
-                      <div className="flex gap-2">
-                        {guestFields.documentNumber.enabled && (
-                          <input value={g.documentNumber || ''} onChange={(e) => updateGuest(i, 'documentNumber', e.target.value)} required={guestFields.documentNumber.required} placeholder={`RUT / Documento${guestFields.documentNumber.required ? ' *' : ''}`} className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" />
+                  </div>
+                )}
+
+                <div>
+                  <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-1">Invitados nuevos de esta fecha</p>
+                  <div className="space-y-2">
+                    {stt.news.map((g, i) => (
+                      <div key={i} className="border border-gray-200 rounded-md p-2 space-y-2">
+                        <div className="flex gap-2">
+                          <input value={g.firstName} onChange={(e) => updateDateGuest(sid, i, 'firstName', e.target.value)} placeholder={`Nombre del invitado ${i + 1} *`} className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" />
+                          {guestFields.lastName.enabled && (
+                            <input value={g.lastName} onChange={(e) => updateDateGuest(sid, i, 'lastName', e.target.value)} placeholder={`Apellido${guestFields.lastName.required ? ' *' : ''}`} className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" />
+                          )}
+                          <button type="button" onClick={() => removeDateGuest(sid, i)} title="Quitar" className="px-3 text-gray-400 hover:text-red-600 border border-gray-300 rounded-md flex-shrink-0">✕</button>
+                        </div>
+                        {(guestFields.documentNumber.enabled || guestFields.age.enabled) && (
+                          <div className="flex gap-2">
+                            {guestFields.documentNumber.enabled && (
+                              <input value={g.documentNumber || ''} onChange={(e) => updateDateGuest(sid, i, 'documentNumber', e.target.value)} placeholder={`RUT / Documento${guestFields.documentNumber.required ? ' *' : ''}`} className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" />
+                            )}
+                            {guestFields.age.enabled && (
+                              <input type="number" min={0} max={120} value={g.age || ''} onChange={(e) => updateDateGuest(sid, i, 'age', e.target.value)} placeholder={`Edad${guestFields.age.required ? ' *' : ''}`} className="w-24 min-w-0 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" />
+                            )}
+                          </div>
                         )}
-                        {guestFields.age.enabled && (
-                          <input type="number" min={0} max={120} value={g.age || ''} onChange={(e) => updateGuest(i, 'age', e.target.value)} required={guestFields.age.required} placeholder={`Edad${guestFields.age.required ? ' *' : ''}`} className="w-24 min-w-0 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" />
+                        {guestDiet && (
+                          <select value={g.dietaryPreference || 'NONE'} onChange={(e) => updateDateGuest(sid, i, 'dietaryPreference', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white">
+                            {ensureDietOption(dietOpts, g.dietaryPreference).map((o) => <option key={o.value} value={o.value}>Preferencia alimenticia: {o.label}</option>)}
+                          </select>
+                        )}
+                        {guestDiet && isFreeTextDiet(g.dietaryPreference) && (
+                          <input value={g.dietaryComments || ''} onChange={(e) => updateDateGuest(sid, i, 'dietaryComments', e.target.value)} maxLength={GUEST_DIET_DETAIL_MAX} placeholder={String(g.dietaryPreference).toUpperCase().includes('ALERG') ? 'Especifica la alergia' : 'Especifica el requerimiento'} className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" />
                         )}
                       </div>
-                    )}
-                    {guestDiet && (
-                      <select value={g.dietaryPreference || 'NONE'} onChange={(e) => updateGuest(i, 'dietaryPreference', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white">
-                        {ensureDietOption(dietOpts, g.dietaryPreference).map((o) => <option key={o.value} value={o.value}>Preferencia alimenticia: {o.label}</option>)}
-                      </select>
-                    )}
-                    {guestDiet && isFreeTextDiet(g.dietaryPreference) && (
-                      <input
-                        value={g.dietaryComments || ''}
-                        onChange={(e) => updateGuest(i, 'dietaryComments', e.target.value)}
-                        // Más corto que el del participante a propósito: este detalle NO va
-                        // a una columna propia, se compone como «<etiqueta>: <detalle>» y
-                        // viaja dentro de `dietaryPreference`. El margen es para la etiqueta,
-                        // que cada evento configura y puede ser larga.
-                        maxLength={GUEST_DIET_DETAIL_MAX}
-                        placeholder={String(g.dietaryPreference).toUpperCase().includes('ALERG') ? 'Especifica la alergia' : 'Especifica el requerimiento'}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                      />
-                    )}
-                  </>
-                )}
+                    ))}
+                  </div>
+                  {/* El cupo lo consumen los invitados NUEVOS; las cargas del organizador no (D1.2). */}
+                  {stt.news.length < maxGuests && (
+                    <button type="button" onClick={() => addDateGuest(sid)} className="mt-2 text-sm font-medium" style={{ color: primary }}>+ Agregar invitado</button>
+                  )}
+                </div>
               </div>
-            ))}
-          </div>
-          {/* El cupo lo consumen los invitados NUEVOS; las cargas del organizador no (D1.2). */}
-          {newGuestCount < maxGuests && (
-            <button type="button" onClick={addGuest} className="mt-2 text-sm font-medium" style={{ color: primary }}>+ Agregar invitado</button>
-          )}
+            );
+          })}
         </div>
       )}
 

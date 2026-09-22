@@ -106,15 +106,20 @@ export async function GET(
       registeredScheduleIds,
       registeredGuestsBySchedule,
       participant: participantOut,
-      // No se expone el RUT (documentNumber) de los invitados: es PII y el formulario
-      // público no lo usa. Se muestran las cargas por nombre y se confirman por id.
-      guests: (p.guests || []).map((g: any) => ({
-        id: g.id,
-        firstName: g.firstName,
-        lastName: g.lastName,
-        guestType: g.guestType,
-        dietaryPreference: g.dietaryPreference,
-      })),
+      // Pool de cargas que se OFRECE para marcar en cada fecha: solo las precargadas por
+      // el organizador (IMPORT) o agregadas por admin (MANUAL). Se excluyen las que el
+      // propio asistente agregó en inscripciones previas (PUBLIC_FORM), que son propias de
+      // una fecha y ya se ven en el detalle de esa fecha (registeredGuestsBySchedule).
+      // No se expone el RUT (PII); las cargas se muestran por nombre y se confirman por id.
+      guests: (p.guests || [])
+        .filter((g: any) => g.registrationSource !== 'PUBLIC_FORM')
+        .map((g: any) => ({
+          id: g.id,
+          firstName: g.firstName,
+          lastName: g.lastName,
+          guestType: g.guestType,
+          dietaryPreference: g.dietaryPreference,
+        })),
     });
   } catch (error: any) {
     console.error('Error in RUT lookup:', error);

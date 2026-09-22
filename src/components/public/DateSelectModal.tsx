@@ -12,6 +12,9 @@ interface Props {
   onChange: (ids: string[]) => void;
   variant?: string;   // 'minimal' | 'modern' | 'default' (define claro/oscuro)
   accent?: string;    // color de acento (del tema del evento)
+  // Fechas en las que el participante YA está inscrito: se muestran bloqueadas ("Ya
+  // inscrito") y no se pueden elegir (para modificarlas se contacta al organizador).
+  registeredIds?: string[];
 }
 
 const fmtDate = (d: string) => {
@@ -25,12 +28,12 @@ const fmtTime = (d: string) => {
  * Modal para elegir la fecha del evento. Se adapta al diseño de la plantilla:
  * oscuro para "modern", claro para "minimal"/"default", con el color de acento del tema.
  */
-export default function DateSelectModal({ open, onClose, schedules, selectedIds, multiple, onChange, variant = 'default', accent = '#4f46e5' }: Props) {
+export default function DateSelectModal({ open, onClose, schedules, selectedIds, multiple, onChange, variant = 'default', accent = '#4f46e5', registeredIds = [] }: Props) {
   if (!open) return null;
   const dark = variant === 'modern';
 
-  const toggle = (id: string, full: boolean) => {
-    if (full) return;
+  const toggle = (id: string, blocked: boolean) => {
+    if (blocked) return;
     if (multiple) {
       onChange(selectedIds.includes(id) ? selectedIds.filter((x) => x !== id) : [...selectedIds, id]);
     } else {
@@ -63,14 +66,16 @@ export default function DateSelectModal({ open, onClose, schedules, selectedIds,
           )}
           {schedules.map((s: any) => {
             const sel = selectedIds.includes(s.id);
+            const registered = registeredIds.includes(s.id);
             const full = !!s.full;
+            const blocked = full || registered;
             return (
               <button
                 key={s.id}
                 type="button"
-                disabled={full}
-                onClick={() => toggle(s.id, full)}
-                className={`w-full text-left rounded-xl border p-3.5 transition disabled:cursor-not-allowed ${cardBase} ${full ? 'opacity-60' : ''}`}
+                disabled={blocked}
+                onClick={() => toggle(s.id, blocked)}
+                className={`w-full text-left rounded-xl border p-3.5 transition disabled:cursor-not-allowed ${cardBase} ${blocked ? 'opacity-60' : ''}`}
                 style={sel ? { outline: `2px solid ${accent}`, borderColor: accent } : undefined}
               >
                 <div className="flex items-start justify-between gap-2">
@@ -81,7 +86,9 @@ export default function DateSelectModal({ open, onClose, schedules, selectedIds,
                     {s.location && <p className={`text-sm ${textMuted}`}><MapPin size={13} className="inline mr-1 -mt-0.5" style={{ color: accent }} />{s.location}</p>}
                   </div>
                   <div className="flex-shrink-0 text-right">
-                    {full ? (
+                    {registered ? (
+                      <span className="text-[11px] font-semibold block max-w-[90px]" style={{ color: accent }}>✓ Ya inscrito</span>
+                    ) : full ? (
                       <span className="text-[11px] font-semibold text-red-500 block max-w-[90px]">Capacidad máxima alcanzada</span>
                     ) : sel ? (
                       <span className="inline-flex h-6 w-6 items-center justify-center rounded-full text-white" style={{ backgroundColor: accent }}><Check size={14} /></span>
