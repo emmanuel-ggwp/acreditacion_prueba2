@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { Event, Participant, EventSchedule, Guest } from '@/models/index';
+import { Event, Participant, EventSchedule, Guest, GuestSchedule } from '@/models/index';
 import {
   publicRegistrationSchema,
   rutRegistrationSchema,
@@ -90,6 +90,10 @@ export async function POST(
     // A partir de aquí `scheduleIds` son UUID comprobados: el esquema los exige en los
     // dos modos (`z.array(z.string().uuid()).min(1)`).
     const scheduleIds: string[] = validation.data.scheduleIds;
+    // Invitados por fecha (invitados distintos en cada fecha). Mapa scheduleId → invitados.
+    // Si viene, manda sobre `guests`; se aplican por fecha vía GuestSchedule.
+    const guestsBySchedule: Record<string, PublicGuestInput[]> | undefined =
+      (validation.data as any).guestsBySchedule;
 
     // 2b. Los horarios existen y son de ESTE evento.
     const schedules = await EventSchedule.findAll({
@@ -349,6 +353,9 @@ export async function POST(
     // editarse en el navegador, así que no se confía en él para el tope).
     const guestMode = getGuestMode((event as any).registrationConfig);
 
+    // Campos personales y recorte de invitados NUMÉRICOS: solo en la PRIMERA inscripción
+    // (R1-02). Un participante ya inscrito no se modifica solo; los invitados numéricos
+    // (guestCount/loads) tampoco se recalculan al agregar una fecha.
     if (existingScheduleIds.length === 0) {
       // Recorte AUTORITATIVO de los invitados numéricos contra el cupo. No se confía en el
       // número que llega: se recalcula y se recorta acá, de modo que una petición manipulada
@@ -372,12 +379,36 @@ export async function POST(
         clamped.guestLoads = 0;
       }
       await participant.update(clamped, { transaction: t });
+    }
 
+    if (guestsBySchedule) {
+      // ── Invitados POR FECHA (nuevo flujo) ──────────────────────────────────────────
+      // Se aplican SOLO a las fechas NUEVAS (schedulesToAdd), tanto en la primera
+      // inscripción como al volver a agregar una fecha. Nunca se tocan las fechas ya
+      // inscritas ni sus invitados (siguen intactos). Esto RELAJA D2.1 de forma acotada:
+      // se permite crear invitados en las fechas que se están agregando ahora —el mismo
+      // permiso que ya existía para agregar la fecha en sí—, pero jamás modificar una
+      // inscripción previa. El cupo de invitados nuevos es POR FECHA (cada fecha admite
+      // hasta `effectiveGuestCap` invitados con nombre); las cargas precargadas ({id}) no
+      // consumen cupo, igual que antes.
+      for (const s of schedulesToAdd) {
+        const raw = guestsBySchedule[(s as any).id] || [];
+        // En modos numéricos solo se aceptan confirmaciones de cargas ({id}); sin nombres.
+        const list = guestMode === 'named' ? raw : raw.filter((g) => g.id);
+        const res = await applyGuestsForSchedule(list, {
+          participant,
+          scheduleId: (s as any).id,
+          capForDate: effectiveGuestCap,
+          transaction: t,
+        });
+        createdGuests += res.created;
+        skippedGuests += res.skipped;
+      }
+    } else if (existingScheduleIds.length === 0) {
+      // ── Compatibilidad: cliente antiguo con `guests` (una sola lista) ───────────────
       // En modos numéricos NO se aceptan invitados con NOMBRE desde la petición (el cupo se
       // maneja por guestCount): solo se permiten confirmaciones de cargas precargadas ({id}).
-      // Así una petición manipulada no puede colar nombres además del número declarado.
       const guestsForApply = guestMode === 'named' ? guestsInput : guestsInput.filter((g) => g.id);
-
       const guestCounts = await applyGuests(guestsForApply, {
         participant,
         primaryScheduleId,
@@ -387,9 +418,9 @@ export async function POST(
       createdGuests = guestCounts.created;
       skippedGuests = guestCounts.skipped;
     } else {
-      // Ya inscrito: no se guarda ningún invitado de esta petición. Se declaran como
-      // no guardados para que la pantalla y el correo no los prometan (D1.3). Las
-      // cargas que ya existen siguen intactas, con la fecha que tuvieran.
+      // Ya inscrito con cliente antiguo (sin guestsBySchedule): no se guarda ningún
+      // invitado de esta petición. Se declaran como no guardados para que la pantalla y el
+      // correo no los prometan (D1.3). Las cargas existentes siguen intactas.
       skippedGuests = guestsInput.filter((g) => !g.id && g.firstName).length;
     }
 
@@ -446,6 +477,11 @@ async function applyGuests(
           upd.dietaryPreference = g.dietaryPreference.trim();
         }
         await guest.update(upd, { transaction: t });
+        await GuestSchedule.findOrCreate({
+          where: { guestId: guest.id, scheduleId: primaryScheduleId },
+          defaults: { guestId: guest.id, scheduleId: primaryScheduleId, confirmed: true } as any,
+          transaction: t,
+        });
       }
     } else if (g.firstName) {
       // Invitado nuevo (ej. acompañante). Solo mientras queden plazas: agotado el
@@ -455,7 +491,7 @@ async function applyGuests(
       // acompañantes que nunca se guardaron.
       if (createdGuests >= remainingGuestSlots) { skippedGuests++; continue; }
       createdGuests++;
-      await Guest.create(
+      const created = await Guest.create(
         {
           participantId: participant.id,
           firstName: g.firstName,
@@ -471,9 +507,74 @@ async function applyGuests(
         },
         { transaction: t }
       );
+      await GuestSchedule.create(
+        { guestId: (created as any).id, scheduleId: primaryScheduleId, confirmed: true } as any,
+        { transaction: t }
+      );
     }
   }
   return { created: createdGuests, skipped: skippedGuests };
+}
+
+/**
+ * Aplica los invitados de UNA fecha (nuevo flujo "invitados por fecha"). Liga cada carga
+ * precargada y cada invitado nuevo a ESA fecha vía GuestSchedule, de modo que un
+ * participante pueda llevar personas distintas en cada función. El cupo (`capForDate`)
+ * es POR FECHA: cuenta solo los invitados NUEVOS con nombre; las cargas precargadas ({id})
+ * no consumen cupo. Idempotente al re-ligar (índice único guest_id, schedule_id).
+ */
+async function applyGuestsForSchedule(
+  guestsInput: PublicGuestInput[],
+  opts: { participant: any; scheduleId: string; capForDate: number; transaction: any }
+): Promise<{ created: number; skipped: number }> {
+  const { participant, scheduleId, capForDate, transaction: t } = opts;
+  let created = 0;
+  let skipped = 0;
+  for (const g of guestsInput) {
+    if (g.id) {
+      // Carga precargada seleccionada para esta fecha. El participantId del where impide
+      // ligar cargas ajenas.
+      const guest = await Guest.findOne({
+        where: { id: g.id, participantId: participant.id },
+        transaction: t,
+      });
+      if (guest) {
+        const upd: Record<string, unknown> = { confirmed: true, scheduleId };
+        if (typeof g.dietaryPreference === 'string' && g.dietaryPreference.trim()) {
+          upd.dietaryPreference = g.dietaryPreference.trim();
+        }
+        await guest.update(upd, { transaction: t });
+        await GuestSchedule.findOrCreate({
+          where: { guestId: guest.id, scheduleId },
+          defaults: { guestId: guest.id, scheduleId, confirmed: true } as any,
+          transaction: t,
+        });
+      }
+    } else if (g.firstName) {
+      if (created >= capForDate) { skipped++; continue; }
+      created++;
+      const ng = await Guest.create(
+        {
+          participantId: participant.id,
+          firstName: g.firstName,
+          lastName: g.lastName ?? null,
+          documentNumber: g.documentNumber ?? null,
+          age: (g as any).age ?? null,
+          guestType: g.guestType ?? null,
+          dietaryPreference: g.dietaryPreference ?? null,
+          confirmed: true,
+          scheduleId,
+          registrationSource: 'PUBLIC_FORM',
+        },
+        { transaction: t }
+      );
+      await GuestSchedule.create(
+        { guestId: (ng as any).id, scheduleId, confirmed: true } as any,
+        { transaction: t }
+      );
+    }
+  }
+  return { created, skipped };
 }
 
 /** Cierre común del handler: deshace la transacción y no filtra el error al público. */
