@@ -244,7 +244,18 @@ const ParticipantForm: React.FC<ParticipantFormProps> = ({ eventId, participant,
     }
   };
 
-  console.log('EventSchedules in ParticipantForm:', EventSchedules);
+  // Editor de invitados NUMÉRICOS (count / acompañante+cargas). Se muestra según el modo
+  // del evento y TAMBIÉN cuando el participante ya tiene datos numéricos (aunque el evento
+  // haya cambiado de modo o quedado con maxGuests=0), para no dejarlos atrapados.
+  const gCount = Number(watch('guestCount' as any)) || 0;
+  const gCompanion = !!watch('guestCompanion' as any);
+  const gLoads = Number(watch('guestLoads' as any)) || 0;
+  const numericByData: 'count' | 'companion' | null = (gCompanion || gLoads > 0) ? 'companion' : (gCount > 0 ? 'count' : null);
+  const numericEditor: 'count' | 'companion' | null = !allowGuests ? numericByData
+    : guestMode === 'count' ? 'count'
+    : guestMode === 'companion' ? 'companion'
+    : numericByData; // modo 'named': solo si hay datos numéricos que mostrar/editar
+  const guestMax = maxGuests > 0 ? maxGuests : Math.max(gCount, gLoads, 20);
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 flex justify-center items-center">
@@ -332,21 +343,21 @@ const ParticipantForm: React.FC<ParticipantFormProps> = ({ eventId, participant,
             </div>
           )}
 
-          {allowGuests && maxGuests > 0 && guestMode === 'count' && (
+          {numericEditor === 'count' && (
             <div className="col-span-2">
-              <label htmlFor="guestCount" className="block text-sm font-medium text-gray-700 mb-1">N° de invitados <span className="text-gray-400 font-normal">(hasta {maxGuests})</span></label>
+              <label htmlFor="guestCount" className="block text-sm font-medium text-gray-700 mb-1">N° de invitados <span className="text-gray-400 font-normal">(hasta {guestMax})</span></label>
               <input
                 id="guestCount"
-                type="number" min={0} max={maxGuests}
+                type="number" min={0} max={guestMax}
                 {...register('guestCount' as any, { setValueAs: (v) => (v === '' ? 0 : parseInt(v, 10) || 0) })}
                 className="block w-full sm:w-48 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
               />
             </div>
           )}
 
-          {allowGuests && maxGuests > 0 && guestMode === 'companion' && (
+          {numericEditor === 'companion' && (
             <div className="col-span-2 space-y-2">
-              <label className="block text-sm font-medium text-gray-700">Invitados <span className="text-gray-400 font-normal">(hasta {maxGuests} en total)</span></label>
+              <label className="block text-sm font-medium text-gray-700">Invitados <span className="text-gray-400 font-normal">(hasta {guestMax} en total)</span></label>
               <label className="flex items-center gap-2 text-sm text-gray-700">
                 <input type="checkbox" {...register('guestCompanion' as any)} className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
                 Va con acompañante
@@ -355,7 +366,7 @@ const ParticipantForm: React.FC<ParticipantFormProps> = ({ eventId, participant,
                 <label htmlFor="guestLoads" className="block text-sm text-gray-700 mb-1">N° de cargas</label>
                 <input
                   id="guestLoads"
-                  type="number" min={0} max={maxGuests}
+                  type="number" min={0} max={guestMax}
                   {...register('guestLoads' as any, { setValueAs: (v) => (v === '' ? 0 : parseInt(v, 10) || 0) })}
                   className="block w-full sm:w-48 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
                 />
