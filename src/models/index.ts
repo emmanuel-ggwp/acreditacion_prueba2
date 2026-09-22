@@ -6,6 +6,7 @@ import EventSchedule from './EventSchedule';
 import Participant from './Participant';
 import ParticipantSchedule from './ParticipantSchedule';
 import Guest from './Guest';
+import GuestSchedule from './GuestSchedule';
 import Award from './Award';
 import ParticipantAward from './ParticipantAward';
 import Accreditation from './Accreditation';
@@ -20,6 +21,11 @@ import GiftDelivery from './GiftDelivery';
 // Define associations here to avoid circular dependencies
 Participant.belongsToMany(EventSchedule, { through: ParticipantSchedule, foreignKey: 'participantId', as: 'schedules' });
 EventSchedule.belongsToMany(Participant, { through: ParticipantSchedule, foreignKey: 'scheduleId', as: 'participants' });
+
+// Invitados por fecha (M:N Guest ⇄ EventSchedule vía GuestSchedule). Permite invitados
+// distintos en cada fecha. Alias 'schedules' en Guest → mixins get/set/addSchedules.
+Guest.belongsToMany(EventSchedule, { through: GuestSchedule, foreignKey: 'guestId', as: 'schedules' });
+EventSchedule.belongsToMany(Guest, { through: GuestSchedule, foreignKey: 'scheduleId', as: 'guests' });
 
 // Regalos Navidad
 GiftCampaign.hasMany(GiftType, { foreignKey: 'campaignId', as: 'types' });
@@ -38,6 +44,7 @@ export {
   Participant,
   ParticipantSchedule,
   Guest,
+  GuestSchedule,
   Award,
   ParticipantAward,
   Accreditation,
