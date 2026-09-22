@@ -47,7 +47,7 @@ const GuestList: React.FC<GuestListProps> = ({ participantId, allowedGuests, gue
   return (
     <div>
       <div className="flex justify-between items-center mb-4">
-        <h3 className="text-xl font-semibold text-gray-700">Invitados ({guests.length}/{allowedGuests})</h3>
+        <h3 className="text-xl font-semibold text-gray-700">Invitados <span className="text-sm font-normal text-gray-500">({guests.length} agregados de {allowedGuests} permitidos)</span></h3>
         {canAddGuest && !editingGuest && (
           <button
             type="button"

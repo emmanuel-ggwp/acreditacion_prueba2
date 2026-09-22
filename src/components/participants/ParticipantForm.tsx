@@ -303,7 +303,7 @@ const ParticipantForm: React.FC<ParticipantFormProps> = ({ eventId, participant,
             {ff.company.enabled && <InputField label={`Empresa${ff.company.required ? ' *' : ''}`} name="company" register={register} error={errors.company} />}
             {ff.position.enabled && <InputField label={`Cargo${ff.position.required ? ' *' : ''}`} name="position" register={register} error={errors.position} />}
             {ff.numeroSap.enabled && <InputField label={`Código SAP${ff.numeroSap.required ? ' *' : ''}`} name={'numeroSap' as any} register={register} error={(errors as any).numeroSap} />}
-            <InputField label="Invitados permitidos" name="allowedGuests" type="number" register={register} error={errors.allowedGuests} />
+            <InputField label="Máximo de invitados permitidos" name="allowedGuests" type="number" register={register} error={errors.allowedGuests} />
 
             <label className="col-span-1 md:col-span-2 flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
               <input type="checkbox" {...register('allowMultipleSchedules')} className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
@@ -406,9 +406,9 @@ const ParticipantForm: React.FC<ParticipantFormProps> = ({ eventId, participant,
 
           {isEffectiveEditMode && participantId && (
             <div className="col-span-2 border-t pt-4">
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="text-sm font-medium text-gray-900">Invitados</h3>
-                <p className="text-xs text-gray-500">Permitidos: {watch('allowedGuests') || 0}</p>
+              <div className="mb-2">
+                <h3 className="text-sm font-medium text-gray-900">Invitados con nombre del participante</h3>
+                <p className="text-xs text-gray-500">Los que ya trae este participante (precargados por el organizador o inscritos por él). El máximo permitido se ajusta arriba en “Máximo de invitados permitidos”.</p>
               </div>
               <GuestList participantId={participantId} allowedGuests={watch('allowedGuests') || 0} guestDietary={guestDiet} dietaryOptions={dietOpts} />
             </div>
