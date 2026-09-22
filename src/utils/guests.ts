@@ -29,3 +29,48 @@ export function buildGuestSummary(
   const names = (opts.names || []).map((n) => (n || '').trim()).filter(Boolean);
   return { count: names.length, summary: names.length ? `${names.length} (${names.join(', ')})` : 'Sin invitados' };
 }
+
+export interface AttendanceDate {
+  /** Nombre de la función/fecha (ej. "Función de Gala"). */
+  name?: string | null;
+  /** Fecha ya formateada para el correo (ej. "vie 25 de septiembre, 20:00"). */
+  when?: string | null;
+  /** Lugar (opcional). */
+  location?: string | null;
+  /** Nombres de los invitados de ESA fecha (sin el titular). */
+  guestNames?: string[];
+}
+
+/**
+ * Arma el texto de "detalle de asistencia" para el correo de confirmación (variable
+ * {{detalle_asistencia}}), pensado para "invitados distintos por fecha":
+ *  - UNA sola fecha  → formato simple (Fecha / Lugar / Invitados), SIN estructura por fecha.
+ *  - VARIAS fechas   → desglose: cada fecha con su lugar y SUS invitados.
+ *
+ * Devuelve texto con saltos de línea (\n). En la plantilla, colocar {{detalle_asistencia}}
+ * dentro de un bloque con `white-space: pre-line` para que los saltos se rendericen.
+ */
+export function buildAttendanceDetail(dates: AttendanceDate[]): string {
+  const list = (dates || []).filter(Boolean);
+  const guestsLine = (names?: string[]) => {
+    const clean = (names || []).map((n) => (n || '').trim()).filter(Boolean);
+    return clean.length ? `Invitados: ${clean.join(', ')}` : 'Sin invitados';
+  };
+
+  if (list.length <= 1) {
+    const d = list[0];
+    if (!d) return '';
+    const lines: string[] = [];
+    if (d.when) lines.push(`Fecha: ${d.when}`);
+    if (d.location) lines.push(`Lugar: ${d.location}`);
+    lines.push(guestsLine(d.guestNames));
+    return lines.join('\n');
+  }
+
+  const blocks = list.map((d) => {
+    const head = [d.name, d.when].map((x) => (x || '').trim()).filter(Boolean).join(' — ');
+    const place = d.location ? ` · ${d.location}` : '';
+    return `• ${head}${place}\n  ${guestsLine(d.guestNames)}`;
+  });
+  return `Estás inscrito en ${list.length} fechas:\n\n${blocks.join('\n\n')}`;
+}

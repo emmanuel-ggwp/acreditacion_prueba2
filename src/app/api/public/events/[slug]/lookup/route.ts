@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Op } from 'sequelize';
-import { Event, Participant, Guest, EventSchedule } from '@/models/index';
+import { Event, Participant, Guest, EventSchedule, GuestSchedule } from '@/models/index';
 import { rutVariants } from '@/utils/validators/rut';
 import { limitPublicLookup } from '@/lib/rate-limit';
 import { getFormFields } from '@/utils/formFields';
@@ -54,6 +54,23 @@ export async function GET(
     // Permiso efectivo: el evento lo permite, o el participante tiene el override.
     const allowMultiple = !!(event as any).allowMultipleSchedules || !!p.allowMultipleSchedules;
 
+    // Invitados YA confirmados en cada fecha inscrita (para mostrar en modo solo lectura las
+    // fechas bloqueadas). Solo nombres, que ya se exponen en `guests`; nada de PII nueva.
+    const registeredGuestsBySchedule: Record<string, string[]> = {};
+    if (registeredScheduleIds.length && (p.guests || []).length) {
+      const nameById = new Map<string, string>(
+        (p.guests || []).map((g: any) => [g.id, `${g.firstName} ${g.lastName || ''}`.trim()])
+      );
+      const links = await GuestSchedule.findAll({
+        where: { guestId: { [Op.in]: Array.from(nameById.keys()) }, scheduleId: { [Op.in]: registeredScheduleIds } },
+      });
+      for (const l of links as any[]) {
+        const nm = nameById.get(l.guestId);
+        if (!nm) continue;
+        (registeredGuestsBySchedule[l.scheduleId] ||= []).push(nm);
+      }
+    }
+
     // PII MÍNIMA (F3-02): este endpoint es PÚBLICO y los RUT son enumerables, así que
     // solo se devuelve lo que el formulario de ESTE evento realmente autocompleta.
     // Los campos deshabilitados (por defecto empresa/cargo/SAP/dieta lo están) NO se
@@ -87,6 +104,7 @@ export async function GET(
       found: true,
       allowMultiple,
       registeredScheduleIds,
+      registeredGuestsBySchedule,
       participant: participantOut,
       // No se expone el RUT (documentNumber) de los invitados: es PII y el formulario
       // público no lo usa. Se muestran las cargas por nombre y se confirman por id.
