@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import useParticipantStore from '@/store/participantStore';
 import useEventStore from '@/store/eventStore';
 import useAuthStore from '@/store/authStore';
-import { PlusCircle, FileDown, FileUp, Edit, Trash2, Award, X, CheckCircle2, Clock, Search, ChevronLeft, ChevronRight, UserCheck, Undo2, HelpCircle, Mail, MailCheck, MailX, Send, Loader2, Users, CalendarPlus } from 'lucide-react';
+import { PlusCircle, FileDown, FileUp, Edit, Trash2, Award, X, CheckCircle2, Clock, Search, ChevronLeft, ChevronRight, UserCheck, Undo2, HelpCircle, Mail, MailCheck, MailX, Send, Loader2, Users, CalendarPlus, CalendarClock } from 'lucide-react';
 import { sendConfirmationEmail } from '@/lib/emailjs';
 import apiClient from '@/utils/apiClient';
 import Participant from '@/models/Participant';
@@ -14,6 +14,7 @@ import ParticipantImport from './ParticipantImport';
 import { showToast } from '@/components/ui/Toast';
 import { exportParticipantsToExcel } from '@/utils/exportParticipants';
 import DeleteReasonModal from '@/components/ui/DeleteReasonModal';
+import GuestDatesModal from './GuestDatesModal';
 import { getGuestMode } from '@/utils/formFields';
 import { buildGuestSummary } from '@/utils/guests';
 import { getDietaryOptions } from '@/utils/dietary';
@@ -95,6 +96,8 @@ const ParticipantList = ({ eventId }: { eventId: string }) => {
   const [enrollOpen, setEnrollOpen] = useState(false);
   const [enrollScheduleIds, setEnrollScheduleIds] = useState<string[]>([]);
   const [enrolling, setEnrolling] = useState(false);
+  // Modal "Invitados por fecha" (asignar qué invitados van a cada fecha del participante).
+  const [guestDatesFor, setGuestDatesFor] = useState<string | null>(null);
   const [savingAward, setSavingAward] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Participant | null>(null);
@@ -667,6 +670,15 @@ const ParticipantList = ({ eventId }: { eventId: string }) => {
                           <Send size={16} />
                         </button>
                       )}
+                      {(participant as any).registered && (
+                        <button
+                          onClick={() => setGuestDatesFor(participant.id)}
+                          className="text-gray-400 hover:text-indigo-700 p-1 hover:bg-indigo-50 rounded"
+                          title="Asignar invitados por fecha"
+                        >
+                          <CalendarClock size={16} />
+                        </button>
+                      )}
                       <button
                         onClick={() => handleEdit(participant as any)}
                         className="text-indigo-600 hover:text-indigo-900 p-1 hover:bg-indigo-50 rounded"
@@ -749,6 +761,14 @@ const ParticipantList = ({ eventId }: { eventId: string }) => {
           itemName={`${deleteTarget.firstName} ${deleteTarget.lastName}`}
           onConfirm={confirmDelete}
           onClose={() => setDeleteTarget(null)}
+        />
+      )}
+
+      {guestDatesFor && (
+        <GuestDatesModal
+          participantId={guestDatesFor}
+          onClose={() => setGuestDatesFor(null)}
+          onSaved={() => reload()}
         />
       )}
 

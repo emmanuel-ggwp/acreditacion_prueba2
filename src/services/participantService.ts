@@ -562,10 +562,82 @@ export class ParticipantService {
     return { enrolled: participants.length, schedules: schedules.length };
   }
 
+  /**
+   * Asigna los invitados de un participante a fechas concretas (admin). Para cada invitado
+   * (existente por id, o nuevo con nombre) fija su conjunto de fechas (GuestSchedule) dentro
+   * de las fechas en las que el participante YA está inscrito. PRESERVA los enlaces
+   * (invitado, fecha) que ya tengan una acreditación, para no romper check-ins hechos. Los
+   * invitados nuevos se crean con registrationSource MANUAL.
+   */
+  async setGuestDates(
+    participantId: string,
+    guestsInput: Array<{ id?: string; firstName?: string; lastName?: string; documentNumber?: string; age?: number | null; guestType?: string | null; scheduleIds: string[] }>,
+    userId?: string
+  ) {
+    const participant: any = await Participant.findByPk(participantId, {
+      include: [{ model: EventSchedule, as: 'schedules', through: { attributes: [] } }],
+    });
+    if (!participant) throw new Error('Participant not found');
+    const enrolled: any[] = participant.schedules || [];
+    const enrolledIds: string[] = enrolled.map((s: any) => s.id);
+    if (!enrolledIds.length) throw new Error('El participante no está inscrito en ninguna fecha.');
+    const enrolledSet = new Set(enrolledIds);
+    const scheduleById = new Map<string, any>(enrolled.map((s: any) => [s.id, s]));
+
+    const tx = await sequelize.transaction();
+    try {
+      let created = 0;
+      for (const gi of guestsInput) {
+        let guest: any;
+        if (gi.id) {
+          guest = await Guest.findOne({ where: { id: gi.id, participantId }, transaction: tx });
+          if (!guest) continue; // invitado ajeno: se ignora
+        } else if ((gi.firstName || '').trim()) {
+          guest = await Guest.create({
+            participantId,
+            firstName: gi.firstName!.trim(),
+            lastName: gi.lastName?.trim() || null,
+            documentNumber: gi.documentNumber?.trim() || null,
+            age: gi.age ?? null,
+            guestType: gi.guestType || null,
+            registrationSource: 'MANUAL',
+          } as any, { transaction: tx });
+          created++;
+        } else {
+          continue;
+        }
+
+        // Fechas deseadas ∩ fechas inscritas del participante.
+        const desired = (gi.scheduleIds || []).filter((id) => enrolledSet.has(id));
+        // Preservar enlaces ya acreditados (no romper check-ins hechos).
+        const accs: any[] = await Accreditation.findAll({
+          where: { guestId: guest.id, eventScheduleId: { [Op.in]: enrolledIds } },
+          attributes: ['eventScheduleId'], transaction: tx,
+        });
+        const finalIds = Array.from(new Set([...desired, ...accs.map((a: any) => a.eventScheduleId)]));
+        const finalSchedules = finalIds.map((id) => scheduleById.get(id)).filter(Boolean);
+        await (guest as any).setSchedules(finalSchedules, { transaction: tx });
+      }
+      await tx.commit();
+      if (userId) {
+        await auditLogService.log({
+          userId, action: 'UPDATE', entity: 'Participant', entityId: participantId,
+          details: { name: `${participant.firstName} ${participant.lastName}`.trim(), action: 'set_guest_dates', invitadosNuevos: created },
+        });
+      }
+      return { ok: true, created };
+    } catch (e) {
+      await tx.rollback();
+      throw e;
+    }
+  }
+
   async getParticipant(participantId: string, includeGuests = false, includeAwards = false) {
     const include: any[] = [];
     if (includeGuests) {
-      include.push({ model: Guest, as: 'guests' });
+      // Se anidan las fechas de cada invitado (GuestSchedule) para poder mostrar/editar
+      // la asignación de invitados por fecha en el panel admin.
+      include.push({ model: Guest, as: 'guests', include: [{ model: EventSchedule, as: 'schedules', through: { attributes: [] }, attributes: ['id'] }] });
     }
     if (includeAwards) {
       // include.push({ model: Award, as: 'awards' });
