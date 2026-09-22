@@ -10,6 +10,7 @@ import {
   Event,
   EventSchedule,
   ParticipantSchedule,
+  GuestSchedule,
   Accreditation
 } from '@/models/index';
 import { createParticipantSchema, updateParticipantSchema, bulkCreateParticipantSchema } from '@/utils/validators/participantSchemas';
@@ -393,6 +394,12 @@ export class ParticipantService {
         { confirmed: false, scheduleId: null },
         { where: { participantId, registrationSource: { [Op.in]: ['IMPORT', 'MANUAL'] } }, transaction: tx }
       );
+
+      // 3b. Quitar los enlaces por fecha (GuestSchedule) de TODOS sus invitados: al volver a
+      //     precargado el participante no tiene fechas, así que sus invitados tampoco.
+      if (guestIds.length) {
+        await GuestSchedule.destroy({ where: { guestId: { [Op.in]: guestIds } }, transaction: tx });
+      }
 
       // 4. Quitar la inscripción: desasociar todas las fechas.
       await (participant as any).setSchedules([], { transaction: tx });

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { Participant, Guest, Accreditation, Event } from '@/models/index';
+import { Participant, Guest, Accreditation, Event, EventSchedule } from '@/models/index';
 import { guestSchema, updateGuestSchema } from '@/utils/validators/participantSchemas';
 import { auditLogService } from './auditLogService';
 
@@ -10,7 +10,15 @@ export class GuestService {
     const validatedData = guestSchema.parse(guestData);
 
     const participant = await Participant.findByPk(participantId, {
-        include: [{ model: Guest, as: 'guests' }, { model: Event, as: 'event' }]
+        include: [
+          { model: Guest, as: 'guests' },
+          { model: Event, as: 'event' },
+          // Fechas en que el participante está inscrito: el invitado nuevo se liga a todas
+          // (luego se afina por fecha en el modal admin). Mantiene el modelo coherente:
+          // sin esto, un invitado agregado por admin quedaba sin fechas (solo el fallback
+          // lo mostraba en el check-in).
+          { model: EventSchedule, as: 'schedules', through: { attributes: [] } },
+        ]
     });
     if (!participant) {
       throw new Error('Participant not found');
@@ -27,6 +35,10 @@ export class GuestService {
     }
 
     const guest = await Guest.create({ ...validatedData, participantId });
+    const scheds = (participant as any).schedules || [];
+    if (scheds.length) {
+      await (guest as any).addSchedules(scheds);
+    }
     if (userId) {
       await auditLogService.log({ userId, action: 'CREATE', entity: 'Guest', entityId: guest.id, details: { name: guestName(guest) } });
     }
@@ -62,6 +74,9 @@ export class GuestService {
     }
 
     const name = guestName(guest);
+    // Limpia los enlaces por fecha (GuestSchedule) antes de borrar: el soft-delete del
+    // invitado no dispara el ON DELETE CASCADE, así que sin esto quedaban filas colgando.
+    await (guest as any).setSchedules([]);
     await guest.destroy();
     if (userId) {
       await auditLogService.log({ userId, action: 'DELETE', entity: 'Guest', entityId: guestId, details: { name, reason: reason || null } });
