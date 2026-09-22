@@ -24,20 +24,6 @@ const fmtAccreditedAt = (d?: string | null) => {
   } catch { return null; }
 };
 
-// Desglose de invitados: total (con nombre + numéricos) y un texto para el tooltip.
-// `guestCount` (alias del listado) = invitados CON NOMBRE; el resto del total son numéricos
-// (cargas). Por la landing nunca hay ambos; solo si se cargan a mano en el panel.
-const guestParts = (p: any) => {
-  const total = Number(p?.guestsTotal) || 0;
-  const named = Number(p?.guestCount) || 0;
-  const numeric = Math.max(0, total - named);
-  let title = 'Sin invitados';
-  if (named > 0 && numeric > 0) title = `${named} con nombre · ${numeric} numéricos (cargas)`;
-  else if (named > 0) title = `${named} con nombre`;
-  else if (numeric > 0) title = `${numeric} numéricos (cargas)`;
-  return { total, title };
-};
-
 // Celda de estado del correo de confirmación. Si falló, el error va en el tooltip (title).
 const EmailStatusCell = ({ p }: { p: any }) => {
   const status = p.emailStatus as string | null | undefined;
@@ -544,16 +530,13 @@ const ParticipantList = ({ eventId }: { eventId: string }) => {
                   <td className="px-6 py-4 whitespace-nowrap text-sm"><EmailStatusCell p={participant} /></td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{participant.documentNumber || '-'}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm">
-                    {(() => {
-                      const g = guestParts(participant);
-                      return g.total > 0 ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-teal-100 text-teal-700" title={g.title}>
-                          <Users size={12} /> {g.total}
-                        </span>
-                      ) : (
-                        <span className="text-gray-300 text-xs">—</span>
-                      );
-                    })()}
+                    {Number((participant as any).guestsTotal) > 0 ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-teal-100 text-teal-700">
+                        <Users size={12} /> {Number((participant as any).guestsTotal)}
+                      </span>
+                    ) : (
+                      <span className="text-gray-300 text-xs">—</span>
+                    )}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm">
                     {(participant as any).registered ? (
