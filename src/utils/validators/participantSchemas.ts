@@ -68,10 +68,14 @@ export const bulkCreateParticipantSchema = z.array(
 export const guestSchema = z.object({
   id: z.guid(),
   participantId: z.guid(),
-  firstName: z.string().min(2, 'El nombre debe tener al menos 2 caracteres'),
-  lastName: z.string().min(2, 'El apellido debe tener al menos 2 caracteres').optional().nullable(),
-  documentNumber: customValidators.documentNumber.optional().nullable(),
-  email: z.string().email('Correo electrónico inválido').optional().nullable(),
+  // El invitado SIEMPRE tiene nombre; apellido/RUT son opcionales y sin formato
+  // estricto (igual que en la landing). Antes exigían apellido de 2+ letras y un RUT
+  // `[a-zA-Z0-9-]{5,20}`, así que NO se podía guardar un invitado sin apellido, sin RUT
+  // o con RUT con puntos (12.345.678-9): fallaba al agregar/actualizar invitados.
+  firstName: z.string().trim().min(1, 'El nombre del invitado es obligatorio').max(120),
+  lastName: z.string().trim().max(120).optional().nullable(),
+  documentNumber: z.string().trim().max(40).optional().nullable(),
+  email: z.union([z.string().trim().email('Correo electrónico inválido'), z.literal(''), z.null()]).optional(),
   phone: customValidators.phone.optional().nullable(),
   birthDate: z.iso.date({ message: 'Fecha de nacimiento inválida' }).optional().nullable(),
   age: z.number().int().min(0).optional().nullable(),
