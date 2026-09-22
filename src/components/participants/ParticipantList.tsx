@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import useParticipantStore from '@/store/participantStore';
 import useEventStore from '@/store/eventStore';
 import useAuthStore from '@/store/authStore';
-import { PlusCircle, FileDown, FileUp, Edit, Trash2, Award, X, CheckCircle2, Clock, Search, ChevronLeft, ChevronRight, UserCheck, Undo2, HelpCircle, Mail, MailCheck, MailX, Send, Loader2, Users } from 'lucide-react';
+import { PlusCircle, FileDown, FileUp, Edit, Trash2, Award, X, CheckCircle2, Clock, Search, ChevronLeft, ChevronRight, UserCheck, Undo2, HelpCircle, Mail, MailCheck, MailX, Send, Loader2, Users, CalendarPlus } from 'lucide-react';
 import { sendConfirmationEmail } from '@/lib/emailjs';
 import apiClient from '@/utils/apiClient';
 import Participant from '@/models/Participant';
@@ -71,9 +71,10 @@ const ParticipantList = ({ eventId }: { eventId: string }) => {
     deleteParticipant,
     revertToPreloaded,
     bulkDeleteParticipants,
+    bulkEnrollParticipants,
     updateParticipant
   } = useParticipantStore();
-  const { currentEvent } = useEventStore();
+  const { currentEvent, EventSchedules, fetchSchedulesForEvent } = useEventStore();
   const { user } = useAuthStore();
   const [filter, setFilter] = useState('');
   const [showOnlyAwarded, setShowOnlyAwarded] = useState(false);
@@ -90,6 +91,10 @@ const ParticipantList = ({ eventId }: { eventId: string }) => {
   const [awardReasonInput, setAwardReasonInput] = useState('');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  // Inscripción masiva en fechas (aditiva): fechas marcadas en el modal + estado de envío.
+  const [enrollOpen, setEnrollOpen] = useState(false);
+  const [enrollScheduleIds, setEnrollScheduleIds] = useState<string[]>([]);
+  const [enrolling, setEnrolling] = useState(false);
   const [savingAward, setSavingAward] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Participant | null>(null);
@@ -315,6 +320,35 @@ const ParticipantList = ({ eventId }: { eventId: string }) => {
     } finally { setBulkDeleting(false); }
   };
 
+  // Abre el modal de inscripción masiva; precarga las fechas del evento si aún no están.
+  const openEnroll = () => {
+    if (!selectedIds.length) return;
+    if (!EventSchedules.length) fetchSchedulesForEvent(eventId);
+    setEnrollScheduleIds([]);
+    setEnrollOpen(true);
+  };
+
+  const toggleEnrollSchedule = (id: string) =>
+    setEnrollScheduleIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
+
+  const allEnrollSelected = EventSchedules.length > 0 && enrollScheduleIds.length === EventSchedules.length;
+  const toggleEnrollAll = () =>
+    setEnrollScheduleIds(allEnrollSelected ? [] : EventSchedules.map((s: any) => s.id));
+
+  const handleEnrollSelected = async () => {
+    if (!selectedIds.length || !enrollScheduleIds.length) return;
+    setEnrolling(true);
+    try {
+      const r = await bulkEnrollParticipants(eventId, { participantIds: selectedIds, scheduleIds: enrollScheduleIds });
+      showToast.success(`Inscritos ${r.enrolled} participante(s) en ${r.schedules} fecha(s).`);
+      setEnrollOpen(false);
+      setSelectedIds([]);
+      reload();
+    } catch (e: any) {
+      showToast.error(e.message || 'No se pudo inscribir');
+    } finally { setEnrolling(false); }
+  };
+
   const openAward = (p: any) => { setAwarding(p); setAwardReasonInput(p.awardReason || ''); };
 
   const saveAward = async (awarded: boolean) => {
@@ -417,6 +451,17 @@ const ParticipantList = ({ eventId }: { eventId: string }) => {
             >
               <Send size={18} />
               Reenviar ({selectedIds.length})
+            </button>
+          )}
+          {selectedIds.length > 0 && (
+            <button
+              onClick={openEnroll}
+              disabled={enrolling}
+              className="bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 flex items-center gap-2 text-sm font-medium transition-colors disabled:opacity-50"
+              title="Inscribir a los seleccionados en una o varias fechas a la vez"
+            >
+              <CalendarPlus size={18} />
+              Inscribir a fechas ({selectedIds.length})
             </button>
           )}
           {selectedIds.length > 0 && (
@@ -705,6 +750,80 @@ const ParticipantList = ({ eventId }: { eventId: string }) => {
           onConfirm={confirmDelete}
           onClose={() => setDeleteTarget(null)}
         />
+      )}
+
+      {/* Modal de inscripción masiva en fechas: marca varias fechas y se suman a todos
+          los participantes seleccionados de una sola vez (sin quitar las que ya tenían). */}
+      {enrollOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => !enrolling && setEnrollOpen(false)}>
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-4 border-b sticky top-0 bg-white">
+              <h3 className="text-lg font-bold flex items-center gap-2"><CalendarPlus size={18} className="text-emerald-600" /> Inscribir a fechas</h3>
+              <button onClick={() => !enrolling && setEnrollOpen(false)} className="text-gray-400 hover:text-gray-600" disabled={enrolling}><X size={20} /></button>
+            </div>
+            <div className="p-5 space-y-4">
+              <p className="text-sm text-gray-600">
+                Marca las fechas para inscribir a los <b>{selectedIds.length}</b> participante(s) seleccionado(s).
+                Las fechas se <b>suman</b> a las que ya tuvieran (no se quita ninguna) y no se duplican.
+              </p>
+
+              {EventSchedules.length === 0 ? (
+                <p className="text-sm text-gray-500 bg-gray-50 border border-gray-100 rounded-lg p-3">
+                  Este evento no tiene fechas creadas todavía. Crea al menos una fecha en la configuración del evento.
+                </p>
+              ) : (
+                <>
+                  <label className="flex items-center gap-2 text-sm font-medium text-gray-700 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={allEnrollSelected}
+                      onChange={toggleEnrollAll}
+                      className="h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                    />
+                    Seleccionar todas las fechas
+                  </label>
+                  <div className="space-y-2 max-h-[45vh] overflow-y-auto">
+                    {EventSchedules.map((s: any) => {
+                      const checked = enrollScheduleIds.includes(s.id);
+                      const when = s.startDateTime ? new Date(s.startDateTime).toLocaleString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+                      return (
+                        <label key={s.id} className={`flex items-start gap-2 p-3 rounded-lg border cursor-pointer transition-colors ${checked ? 'bg-emerald-50 border-emerald-300' : 'bg-white border-gray-200 hover:bg-gray-50'}`}>
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => toggleEnrollSchedule(s.id)}
+                            className="mt-0.5 h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                          />
+                          <span className="text-sm">
+                            <span className="font-medium text-gray-800">{s.label || s.scheduleName || 'Fecha'}</span>
+                            {when && <span className="block text-gray-500">{when}{s.location ? ` · ${s.location}` : ''}</span>}
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+            </div>
+            <div className="flex justify-end gap-2 px-5 py-4 border-t sticky bottom-0 bg-white">
+              <button
+                onClick={() => setEnrollOpen(false)}
+                disabled={enrolling}
+                className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm font-medium disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleEnrollSelected}
+                disabled={enrolling || !enrollScheduleIds.length}
+                className="px-4 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 text-sm font-medium flex items-center gap-2 disabled:opacity-50"
+              >
+                {enrolling ? <Loader2 size={16} className="animate-spin" /> : <CalendarPlus size={16} />}
+                Inscribir {enrollScheduleIds.length > 0 ? `en ${enrollScheduleIds.length} fecha(s)` : ''}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Modal de ayuda: explica qué hace cada botón/acción de la tabla. */}

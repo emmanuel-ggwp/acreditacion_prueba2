@@ -25,6 +25,7 @@ interface ParticipantState {
   deleteParticipant: (id: string, reason?: string) => Promise<void>;
   revertToPreloaded: (id: string) => Promise<void>;
   bulkDeleteParticipants: (eventId: string, opts: { ids?: string[]; all?: boolean }) => Promise<{ deleted: number; guestsDeleted: number }>;
+  bulkEnrollParticipants: (eventId: string, opts: { participantIds: string[]; scheduleIds: string[] }) => Promise<{ enrolled: number; schedules: number }>;
   setCurrentParticipant: (participant: ParticipantWithAccreditation | null) => void;
 }
 
@@ -154,6 +155,18 @@ const useParticipantStore = create<ParticipantState>()(
         set({ loading: true, error: null });
         try {
           const res = await apiClient.delete<{ deleted: number; guestsDeleted: number }>(`/api/events/${eventId}/participants`, { body: opts });
+          set({ loading: false });
+          return res;
+        } catch (error: any) {
+          set({ error: error.message, loading: false });
+          throw error;
+        }
+      },
+
+      bulkEnrollParticipants: async (eventId, opts) => {
+        set({ loading: true, error: null });
+        try {
+          const res = await apiClient.post<{ enrolled: number; schedules: number }>(`/api/events/${eventId}/participants/enroll`, opts);
           set({ loading: false });
           return res;
         } catch (error: any) {

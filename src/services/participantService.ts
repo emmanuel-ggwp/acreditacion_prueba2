@@ -505,6 +505,63 @@ export class ParticipantService {
     }
   }
 
+  /**
+   * Inscribe VARIOS participantes en VARIAS fechas de una sola vez (aditivo). Suma las
+   * fechas marcadas SIN quitar las que la persona ya tuviera; es idempotente gracias al
+   * índice único (participant_id, schedule_id), así que reinscribir en una fecha ya
+   * asignada no duplica ni falla. Solo actúa sobre participantes y horarios del MISMO
+   * evento (guardas por eventId), para no contaminar el cupo de otro evento.
+   */
+  async bulkEnrollParticipants(
+    eventId: string,
+    opts: { participantIds: string[]; scheduleIds: string[] },
+    userId?: string
+  ) {
+    const participantIds = Array.from(new Set(opts.participantIds || []));
+    const scheduleIds = Array.from(new Set(opts.scheduleIds || []));
+    if (!participantIds.length) throw new Error('No hay participantes seleccionados.');
+    if (!scheduleIds.length) throw new Error('Debes elegir al menos una fecha.');
+
+    // Fechas: solo las de ESTE evento. Si alguna no pertenece al evento, se aborta.
+    const schedules = await EventSchedule.findAll({ where: { id: { [Op.in]: scheduleIds }, eventId } });
+    if (schedules.length !== scheduleIds.length) {
+      throw new Error('Una o más fechas no pertenecen a este evento.');
+    }
+
+    // Participantes: solo los de ESTE evento (descarta ids ajenos silenciosamente).
+    const participants = await Participant.findAll({
+      where: { id: { [Op.in]: participantIds }, eventId },
+    });
+    if (!participants.length) throw new Error('No hay participantes válidos para este evento.');
+
+    const tx = await sequelize.transaction();
+    try {
+      for (const participant of participants) {
+        // addSchedules es aditivo e idempotente: no toca las fechas ya asignadas.
+        await (participant as any).addSchedules(schedules, { transaction: tx });
+      }
+      await tx.commit();
+    } catch (e) {
+      await tx.rollback();
+      throw e;
+    }
+
+    if (userId) {
+      await auditLogService.log({
+        userId, action: 'UPDATE', entity: 'Participant', entityId: eventId,
+        details: {
+          name: 'Inscripción masiva en fechas',
+          summary: `Inscritos ${participants.length} participante(s) en ${schedules.length} fecha(s)`,
+          operacion: 'Inscripción masiva',
+          participantes: participants.length,
+          fechas: schedules.length,
+        },
+      });
+    }
+
+    return { enrolled: participants.length, schedules: schedules.length };
+  }
+
   async getParticipant(participantId: string, includeGuests = false, includeAwards = false) {
     const include: any[] = [];
     if (includeGuests) {
