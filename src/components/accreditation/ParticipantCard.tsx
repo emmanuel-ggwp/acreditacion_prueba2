@@ -358,11 +358,14 @@ const ParticipantCard: React.FC<ParticipantCardProps> = ({ person, type, schedul
                         {(g as any).guestType === 'CARGA' ? 'Carga' : (g as any).guestType === 'ACOMPANANTE' ? 'Acompañante' : (g as any).guestType}
                       </span>
                     )}
+                    {((g as any).age != null && (g as any).age !== '') && (
+                      <span className="ml-1 align-middle text-[10px] px-1.5 py-0.5 rounded-full bg-teal-100 text-teal-700">
+                        {(g as any).age} años
+                      </span>
+                    )}
                   </span>
-                  {((g as any).documentNumber || (g as any).age != null) && (
-                    <span className="block text-xs text-gray-500 truncate">
-                      {[(g as any).documentNumber ? `RUT: ${(g as any).documentNumber}` : null, ((g as any).age != null && (g as any).age !== '') ? `${(g as any).age} años` : null].filter(Boolean).join(' · ')}
-                    </span>
+                  {(g as any).documentNumber && (
+                    <span className="block text-xs text-gray-600 truncate">RUT: {(g as any).documentNumber}</span>
                   )}
                   {(g as any).dietaryPreference && dietaryLabel((g as any).dietaryPreference) !== 'Ninguna' && (
                     <span className="mt-0.5 inline-flex items-center gap-1 text-xs text-orange-700">
