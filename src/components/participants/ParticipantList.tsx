@@ -15,6 +15,7 @@ import { showToast } from '@/components/ui/Toast';
 import { exportParticipantsToExcel } from '@/utils/exportParticipants';
 import DeleteReasonModal from '@/components/ui/DeleteReasonModal';
 import { getGuestMode } from '@/utils/formFields';
+import { buildGuestSummary } from '@/utils/guests';
 import { getDietaryOptions } from '@/utils/dietary';
 
 const fmtAccreditedAt = (d?: string | null) => {
@@ -127,11 +128,11 @@ const ParticipantList = ({ eventId }: { eventId: string }) => {
   // ---- Reenvío del correo de confirmación (best-effort, desde el navegador con EmailJS) ----
   const [resending, setResending] = useState(false);
   const [resendProg, setResendProg] = useState<{ done: number; total: number; ok: number; fail: number } | null>(null);
-  const templateInfoRef = useRef<{ templateId: string | null; eventName: string; location: string } | null>(null);
+  const templateInfoRef = useRef<{ templateId: string | null; eventName: string; location: string; guestMode?: string } | null>(null);
 
   const getTemplateInfo = useCallback(async () => {
     if (templateInfoRef.current) return templateInfoRef.current;
-    const info = await apiClient.get<{ templateId: string | null; eventName: string; location: string }>(`/api/events/${eventId}/email-template`);
+    const info = await apiClient.get<{ templateId: string | null; eventName: string; location: string; guestMode?: string }>(`/api/events/${eventId}/email-template`);
     templateInfoRef.current = info;
     return info;
   }, [eventId]);
@@ -149,16 +150,28 @@ const ParticipantList = ({ eventId }: { eventId: string }) => {
     for (let i = 0; i < withEmail.length; i++) {
       const p = withEmail[i];
       const nombre = `${p.firstName} ${p.lastName}`.trim();
-      // El listado no trae la fecha/lugar del horario, así que se piden aquí (el GET del
-      // participante siempre incluye sus horarios). Se usa el más temprano, igual que el
-      // correo original de la landing; antes se enviaban schedule_name/fechaEvento vacíos.
+      // El listado no trae la fecha/lugar del horario ni los invitados con nombre, así que se
+      // pide el participante completo aquí (el GET siempre incluye horarios; y con nombre/número
+      // de invitados). Se usa el horario más temprano y se arma {{guests_summary}} igual que la
+      // landing; antes se enviaban schedule_name/fechaEvento/guests_summary vacíos.
       let sched: any = null;
+      let full: any = null;
       try {
-        const full = await apiClient.get<any>(`/api/participants/${p.id}`);
+        full = await apiClient.get<any>(`/api/participants/${p.id}`);
         const scheds = ((full?.schedules as any[]) || []).slice()
           .sort((a, b) => new Date(a.startDateTime).getTime() - new Date(b.startDateTime).getTime());
         sched = scheds[0] || null;
       } catch { /* sin horario accesible: se envía sin fecha/lugar */ }
+      // Modo de invitados del evento (mismo criterio que la landing). Con named se listan los
+      // nombres; con count el número; con companion acompañante + cargas.
+      const guestMode = getGuestMode({ guests: { mode: info.guestMode } } as any);
+      const names = ((full?.guests as any[]) || []).map((g: any) => `${g.firstName || ''} ${g.lastName || ''}`.trim()).filter(Boolean);
+      const gs = buildGuestSummary(guestMode, {
+        names,
+        count: Number(full?.guestCount ?? p.guestCount ?? 0),
+        companion: !!full?.guestCompanion,
+        loads: Number(full?.guestLoads ?? 0),
+      });
       const r = await sendConfirmationEmail(info.templateId, {
         to_email: p.email, email: p.email,
         participant_name: nombre, nombre,
@@ -166,7 +179,7 @@ const ParticipantList = ({ eventId }: { eventId: string }) => {
         schedule_name: sched ? (sched.label || sched.scheduleName || '') : '',
         fechaEvento: sched ? new Date(sched.startDateTime).toLocaleDateString('es-CL') : '',
         lugarEvento: sched?.location || info.location || '',
-        guests_count: String((p as any).guestsTotal ?? p.guestCount ?? 0), guests_summary: '',
+        guests_count: String(gs.count), guests_summary: gs.summary,
       });
       await apiClient.patch(`/api/participants/${p.id}/email-status`, { ok: r.ok, skipped: r.skipped, error: r.error }).catch(() => {});
       if (r.ok) ok++; else fail++;

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { withAuth } from '@/middleware/auth';
 import { AuthenticatedRequest } from '@/types/auth';
 import { ROLES } from '@/utils/constants';
+import { getGuestMode } from '@/utils/formFields';
 import { Event, EmailTemplate } from '@/models/index';
 
 const { ADMIN, OPERATOR } = ROLES;
@@ -28,6 +29,7 @@ export const GET = withAuth(async (
       templateId,
       eventName: event.name,
       location: event.location || '',
+      guestMode: getGuestMode(event.registrationConfig),
     });
   } catch (e: any) {
     return NextResponse.json({ message: e.message }, { status: 500 });
