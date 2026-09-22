@@ -50,6 +50,7 @@ const GuestList: React.FC<GuestListProps> = ({ participantId, allowedGuests, gue
         <h3 className="text-xl font-semibold text-gray-700">Invitados ({guests.length}/{allowedGuests})</h3>
         {canAddGuest && !editingGuest && (
           <button
+            type="button"
             onClick={handleAddGuest}
             className="bg-blue-500 text-white px-3 py-1 rounded-lg hover:bg-blue-600 flex items-center gap-2 text-sm"
           >
@@ -105,6 +106,7 @@ const GuestList: React.FC<GuestListProps> = ({ participantId, allowedGuests, gue
               </div>
               <div className="flex items-center gap-3">
                 <button
+                  type="button"
                   onClick={() => setEditingGuest(guest)}
                   className="text-blue-500 hover:text-blue-700 text-sm"
                   disabled={loading}
@@ -112,6 +114,7 @@ const GuestList: React.FC<GuestListProps> = ({ participantId, allowedGuests, gue
                   Editar
                 </button>
                 <button
+                  type="button"
                   onClick={() => setDeleteTarget(guest)}
                   className="text-red-500 hover:text-red-700"
                   disabled={loading}
