@@ -332,6 +332,28 @@ export class ParticipantService {
     if (Array.isArray(scheduleIds)) {
       const schedules = await EventSchedule.findAll({ where: { id: scheduleIds, eventId: (participant as any).eventId } });
       await (participant as any).setSchedules(schedules);
+
+      // Al quitar una fecha del participante, sus invitados no deben quedar ligados a esa
+      // fecha (GuestSchedule huérfano: si no, un invitado seguiría "asistiendo" a una fecha
+      // en la que su titular ya no está y hasta podría acreditarse ahí). Se limpian los
+      // enlaces a fechas que el participante ya NO tiene, PRESERVANDO los ya acreditados
+      // (no romper check-ins hechos).
+      const keepIds = schedules.map((s: any) => s.id);
+      const guests = await Guest.findAll({ where: { participantId }, attributes: ['id'] });
+      const guestIds = guests.map((g: any) => g.id);
+      if (guestIds.length) {
+        const accredited = await Accreditation.findAll({
+          where: { guestId: { [Op.in]: guestIds } }, attributes: ['guestId', 'eventScheduleId'],
+        });
+        const keepPair = new Set(accredited.map((a: any) => `${a.guestId}:${a.eventScheduleId}`));
+        const links = await GuestSchedule.findAll({ where: { guestId: { [Op.in]: guestIds } } });
+        const toRemove = links
+          .filter((l: any) => !keepIds.includes(l.scheduleId) && !keepPair.has(`${l.guestId}:${l.scheduleId}`))
+          .map((l: any) => l.id);
+        if (toRemove.length) {
+          await GuestSchedule.destroy({ where: { id: { [Op.in]: toRemove } } });
+        }
+      }
     }
 
     if (userId) {
