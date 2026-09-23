@@ -12,6 +12,7 @@ import { getDietaryOptions, isFreeTextDiet, dietaryFull, dietaryLabel, ensureDie
 import { hexToRgba } from '@/utils/color';
 import { CONTACT_EMAIL } from '@/utils/contact';
 import { getTitleFont, googleFontHref } from '@/utils/fonts';
+import { formatDateCL, formatTimeCL } from '@/utils/formatters';
 
 const GALA_LABELS: Record<string, string> = { email: 'Correo electrónico', phone: 'Teléfono', documentNumber: 'RUT / Documento', company: 'Empresa', position: 'Cargo', numeroSap: 'Código SAP', dietary: 'Preferencia alimenticia' };
 
@@ -20,20 +21,9 @@ interface TemplateProps {
   slug: string;
 }
 
-const fmtDate = (d: string) => {
-  try {
-    return new Date(d).toLocaleDateString('es-CL', { weekday: 'long', day: '2-digit', month: 'long' });
-  } catch {
-    return '';
-  }
-};
-const fmtTime = (d: string) => {
-  try {
-    return new Date(d).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' });
-  } catch {
-    return '';
-  }
-};
+// Fecha/hora deterministas (es-CL + America/Santiago) para que SSR y cliente coincidan.
+const fmtDate = (d: string) => formatDateCL(d, { weekday: 'long', day: '2-digit', month: 'long' });
+const fmtTime = (d: string) => formatTimeCL(d);
 
 const blockTypeLabel = (t?: string) => {
   switch (t) {
@@ -440,10 +430,9 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
             .sort((a, b) => new Date(a.startDateTime).getTime() - new Date(b.startDateTime).getTime());
           const primary: any = selDates[0];
           const fmtWhen = (s: any) => {
-            try {
-              return new Date(s.startDateTime).toLocaleDateString('es-CL', { weekday: 'short', day: '2-digit', month: 'long' })
-                + ', ' + new Date(s.startDateTime).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' });
-            } catch { return ''; }
+            const day = formatDateCL(s.startDateTime, { weekday: 'short', day: '2-digit', month: 'long' });
+            const time = formatTimeCL(s.startDateTime);
+            return day ? `${day}, ${time}` : '';
           };
           const cargaName = (id: string) => { const c = cargas.find((x) => x.id === id); return c ? `${c.firstName} ${c.lastName || ''}`.trim() : ''; };
           const namesForDate = (sid: string) => {
@@ -476,7 +465,7 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
             nombre,
             event_name: event.name,
             schedule_name: primary ? (primary.label || primary.scheduleName) : '',
-            fechaEvento: primary ? new Date(primary.startDateTime).toLocaleDateString('es-CL') : '',
+            fechaEvento: primary ? formatDateCL(primary.startDateTime) : '',
             lugarEvento: primary?.location || '',
             guests_count: String(gs.count),
             guests_summary: gs.summary,
@@ -672,8 +661,8 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
     const d = new Date(s.startDateTime);
     const validDate = !isNaN(d.getTime());
     const dayNum = validDate ? d.getDate() : '';
-    const weekdayName = validDate ? d.toLocaleDateString('es-CL', { weekday: 'long' }) : '';
-    const monthName = validDate ? d.toLocaleDateString('es-CL', { month: 'long' }) : '';
+    const weekdayName = validDate ? formatDateCL(d, { weekday: 'long' }) : '';
+    const monthName = validDate ? formatDateCL(d, { month: 'long' }) : '';
 
     return (
       <button key={s.id} type="button" disabled={blocked} onClick={() => { if (!blocked) toggleDate(s.id); }} className="w-full sm:w-[18rem] text-left rounded-2xl overflow-hidden transition shadow-lg disabled:cursor-not-allowed" style={{ outline: selected ? `3px solid ${dateSelectedColor}` : '3px solid transparent', backgroundColor: s.imageUrl ? 'rgba(0,0,0,0.5)' : hexToRgba(dateCardColor, dateCardOpacity), border: '1px solid rgba(255,255,255,0.15)', opacity: blocked ? 0.55 : 1 }}>

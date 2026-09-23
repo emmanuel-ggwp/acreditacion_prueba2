@@ -5,6 +5,7 @@ import PublicRegistrationForm from '@/components/public/PublicRegistrationForm';
 import { Calendar, MapPin } from 'lucide-react';
 import { CONTACT_EMAIL } from '@/utils/contact';
 import { getTitleFont, googleFontHref } from '@/utils/fonts';
+import { formatDateCL } from '@/utils/formatters';
 
 interface TemplateProps {
   event: any;
@@ -51,7 +52,7 @@ export default function DefaultTemplate({ event, slug }: TemplateProps) {
               {headerSel ? (
                 <div className="flex items-center">
                   <Calendar className="mr-2 h-4 w-4" />
-                  {new Date(headerSel.startDateTime).toLocaleDateString(undefined, {
+                  {formatDateCL(headerSel.startDateTime, {
                     weekday: 'long',
                     year: 'numeric',
                     month: 'long',

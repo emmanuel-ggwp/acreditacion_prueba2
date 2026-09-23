@@ -6,6 +6,7 @@ import { Calendar, MapPin, Clock } from 'lucide-react';
 import { hexToRgba } from '@/utils/color';
 import { CONTACT_EMAIL } from '@/utils/contact';
 import { getTitleFont, googleFontHref } from '@/utils/fonts';
+import { formatDateCL, formatTimeCL } from '@/utils/formatters';
 
 interface TemplateProps {
   event: any;
@@ -57,14 +58,14 @@ export default function ModernTemplate({ event, slug }: TemplateProps) {
                 <div className="flex items-center">
                   <Calendar className="mr-3 h-5 w-5" style={{ color: primary }} />
                   <span>
-                    {new Date(headerSel.startDateTime).toLocaleDateString(undefined, {
+                    {formatDateCL(headerSel.startDateTime, {
                       weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
                     })}
                   </span>
                 </div>
                 <div className="flex items-center">
                   <Clock className="mr-3 h-5 w-5" style={{ color: primary }} />
-                  <span>{new Date(headerSel.startDateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                  <span>{formatTimeCL(headerSel.startDateTime)}</span>
                 </div>
               </>
             ) : (event.schedules?.length || 0) > 1 ? (

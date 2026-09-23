@@ -9,6 +9,7 @@ import { getFormFields, guestDietaryEnabled, getGuestMode, getGuestFields } from
 import { getDietaryOptions, isFreeTextDiet, dietaryFull, ensureDietOption, DIET_COMMENTS_MAX, GUEST_DIET_DETAIL_MAX } from '@/utils/dietary';
 import { sendConfirmationEmail } from '@/lib/emailjs';
 import { buildGuestSummary, buildAttendanceDetail } from '@/utils/guests';
+import { formatDateCL, formatTimeCL } from '@/utils/formatters';
 import { hexToRgba } from '@/utils/color';
 import DateSelectModal from '@/components/public/DateSelectModal';
 import CustomQuestionFields from '@/components/public/CustomQuestionFields';
@@ -327,10 +328,9 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
           const nombre = `${data.firstName} ${data.lastName}`.trim();
           const serverCap = Number.isFinite(Number(result?.guestCap)) ? Number(result.guestCap) : maxGuests;
           const fmtWhen = (s: any) => {
-            try {
-              return new Date(s.startDateTime).toLocaleDateString('es-CL', { weekday: 'short', day: '2-digit', month: 'long' })
-                + ', ' + new Date(s.startDateTime).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' });
-            } catch { return ''; }
+            const day = formatDateCL(s.startDateTime, { weekday: 'short', day: '2-digit', month: 'long' });
+            const time = formatTimeCL(s.startDateTime);
+            return day ? `${day}, ${time}` : '';
           };
           // Nombres de invitados de una fecha (cargas marcadas + invitados nuevos con nombre).
           const namesForDate = (sid: string) => {
@@ -364,7 +364,7 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
             nombre,
             event_name: event.name,
             schedule_name: primary ? (primary.label || primary.scheduleName) : '',
-            fechaEvento: primary ? new Date(primary.startDateTime).toLocaleDateString('es-CL') : '',
+            fechaEvento: primary ? formatDateCL(primary.startDateTime) : '',
             lugarEvento: primary?.location || event.location || '',
             guests_count: String(gs.count),
             guests_summary: gs.summary,

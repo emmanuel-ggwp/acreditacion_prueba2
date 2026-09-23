@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { X, Calendar, MapPin, Clock, Check } from 'lucide-react';
+import { formatDateCL, formatTimeCL } from '@/utils/formatters';
 
 interface Props {
   open: boolean;
@@ -17,12 +18,9 @@ interface Props {
   registeredIds?: string[];
 }
 
-const fmtDate = (d: string) => {
-  try { return new Date(d).toLocaleDateString('es-CL', { weekday: 'long', day: '2-digit', month: 'long' }); } catch { return ''; }
-};
-const fmtTime = (d: string) => {
-  try { return new Date(d).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' }); } catch { return ''; }
-};
+// Fecha/hora deterministas (es-CL + America/Santiago) para que SSR y cliente coincidan.
+const fmtDate = (d: string) => formatDateCL(d, { weekday: 'long', day: '2-digit', month: 'long' });
+const fmtTime = (d: string) => formatTimeCL(d);
 
 /**
  * Modal para elegir la fecha del evento. Se adapta al diseño de la plantilla:

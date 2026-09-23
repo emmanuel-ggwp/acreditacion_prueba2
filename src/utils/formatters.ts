@@ -57,6 +57,51 @@ export const formatDateTime = (date: string | Date): string => {
 };
 
 /**
+ * Formato de fecha/hora PÚBLICO y DETERMINISTA: siempre locale `es-CL` y zona horaria
+ * `America/Santiago`, sin depender del navegador ni del reloj del servidor. Esto asegura
+ * que el render del servidor (SSR) y el del cliente coincidan carácter a carácter —lo que
+ * evita el error de hidratación de React— y que las fechas siempre se muestren en la hora
+ * de Chile. Devuelven '' ante una fecha inválida (para no romper el render). Úsalos en toda
+ * la cara pública (landing/plantillas/chips) en vez de `toLocale*` sueltos.
+ */
+const CL_LOCALE = 'es-CL';
+const CL_TIMEZONE = 'America/Santiago';
+
+// Una fecha inválida NO lanza en `toLocale*` (V8 devuelve "Invalid Date"), así que se
+// filtra explícitamente con isNaN para devolver '' y no mostrar "Invalid Date" en la UI.
+const asValidDate = (date: string | Date): Date | null => {
+  const d = date instanceof Date ? date : new Date(date);
+  return isNaN(d.getTime()) ? null : d;
+};
+
+export const formatDateCL = (
+  date: string | Date,
+  opts: Intl.DateTimeFormatOptions = { day: '2-digit', month: '2-digit', year: 'numeric' }
+): string => {
+  const d = asValidDate(date);
+  if (!d) return '';
+  try { return d.toLocaleDateString(CL_LOCALE, { timeZone: CL_TIMEZONE, ...opts }); } catch { return ''; }
+};
+
+export const formatTimeCL = (
+  date: string | Date,
+  opts: Intl.DateTimeFormatOptions = { hour: '2-digit', minute: '2-digit' }
+): string => {
+  const d = asValidDate(date);
+  if (!d) return '';
+  try { return d.toLocaleTimeString(CL_LOCALE, { timeZone: CL_TIMEZONE, ...opts }); } catch { return ''; }
+};
+
+export const formatDateTimeCL = (
+  date: string | Date,
+  opts: Intl.DateTimeFormatOptions = { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }
+): string => {
+  const d = asValidDate(date);
+  if (!d) return '';
+  try { return d.toLocaleString(CL_LOCALE, { timeZone: CL_TIMEZONE, ...opts }); } catch { return ''; }
+};
+
+/**
  * Combines first and last names into a full name.
  * @param firstName The user's first name.
  * @param lastName The user's last name.

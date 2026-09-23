@@ -6,20 +6,16 @@ import { Calendar, MapPin, Clock } from 'lucide-react';
 import { hexToRgba } from '@/utils/color';
 import { CONTACT_EMAIL } from '@/utils/contact';
 import { getTitleFont, googleFontHref } from '@/utils/fonts';
+import { formatDateCL, formatTimeCL } from '@/utils/formatters';
 
 interface TemplateProps {
   event: any;
   slug: string;
 }
 
-const fmtDate = (d: string) => {
-  try {
-    return new Date(d).toLocaleDateString('es-CL', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
-  } catch { return ''; }
-};
-const fmtTime = (d: string) => {
-  try { return new Date(d).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' }); } catch { return ''; }
-};
+// Fecha/hora deterministas (es-CL + America/Santiago) para que SSR y cliente coincidan.
+const fmtDate = (d: string) => formatDateCL(d, { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
+const fmtTime = (d: string) => formatTimeCL(d);
 
 export default function MinimalTemplate({ event, slug }: TemplateProps) {
   const theme = (event.registrationConfig && event.registrationConfig.theme) || {};
