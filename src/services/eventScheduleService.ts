@@ -41,6 +41,16 @@ export class EventScheduleService {
       throw new Error('Schedule not found');
     }
 
+    // La fecha y hora de término debe ser posterior a la de inicio. updateScheduleSchema
+    // no puede validarlo (el .partial() descarta el .refine() del base y además puede
+    // venir una sola de las dos fechas), así que se valida con los valores EFECTIVOS:
+    // lo que trae la edición o, si no, lo que ya tiene la fecha.
+    const effStart = new Date((validatedData.startDateTime ?? (schedule as any).startDateTime) as any);
+    const effEnd = new Date((validatedData.endDateTime ?? (schedule as any).endDateTime) as any);
+    if (!isNaN(effStart.getTime()) && !isNaN(effEnd.getTime()) && effEnd <= effStart) {
+      throw new Error('La fecha y hora de término debe ser posterior a la de inicio.');
+    }
+
     // Solo se bloquea si las fechas CAMBIAN de verdad (el formulario reenvía siempre
     // start/endDateTime, así que comparar por presencia impedía editar cualquier otro
     // campo —cupo, aforo, ubicación— de un horario con acreditaciones).

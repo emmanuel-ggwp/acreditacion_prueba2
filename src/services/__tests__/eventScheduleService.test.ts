@@ -116,8 +116,13 @@ describe('EventScheduleService', () => {
       (ScheduleMock.findByPk as jest.Mock).mockResolvedValue(makeSchedule());
       (AccreditationMock.count as jest.Mock).mockResolvedValue(3);
 
+      // Se reenvían AMBAS fechas (rango válido) como hace el formulario: se prueba el
+      // bloqueo por acreditaciones, no la validez del rango.
       await expect(
-        service.updateSchedule('sch-1', { startDateTime: '2026-10-05T10:00:00.000Z' } as any),
+        service.updateSchedule('sch-1', {
+          startDateTime: '2026-10-05T10:00:00.000Z',
+          endDateTime: '2026-10-05T12:00:00.000Z',
+        } as any),
       ).rejects.toThrow('Cannot change dates of a schedule with existing accreditations.');
     });
 
@@ -126,7 +131,10 @@ describe('EventScheduleService', () => {
       (ScheduleMock.findByPk as jest.Mock).mockResolvedValue(schedule);
       (AccreditationMock.count as jest.Mock).mockResolvedValue(0);
 
-      const result = await service.updateSchedule('sch-1', { startDateTime: '2026-10-05T10:00:00.000Z' } as any);
+      const result = await service.updateSchedule('sch-1', {
+        startDateTime: '2026-10-05T10:00:00.000Z',
+        endDateTime: '2026-10-05T12:00:00.000Z',
+      } as any);
 
       expect(schedule.update).toHaveBeenCalled();
       expect(result).toBe(schedule);

@@ -210,7 +210,13 @@ export const scheduleSchema = z.object({
 });
 
 export const createScheduleSchema = scheduleSchema.omit({ id: true, isActive: true });
-export const updateScheduleSchema = createScheduleSchema.partial();
+// En EDICIÓN, blockType es opcional SIN default: si se reinyectara 'SINGLE', un update
+// parcial que no lo envía sobreescribiría un AM/PM/FULL_DAY/CUSTOM previo. La regla
+// "término posterior al inicio" se valida en el servicio con valores efectivos, porque
+// .partial() descarta el .refine() del esquema base (y puede venir una sola fecha).
+export const updateScheduleSchema = createScheduleSchema.partial().extend({
+  blockType: z.enum(['SINGLE', 'AM', 'PM', 'FULL_DAY', 'CUSTOM']).optional(),
+});
 
 export const eventFilterSchema = z.object({
   isActive: z.string().transform(val => val === 'true').optional(),
