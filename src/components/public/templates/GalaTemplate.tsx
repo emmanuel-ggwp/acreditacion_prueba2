@@ -618,6 +618,38 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
     </div>
   );
 
+  // Selector numérico con botones (− n +): más visible y con mejor toque que un input.
+  const stepper = (value: number, onChange: (n: number) => void, min: number, max: number) => {
+    const btnStyle = { backgroundColor: hexToRgba(buttonColor, 0.22), borderColor: hexToRgba(buttonColor, 0.85) };
+    const cls = 'h-11 w-11 flex-shrink-0 rounded-full text-white text-2xl leading-none font-semibold border flex items-center justify-center transition hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed';
+    return (
+      <div className="inline-flex items-center gap-4">
+        <button type="button" onClick={() => onChange(Math.max(min, value - 1))} disabled={value <= min} className={cls} style={btnStyle} aria-label="Quitar uno">−</button>
+        <span className="min-w-[2.5rem] text-center text-3xl font-bold text-white tabular-nums">{value}</span>
+        <button type="button" onClick={() => onChange(Math.min(max, value + 1))} disabled={value >= max} className={cls} style={btnStyle} aria-label="Agregar uno">＋</button>
+      </div>
+    );
+  };
+
+  // Toggle tipo tarjeta (sí/no) más visible que una casilla suelta.
+  const toggleCard = (checked: boolean, onChange: (b: boolean) => void, label: string) => (
+    <button
+      type="button"
+      onClick={() => onChange(!checked)}
+      className="w-full sm:w-auto inline-flex items-center gap-3 rounded-2xl px-4 py-3 border transition text-left hover:brightness-110"
+      style={checked
+        ? { backgroundColor: hexToRgba(buttonColor, 0.22), borderColor: hexToRgba(buttonColor, 0.9) }
+        : { backgroundColor: 'rgba(255,255,255,0.06)', borderColor: 'rgba(255,255,255,0.25)' }}
+      aria-pressed={checked}
+    >
+      <span className="flex-shrink-0 h-6 w-6 rounded-md border-2 flex items-center justify-center text-white text-sm leading-none"
+        style={{ borderColor: checked ? buttonColor : 'rgba(255,255,255,0.5)', backgroundColor: checked ? buttonColor : 'transparent' }}>
+        {checked ? '✓' : ''}
+      </span>
+      <span className="text-white font-semibold text-sm">{label}</span>
+    </button>
+  );
+
   const renderDateCard = (s: any) => {
     const selected = selectedScheduleIds.includes(s.id);
     const already = registeredScheduleIds.includes(s.id);
@@ -1015,10 +1047,7 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
               {/* Modos numéricos (count/companion): se conserva el acompañante simple. */}
               {event.allowGuests && maxGuests > 0 && guestMode !== 'named' && (
                 <div className="mb-2">
-                  <label className="flex items-center gap-3 text-white font-semibold cursor-pointer">
-                    <input type="checkbox" checked={acompEnabled} onChange={(e) => setAcompEnabled(e.target.checked)} className="w-5 h-5" style={{ accentColor: primary }} />
-                    ¿Asistes con acompañante?
-                  </label>
+                  {toggleCard(acompEnabled, setAcompEnabled, '¿Asistes con acompañante?')}
                   {acompEnabled && (
                     <div className="mt-3 space-y-3">
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -1111,13 +1140,7 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
               {event.allowGuests && maxGuests > 0 && guestMode === 'count' && (
                 <div className="mt-5">
                   <p className="text-white font-semibold mb-2">¿Cuántos invitados llevas? <span className="text-white/60 text-sm font-normal">(hasta {maxGuests})</span></p>
-                  <input
-                    className={`${inputClass} sm:max-w-[10rem]`}
-                    style={inputStyle}
-                    type="number" min={0} max={maxGuests}
-                    value={countGuests}
-                    onChange={(e) => setCountGuests(Math.max(0, Math.min(maxGuests, parseInt(e.target.value, 10) || 0)))}
-                  />
+                  {stepper(countGuests, (n) => setCountGuests(Math.max(0, Math.min(maxGuests, n))), 0, maxGuests)}
                 </div>
               )}
 
@@ -1125,19 +1148,10 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
               {event.allowGuests && maxGuests > 0 && guestMode === 'companion' && (
                 <div className="mt-5 space-y-3">
                   <p className="text-white font-semibold">Invitados <span className="text-white/60 text-sm font-normal">(hasta {maxGuests} en total)</span></p>
-                  <label className="flex items-center gap-2 text-white/90 text-sm">
-                    <input type="checkbox" checked={companion} onChange={(e) => setCompanion(e.target.checked)} className="h-4 w-4 rounded" />
-                    Voy con acompañante
-                  </label>
+                  {toggleCard(companion, setCompanion, 'Voy con acompañante')}
                   <div>
                     <p className="text-white/80 text-sm mb-1">Número de cargas</p>
-                    <input
-                      className={`${inputClass} sm:max-w-[10rem]`}
-                      style={inputStyle}
-                      type="number" min={0} max={Math.max(0, maxGuests - (companion ? 1 : 0))}
-                      value={loads}
-                      onChange={(e) => setLoads(Math.max(0, Math.min(Math.max(0, maxGuests - (companion ? 1 : 0)), parseInt(e.target.value, 10) || 0)))}
-                    />
+                    {stepper(loads, (n) => setLoads(Math.max(0, Math.min(Math.max(0, maxGuests - (companion ? 1 : 0)), n))), 0, Math.max(0, maxGuests - (companion ? 1 : 0)))}
                   </div>
                   <p className="text-white/60 text-xs">Total de invitados: {(companion ? 1 : 0) + loads}</p>
                 </div>
