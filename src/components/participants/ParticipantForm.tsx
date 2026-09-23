@@ -215,8 +215,10 @@ const ParticipantForm: React.FC<ParticipantFormProps> = ({ eventId, participant,
       // Invitados numéricos: normalizamos guestCount según el modo del evento.
       if (allowGuests && maxGuests > 0) {
         if (guestMode === 'companion') {
-          const total = ((data as any).guestCompanion ? 1 : 0) + (Number((data as any).guestLoads) || 0);
-          participantData.guestCount = Math.min(total, maxGuests);
+          // El máximo se aplica a las CARGAS; el acompañante es aparte (+1).
+          const loads = Math.max(0, Math.min(Number((data as any).guestLoads) || 0, maxGuests));
+          participantData.guestLoads = loads;
+          participantData.guestCount = ((data as any).guestCompanion ? 1 : 0) + loads;
         } else if (guestMode === 'count') {
           participantData.guestCount = Math.max(0, Math.min(Number((data as any).guestCount) || 0, maxGuests));
         }
@@ -357,13 +359,13 @@ const ParticipantForm: React.FC<ParticipantFormProps> = ({ eventId, participant,
 
           {numericEditor === 'companion' && (
             <div className="col-span-2 space-y-2">
-              <label className="block text-sm font-medium text-gray-700">Invitados <span className="text-gray-400 font-normal">(hasta {guestMax} en total)</span></label>
+              <label className="block text-sm font-medium text-gray-700">Invitados</label>
               <label className="flex items-center gap-2 text-sm text-gray-700">
                 <input type="checkbox" {...register('guestCompanion' as any)} className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
                 Va con acompañante
               </label>
               <div>
-                <label htmlFor="guestLoads" className="block text-sm text-gray-700 mb-1">N° de cargas</label>
+                <label htmlFor="guestLoads" className="block text-sm text-gray-700 mb-1">N° de cargas <span className="text-gray-400 font-normal">(hasta {guestMax})</span></label>
                 <input
                   id="guestLoads"
                   type="number" min={0} max={guestMax}

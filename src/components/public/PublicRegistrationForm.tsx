@@ -828,15 +828,13 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
       {/* Modo 'companion': acompañante (sí/no) + número de cargas. */}
       {allowGuests && maxGuests > 0 && guestMode === 'companion' && (
         <div className="border-t border-gray-200 pt-5 space-y-3">
-          <label className="block text-sm font-medium text-gray-700">
-            Invitados <span className="text-gray-400 font-normal">(hasta {maxGuests} en total)</span>
-          </label>
+          <label className="block text-sm font-medium text-gray-700">Invitados</label>
           {toggleCard(companion, setCompanion, 'Voy con acompañante')}
           <div>
-            <label className="block text-sm text-gray-700 mb-1">Número de cargas</label>
-            {stepper(loads, (n) => setLoads(Math.max(0, Math.min(Math.max(0, maxGuests - (companion ? 1 : 0)), n))), 0, Math.max(0, maxGuests - (companion ? 1 : 0)))}
+            <label className="block text-sm text-gray-700 mb-1">Número de cargas <span className="text-gray-400 font-normal">(hasta {maxGuests})</span></label>
+            {stepper(loads, (n) => setLoads(Math.max(0, Math.min(maxGuests, n))), 0, maxGuests)}
           </div>
-          <p className="text-xs text-gray-500">Total de invitados: {(companion ? 1 : 0) + loads}</p>
+          <p className="text-xs text-gray-500">Total de invitados: {(companion ? 1 : 0) + loads}{companion ? ` (1 acompañante${loads ? ` + ${loads} carga${loads === 1 ? '' : 's'}` : ''})` : ''}</p>
         </div>
       )}
 

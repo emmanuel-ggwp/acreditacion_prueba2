@@ -1147,13 +1147,13 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
               {/* Modo 'companion': acompañante (sí/no) + número de cargas. */}
               {event.allowGuests && maxGuests > 0 && guestMode === 'companion' && (
                 <div className="mt-5 space-y-3">
-                  <p className="text-white font-semibold">Invitados <span className="text-white/60 text-sm font-normal">(hasta {maxGuests} en total)</span></p>
+                  <p className="text-white font-semibold">Invitados</p>
                   {toggleCard(companion, setCompanion, 'Voy con acompañante')}
                   <div>
-                    <p className="text-white/80 text-sm mb-1">Número de cargas</p>
-                    {stepper(loads, (n) => setLoads(Math.max(0, Math.min(Math.max(0, maxGuests - (companion ? 1 : 0)), n))), 0, Math.max(0, maxGuests - (companion ? 1 : 0)))}
+                    <p className="text-white/80 text-sm mb-1">Número de cargas <span className="text-white/50">(hasta {maxGuests})</span></p>
+                    {stepper(loads, (n) => setLoads(Math.max(0, Math.min(maxGuests, n))), 0, maxGuests)}
                   </div>
-                  <p className="text-white/60 text-xs">Total de invitados: {(companion ? 1 : 0) + loads}</p>
+                  <p className="text-white/60 text-xs">Total de invitados: {(companion ? 1 : 0) + loads}{companion ? ` (1 acompañante${loads ? ` + ${loads} carga${loads === 1 ? '' : 's'}` : ''})` : ''}</p>
                 </div>
               )}
             </>

@@ -362,11 +362,11 @@ export async function POST(
       // no pueda declarar más invitados que el máximo del evento.
       const clamped: Record<string, unknown> = {};
       if (guestMode === 'companion') {
-        // El total = (acompañante ? 1 : 0) + cargas; el conjunto no puede pasar el cupo.
+        // El cupo (máximo) se aplica a las CARGAS; el acompañante es aparte (+1). El total
+        // = (acompañante ? 1 : 0) + cargas, y las cargas no pueden pasar el cupo.
         const companion = !!(participant as any).guestCompanion;
         let loads = Math.max(0, Math.floor(Number((participant as any).guestLoads) || 0));
-        const maxLoads = Math.max(0, effectiveGuestCap - (companion ? 1 : 0));
-        if (loads > maxLoads) loads = maxLoads;
+        if (loads > effectiveGuestCap) loads = effectiveGuestCap;
         clamped.guestLoads = loads;
         clamped.guestCount = (companion ? 1 : 0) + loads;
       } else if (guestMode === 'count') {
