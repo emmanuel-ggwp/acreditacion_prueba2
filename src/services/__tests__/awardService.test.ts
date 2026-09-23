@@ -33,17 +33,24 @@ describe('AwardService', () => {
   describe('updateAward', () => {
     const awardId = 'award-1';
     const userId = 'user-1';
-    const initialAward = { 
-        id: awardId, 
-        name: 'Old Name', 
-        quantity: 10, 
-        update: jest.fn(function(this: any, data: any) {
-            Object.assign(this, data);
-            return Promise.resolve(this);
-        })
-    };
+
+    // Se crea fresco en cada test: `update` muta la instancia, así evitamos fugas entre tests.
+    // `get({ plain: true })` lo usa el servicio para el diff de auditoría (buildChanges).
+    const makeInitialAward = () => ({
+      id: awardId,
+      name: 'Old Name',
+      quantity: 10,
+      get: jest.fn(function (this: any) {
+        return { id: this.id, name: this.name, quantity: this.quantity };
+      }),
+      update: jest.fn(function (this: any, data: any) {
+        Object.assign(this, data);
+        return Promise.resolve(this);
+      }),
+    });
 
     it('should update an award successfully', async () => {
+      const initialAward = makeInitialAward();
       const updateData = { name: 'New Name', quantity: 15 };
       (AwardMock.findByPk as jest.Mock).mockResolvedValue(initialAward);
       (ParticipantAwardMock.count as jest.Mock).mockResolvedValue(5); // 5 assigned
@@ -56,6 +63,7 @@ describe('AwardService', () => {
     });
 
     it('should throw an error if quantity is less than assigned count', async () => {
+      const initialAward = makeInitialAward();
       const updateData = { quantity: 4 }; // Less than 5 assigned
       (AwardMock.findByPk as jest.Mock).mockResolvedValue(initialAward);
       (ParticipantAwardMock.count as jest.Mock).mockResolvedValue(5);

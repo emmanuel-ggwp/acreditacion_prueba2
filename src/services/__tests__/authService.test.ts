@@ -129,27 +129,55 @@ describe('AuthService', () => {
   });
 
   describe('refreshAccessToken', () => {
-    it('should return a new access token for a valid refresh token', async () => {
+    it('should rotate tokens for a valid refresh token', async () => {
       const refreshToken = 'valid-refresh-token';
       const user = { id: 'user-1', role: 'ADMIN', username: 'test', email: 'test@test.com' };
       const refreshTokenPayload = { id: user.id, exp: Date.now() / 1000 + 3600 };
-      const newAccessToken = { accessToken: 'new-access-token' };
+      const newTokens = { accessToken: 'new-access-token', refreshToken: 'new-refresh-token' };
 
+      // La fila del token existe, no está revocada y no ha expirado.
+      const existingToken = {
+        token: refreshToken,
+        isRevoked: false,
+        expiresAt: addDays(new Date(), 30),
+        update: jest.fn().mockResolvedValue(undefined),
+      };
+      RefreshTokenMock.findOne.mockResolvedValue(existingToken as any);
       verifyRefreshTokenMock.mockReturnValue(refreshTokenPayload);
       UserMock.findByPk.mockResolvedValue({ ...user, isActive: true } as any);
-      generateTokensMock.mockReturnValue(newAccessToken);
+      generateTokensMock.mockReturnValue(newTokens);
+      RefreshTokenMock.create.mockResolvedValue({ token: newTokens.refreshToken } as any);
 
       const result = await authService.refreshAccessToken(refreshToken);
 
+      expect(RefreshTokenMock.findOne).toHaveBeenCalledWith({ where: { token: refreshToken } });
       expect(verifyRefreshToken).toHaveBeenCalledWith(refreshToken);
       expect(UserMock.findByPk).toHaveBeenCalledWith(user.id);
-      expect(generateTokens).toHaveBeenCalledWith({ id: user.id, role: user.role, username: user.username, email: user.email });
-      expect(result).toEqual(newAccessToken);
+      // Se invalida el token anterior (rotación) y se emite uno nuevo.
+      expect(existingToken.update).toHaveBeenCalledWith({ isRevoked: true });
+      expect(generateTokens).toHaveBeenCalledWith({ id: user.id, role: user.role, email: user.email, username: user.username });
+      expect(RefreshTokenMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({ token: newTokens.refreshToken, userId: user.id })
+      );
+      expect(result).toEqual(newTokens);
     });
 
-    it('should throw an error for an invalid refresh token', async () => {
-      verifyRefreshTokenMock.mockReturnValue(null);
-      await expect(authService.refreshAccessToken('invalid-token')).rejects.toThrow('Invalid or expired refresh token');
+    it('should throw if the refresh token is not found or revoked', async () => {
+      RefreshTokenMock.findOne.mockResolvedValue(null);
+      await expect(authService.refreshAccessToken('missing-token')).rejects.toThrow('Invalid or revoked refresh token');
+    });
+
+    it('should revoke and throw for an expired refresh token', async () => {
+      const expiredToken = {
+        token: 'expired-token',
+        isRevoked: false,
+        expiresAt: addDays(new Date(), -1),
+        update: jest.fn().mockResolvedValue(undefined),
+      };
+      RefreshTokenMock.findOne.mockResolvedValue(expiredToken as any);
+
+      await expect(authService.refreshAccessToken('expired-token')).rejects.toThrow('Expired refresh token');
+      expect(expiredToken.update).toHaveBeenCalledWith({ isRevoked: true });
     });
   });
 
