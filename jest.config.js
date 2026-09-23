@@ -17,16 +17,16 @@ module.exports = {
     'src/services/**/*.ts',
     'src/app/api/**/*.ts',
   ],
-  // Umbral tipo "ratchet": refleja la cobertura REAL actual (no una meta inalcanzable).
-  // `npm test` queda en verde mientras no BAJE la cobertura, y se sube conforme se
-  // agregan pruebas. Hoy los servicios están ~88% y faltan las rutas API (que arrastran
-  // el global hacia abajo); al cubrir las rutas se sube este piso hacia el 80% global.
+  // Umbral tipo "ratchet": refleja la cobertura REAL (servicios + rutas API cubiertos).
+  // Statements/lines/functions superan el 80% original; branches queda ~78%. El piso se
+  // fija un poco por debajo de lo alcanzado para que `npm test` no falle por variaciones
+  // menores, y avise si la cobertura BAJA. Súbelo al agregar más pruebas.
   coverageThreshold: {
     global: {
-      branches: 50,
-      functions: 47,
-      lines: 46,
-      statements: 45,
+      branches: 75,
+      functions: 85,
+      lines: 88,
+      statements: 88,
     },
   },
 };
