@@ -580,7 +580,15 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
             </div>
           ))}
           {stt.news.length < maxGuests && (
-            <button type="button" onClick={() => addGuestFor(sid)} className="text-sm underline text-white/90 hover:text-white">+ Agregar {guestTermSingular.toLowerCase()}</button>
+            <button
+              type="button"
+              onClick={() => addGuestFor(sid)}
+              className="mt-1 inline-flex w-full sm:w-auto items-center justify-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold text-white border transition hover:brightness-110"
+              style={{ backgroundColor: hexToRgba(buttonColor, 0.22), borderColor: hexToRgba(buttonColor, 0.85) }}
+            >
+              <span className="text-lg leading-none">＋</span>
+              Agregar {guestTermSingular.toLowerCase()}
+            </button>
           )}
         </div>
       </div>
