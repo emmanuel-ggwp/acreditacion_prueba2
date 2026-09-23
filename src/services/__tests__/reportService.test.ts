@@ -1,22 +1,7 @@
-// jest.setup.js mockea @/lib/sequelize como módulo VIRTUAL (keyed por el string "@/lib/sequelize").
-// Pero reportService.ts lo importa por ruta RELATIVA ('../lib/sequelize'), que se resuelve al
-// archivo real y NO al mock virtual, por lo que la suite ni siquiera cargaría (el módulo real
-// revienta sin BD). Por eso mockeamos aquí la MISMA ruta resuelta (src/lib/sequelize) para que
-// tanto el servicio como este test compartan exactamente la misma instancia mockeada.
-jest.mock('../../lib/sequelize', () => ({
-  sequelize: {
-    query: jest.fn(),
-    literal: jest.fn((v) => v),
-    fn: jest.fn(),
-    col: jest.fn(),
-    where: jest.fn(),
-    transaction: jest.fn(),
-    getQueryInterface: jest.fn(() => ({})),
-  },
-}));
-
+// reportService importa `sequelize` desde `@/lib/sequelize`, que jest.setup.js mockea
+// globalmente. Importamos la MISMA instancia mockeada para configurar `sequelize.query`.
 import { ReportService, reportService } from '../reportService';
-import { sequelize } from '../../lib/sequelize';
+import { sequelize } from '@/lib/sequelize';
 import {
   Event,
   EventSchedule,

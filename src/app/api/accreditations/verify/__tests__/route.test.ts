@@ -56,15 +56,15 @@ describe('POST /api/accreditations/verify', () => {
     expect(res.status).toBe(200);
   });
 
-  it('devuelve 400 cuando el cuerpo no pasa la validación zod', async () => {
+  it('devuelve 400 con el detalle de errores cuando el cuerpo no pasa la validación zod', async () => {
     const res = await (POST as any)(makeRequest({ type: 'invalid', id: 'not-a-guid', scheduleId: GUID_B }));
     const body = await res.json();
 
     expect(res.status).toBe(400);
     expect(body.message).toBe('Validation failed');
-    // La ruta usa `error.errors` (alias de zod v3); en zod v4 es undefined y se omite
-    // del JSON, así que el cuerpo solo trae `message`. Se comprueba el comportamiento real.
-    expect(body.errors).toBeUndefined();
+    // La ruta usa `error.issues` (zod v4): el 400 incluye el detalle de validación.
+    expect(Array.isArray(body.errors)).toBe(true);
+    expect(body.errors.length).toBeGreaterThan(0);
     expect(mockedService.verifyAccreditation).not.toHaveBeenCalled();
   });
 

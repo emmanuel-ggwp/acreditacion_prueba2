@@ -1,7 +1,7 @@
 import { Op, fn, col, literal, Sequelize, QueryTypes } from 'sequelize';
 import { startOfHour, endOfHour, eachHourOfInterval, format, startOfDay, endOfDay, subMinutes } from 'date-fns';
 import { stringify } from 'csv-stringify/sync';
-import { sequelize } from '../lib/sequelize';
+import { sequelize } from '@/lib/sequelize';
 
 import { 
   Event, 
