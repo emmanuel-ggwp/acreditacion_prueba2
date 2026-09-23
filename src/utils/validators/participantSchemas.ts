@@ -1,17 +1,13 @@
 
 import { z } from 'zod';
 
-// Validadores de campos de participante (teléfono, documento). Antes vivían en
-// `userSchemas.ts`, que se eliminó al unificar los esquemas de auth (SB-31); este
-// es su único consumidor, así que se trajeron aquí.
-const documentNumberRegex = /^[a-zA-Z0-9-]{5,20}$/;
-
+// Validadores de campos de participante (teléfono). Antes vivían en `userSchemas.ts`,
+// que se eliminó al unificar los esquemas de auth (SB-31); este es su único consumidor.
 const customValidators = {
   // Teléfono SIN formato estricto: antes un regex rígido rechazaba números válidos
   // (p. ej. el celular chileno de 9 dígitos "926417843"). Ahora es texto libre acotado,
   // igual que en la landing pública; el teléfono nunca bloquea al guardar.
   phone: z.string().trim().max(40),
-  documentNumber: z.string().regex(documentNumberRegex, 'Formato de número de documento inválido'),
 };
 
 export const participantSchema = z.object({
@@ -19,9 +15,16 @@ export const participantSchema = z.object({
   eventId: z.guid().optional(),
   firstName: z.string().min(2, 'El nombre debe tener al menos 2 caracteres'),
   lastName: z.string().min(2, 'El apellido debe tener al menos 2 caracteres'),
-  email: z.string().email('Correo electrónico inválido'),
+  // Correo OPCIONAL: su obligatoriedad la decide cada evento (formFields.email) y la
+  // refuerza el formulario, no el esquema base. Acepta correo válido, vacío o ausente/nulo
+  // —igual que el registro público—. Antes era obligatorio y rechazaba guardar/editar un
+  // participante sin correo.
+  email: z.union([z.string().trim().max(200).email('Correo electrónico inválido'), z.literal(''), z.null()]).optional(),
   phone: customValidators.phone.optional().nullable(),
-  documentNumber: customValidators.documentNumber.optional().nullable(),
+  // Documento (RUT) SIN formato estricto: antes el regex `[a-zA-Z0-9-]{5,20}` rechazaba
+  // RUTs con puntos (12.345.678-9) o cortos, así que no se podía crear/editar un
+  // participante con esos valores. Texto libre acotado, igual que invitados y público.
+  documentNumber: z.string().trim().max(40).optional().nullable(),
   company: z.string().optional().nullable(),
   position: z.string().optional().nullable(),
   numeroSap: z.string().optional().nullable(),
