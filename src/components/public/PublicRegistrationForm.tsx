@@ -742,7 +742,7 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
               <div key={sid} className="rounded-md border border-gray-200 p-3 space-y-3">
                 <p className="text-sm font-semibold text-gray-800">
                   {s.label || s.scheduleName}
-                  <span className="text-xs font-normal text-gray-400"> · {new Date(s.startDateTime).toLocaleDateString('es-CL')}</span>
+                  <span className="text-xs font-normal text-gray-400"> · {new Date(s.startDateTime).toLocaleDateString('es-CL', { timeZone: 'America/Santiago' })}</span>
                 </p>
 
                 {cargas.length > 0 && (
@@ -847,7 +847,7 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
           {allSchedules.length === 1 ? (
             <div className="rounded-md border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700 flex items-center gap-2">
               <Calendar className="h-4 w-4 text-gray-400 flex-shrink-0" />
-              <span>{(allSchedules[0].label || allSchedules[0].scheduleName)} · {new Date(allSchedules[0].startDateTime).toLocaleString()}</span>
+              <span>{(allSchedules[0].label || allSchedules[0].scheduleName)} · {new Date(allSchedules[0].startDateTime).toLocaleString('es-CL', { timeZone: 'America/Santiago', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
             </div>
           ) : (
             <button
