@@ -1,116 +1,46 @@
 // jest.setup.js
-const { Sequelize } = require('sequelize');
+//
+// Los servicios importan modelos (directo o vía @/models/index, que además registra
+// asociaciones). Para que las suites CARGUEN sin una BD real, se mockean TODOS los modelos
+// con una fábrica común: métodos de consulta como jest.fn() (que cada test configura) +
+// asociaciones no-op (belongsTo/hasMany/... ) para que las llamadas de models/index no
+// revienten sobre clases sin inicializar. Antes la lista de mocks estaba incompleta
+// (faltaban ParticipantSchedule, GuestSchedule, EmailTemplate, AuditLog, Gift*), así que
+// cualquier suite que tocara un modelo no mockeado fallaba al importar (getQueryInterface /
+// null.replace). Un solo lugar para todos evita que se vuelva a desincronizar.
 
-// Mock the sequelize instance from the correct path
+// Instancia de sequelize mockeada (los servicios usan sequelize.transaction, etc.).
 jest.mock('@/lib/sequelize', () => ({
   sequelize: {
     transaction: jest.fn(),
     define: jest.fn().mockReturnThis(),
     sync: jest.fn(),
     query: jest.fn(),
+    literal: jest.fn((v) => v),
+    fn: jest.fn(),
+    col: jest.fn(),
+    where: jest.fn(),
+    getQueryInterface: jest.fn(() => ({})),
   },
 }), { virtual: true });
 
-// Mock individual models to prevent them from being registered with Sequelize's connection manager
-// while still allowing their static methods to be mocked in tests.
-jest.mock('./src/models/User', () => {
+// Fábrica de modelo mockeado: estáticos de consulta + asociaciones no-op.
+const makeMockModel = () => {
   const { Model } = require('sequelize');
-  class User extends Model {
-    static findOne = jest.fn();
-    static findByPk = jest.fn();
-    static findAll = jest.fn();
-    static create = jest.fn();
-    static update = jest.fn();
-    static destroy = jest.fn();
-    static scope = jest.fn(() => User);
-  }
-  return User;
-});
+  class MockModel extends Model {}
+  ['findOne', 'findByPk', 'findAll', 'findAndCountAll', 'count', 'create', 'bulkCreate', 'update', 'destroy', 'max', 'min', 'sum', 'increment']
+    .forEach((m) => { MockModel[m] = jest.fn(); });
+  MockModel.scope = jest.fn(() => MockModel);
+  // Asociaciones: no-op para que models/index no falle al registrarlas sobre el mock.
+  ['belongsTo', 'hasOne', 'hasMany', 'belongsToMany', 'addScope', 'init', 'sync']
+    .forEach((m) => { MockModel[m] = jest.fn(); });
+  return MockModel;
+};
 
-jest.mock('./src/models/RefreshToken', () => {
-  const { Model } = require('sequelize');
-  class RefreshToken extends Model {
-      static findOne = jest.fn();
-      static create = jest.fn();
-      static update = jest.fn();
-  }
-  return RefreshToken;
-});
-
-// Mock other models that might be pulled in as dependencies
-jest.mock('./src/models/Event', () => {
-    const { Model } = require('sequelize');
-    class Event extends Model {
-        static findOne = jest.fn();
-        static findByPk = jest.fn();
-        static findAll = jest.fn();
-        static findAndCountAll = jest.fn();
-        static create = jest.fn();
-        static update = jest.fn();
-        static destroy = jest.fn();
-        static scope = jest.fn(() => Event);
-    }
-    return Event;
-});
-
-jest.mock('./src/models/Participant', () => {
-    const { Model } = require('sequelize');
-    class Participant extends Model {
-        static findByPk = jest.fn();
-        static count = jest.fn();
-    }
-    return Participant;
-});
-
-jest.mock('./src/models/Accreditation', () => {
-    const { Model } = require('sequelize');
-    class Accreditation extends Model {
-        static findByPk = jest.fn();
-        static findAll = jest.fn();
-        static findAndCountAll = jest.fn();
-        static count = jest.fn();
-        static findOne = jest.fn();
-        static create = jest.fn();
-    }
-    return Accreditation;
-});
-
-jest.mock('./src/models/Award', () => {
-    const { Model } = require('sequelize');
-    class Award extends Model {
-        static findByPk = jest.fn();
-        static findAll = jest.fn();
-        static create = jest.fn();
-        static destroy = jest.fn();
-    }
-    return Award;
-});
-
-jest.mock('./src/models/ParticipantAward', () => {
-    const { Model } = require('sequelize');
-    class ParticipantAward extends Model {
-        static findByPk = jest.fn();
-        static findAll = jest.fn();
-        static count = jest.fn();
-        static create = jest.fn();
-        static destroy = jest.fn();
-    }
-    return ParticipantAward;
-});
-
-jest.mock('./src/models/Guest', () => {
-    const { Model } = require('sequelize');
-    class Guest extends Model {
-        static findByPk = jest.fn();
-    }
-    return Guest;
-});
-
-jest.mock('./src/models/EventSchedule', () => {
-    const { Model } = require('sequelize');
-    class EventSchedule extends Model {
-        static findByPk = jest.fn();
-        static findAll = jest.fn();
-    }
-    return EventSchedule;
+[
+  'User', 'RefreshToken', 'Event', 'EventSchedule', 'Participant', 'ParticipantSchedule',
+  'Guest', 'GuestSchedule', 'Award', 'ParticipantAward', 'Accreditation', 'AuditLog',
+  'EmailTemplate', 'GiftCampaign', 'GiftType', 'GiftEmployee', 'GiftDelivery',
+].forEach((name) => {
+  jest.mock(`./src/models/${name}`, () => makeMockModel());
 });
