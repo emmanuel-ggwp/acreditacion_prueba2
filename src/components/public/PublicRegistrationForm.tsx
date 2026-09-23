@@ -9,6 +9,7 @@ import { getFormFields, guestDietaryEnabled, getGuestMode, getGuestFields } from
 import { getDietaryOptions, isFreeTextDiet, dietaryFull, ensureDietOption, DIET_COMMENTS_MAX, GUEST_DIET_DETAIL_MAX } from '@/utils/dietary';
 import { sendConfirmationEmail } from '@/lib/emailjs';
 import { buildGuestSummary, buildAttendanceDetail } from '@/utils/guests';
+import { hexToRgba } from '@/utils/color';
 import DateSelectModal from '@/components/public/DateSelectModal';
 import CustomQuestionFields from '@/components/public/CustomQuestionFields';
 import { getCustomQuestions, initCustomAnswers, missingRequiredCustom, type CustomAnswers } from '@/utils/customQuestions';
@@ -120,6 +121,32 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
     const cur = st[sid] || { cargas: [], news: [] };
     return { ...st, [sid]: { ...cur, news: cur.news.filter((_, idx) => idx !== i) } };
   });
+
+  // Controles numéricos con aspecto de botón (consistente con la plantilla Gala).
+  const stepper = (value: number, onChange: (n: number) => void, min: number, max: number) => {
+    const cls = 'h-10 w-10 flex-shrink-0 rounded-full border-2 flex items-center justify-center text-xl leading-none font-semibold transition hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed';
+    const st = { borderColor: btnColor, color: btnColor };
+    return (
+      <div className="inline-flex items-center gap-4">
+        <button type="button" onClick={() => onChange(Math.max(min, value - 1))} disabled={value <= min} className={cls} style={st} aria-label="Quitar uno">−</button>
+        <span className="min-w-[2.5rem] text-center text-2xl font-bold text-gray-800 tabular-nums">{value}</span>
+        <button type="button" onClick={() => onChange(Math.min(max, value + 1))} disabled={value >= max} className={cls} style={st} aria-label="Agregar uno">＋</button>
+      </div>
+    );
+  };
+  const toggleCard = (checked: boolean, onChange: (b: boolean) => void, label: string) => (
+    <button
+      type="button"
+      onClick={() => onChange(!checked)}
+      aria-pressed={checked}
+      className="w-full sm:w-auto inline-flex items-center gap-3 rounded-xl px-4 py-3 border-2 transition text-left"
+      style={checked ? { borderColor: btnColor, backgroundColor: hexToRgba(btnColor, 0.08) } : { borderColor: '#e5e7eb', backgroundColor: '#fff' }}
+    >
+      <span className="flex-shrink-0 h-5 w-5 rounded border-2 flex items-center justify-center text-white text-xs leading-none"
+        style={{ borderColor: checked ? btnColor : '#d1d5db', backgroundColor: checked ? btnColor : 'transparent' }}>{checked ? '✓' : ''}</span>
+      <span className="text-sm font-semibold text-gray-800">{label}</span>
+    </button>
+  );
 
   const {
     register,
@@ -772,7 +799,14 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
                   </div>
                   {/* El cupo lo consumen los invitados NUEVOS; las cargas del organizador no (D1.2). */}
                   {stt.news.length < maxGuests && (
-                    <button type="button" onClick={() => addDateGuest(sid)} className="mt-2 text-sm font-medium" style={{ color: primary }}>+ Agregar invitado</button>
+                    <button
+                      type="button"
+                      onClick={() => addDateGuest(sid)}
+                      className="mt-2 inline-flex w-full sm:w-auto items-center justify-center gap-2 rounded-lg border-2 px-4 py-2.5 text-sm font-semibold transition hover:bg-gray-50"
+                      style={{ borderColor: btnColor, color: btnColor }}
+                    >
+                      <span className="text-base leading-none">＋</span> Agregar invitado
+                    </button>
                   )}
                 </div>
               </div>
@@ -787,15 +821,7 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
           <label htmlFor="guestCount" className="block text-sm font-medium text-gray-700 mb-2">
             ¿Cuántos invitados llevas? <span className="text-gray-400 font-normal">(hasta {maxGuests})</span>
           </label>
-          <input
-            id="guestCount"
-            type="number"
-            min={0}
-            max={maxGuests}
-            value={countGuests}
-            onChange={(e) => setCountGuests(Math.max(0, Math.min(maxGuests, parseInt(e.target.value, 10) || 0)))}
-            className="block w-full sm:w-40 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-          />
+          {stepper(countGuests, (n) => setCountGuests(Math.max(0, Math.min(maxGuests, n))), 0, maxGuests)}
         </div>
       )}
 
@@ -805,26 +831,10 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
           <label className="block text-sm font-medium text-gray-700">
             Invitados <span className="text-gray-400 font-normal">(hasta {maxGuests} en total)</span>
           </label>
-          <label className="flex items-center gap-2 text-sm text-gray-700">
-            <input
-              type="checkbox"
-              checked={companion}
-              onChange={(e) => setCompanion(e.target.checked)}
-              className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-            />
-            Voy con acompañante
-          </label>
+          {toggleCard(companion, setCompanion, 'Voy con acompañante')}
           <div>
-            <label htmlFor="guestLoads" className="block text-sm text-gray-700 mb-1">Número de cargas</label>
-            <input
-              id="guestLoads"
-              type="number"
-              min={0}
-              max={Math.max(0, maxGuests - (companion ? 1 : 0))}
-              value={loads}
-              onChange={(e) => setLoads(Math.max(0, Math.min(Math.max(0, maxGuests - (companion ? 1 : 0)), parseInt(e.target.value, 10) || 0)))}
-              className="block w-full sm:w-40 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-            />
+            <label className="block text-sm text-gray-700 mb-1">Número de cargas</label>
+            {stepper(loads, (n) => setLoads(Math.max(0, Math.min(Math.max(0, maxGuests - (companion ? 1 : 0)), n))), 0, Math.max(0, maxGuests - (companion ? 1 : 0)))}
           </div>
           <p className="text-xs text-gray-500">Total de invitados: {(companion ? 1 : 0) + loads}</p>
         </div>
