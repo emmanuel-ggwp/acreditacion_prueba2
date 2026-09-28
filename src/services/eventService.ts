@@ -1,3 +1,12 @@
+/**
+ * Servicio de eventos (Event), la entidad raíz de la aplicación.
+ *
+ * Responsable del CRUD de eventos, la generación de slugs públicos únicos, el borrado en cascada
+ * dentro de una transacción (horarios, inscripciones, invitados, premios y acreditaciones), el
+ * listado paginado con filtros y orden según el estado de los horarios, y la actualización
+ * automática por tiempo del estado de los horarios (published → accrediting → accredited). Toda
+ * operación de escritura registra auditoría.
+ */
 import { z } from 'zod';
 import { Op, fn, col, literal } from 'sequelize';
 import { sequelize } from '@/lib/sequelize';
@@ -15,7 +24,20 @@ import { slugify } from '@/utils/formatters';
 import { AuditLog } from '../models';
 import { auditLogService } from './auditLogService';
 
+/**
+ * Lógica de negocio para crear, editar, eliminar (en cascada), consultar y listar eventos, además
+ * de gestionar sus slugs públicos y refrescar por tiempo el estado de sus horarios.
+ */
 export class EventService {
+  /**
+   * Valida y crea un evento. Si es público y no trae slug, genera uno único a partir del nombre
+   * (considerando incluso los eventos soft-deleted, cuyo slug sigue reservado por el índice UNIQUE).
+   *
+   * @param data - Datos del evento; se validan con `createEventSchema`.
+   * @param userId - ID del usuario creador (queda en `createdBy` y en la auditoría, acción `CREATE`).
+   * @returns El evento (`Event`) creado.
+   * @throws {z.ZodError} Si `data` no cumple `createEventSchema`.
+   */
   async createEvent(data: z.infer<typeof createEventSchema>, userId: string) {
     const validatedData = createEventSchema.parse(data);
     
@@ -38,6 +60,17 @@ export class EventService {
     return event;
   }
 
+  /**
+   * Valida y actualiza un evento. Si tras el cambio queda público y el slug está vacío o ausente,
+   * genera uno único (excluyendo el propio evento e incluyendo soft-deleted). Registra los cambios.
+   *
+   * @param eventId - ID del evento a actualizar.
+   * @param data - Campos a modificar; se validan con `updateEventSchema`.
+   * @param userId - ID del usuario que edita; si viene y hubo cambios reales, se registra en auditoría (acción `UPDATE`).
+   * @returns El evento (`Event`) actualizado.
+   * @throws {z.ZodError} Si `data` no cumple `updateEventSchema`.
+   * @throws {Error} `'Event not found'` si el evento no existe.
+   */
   async updateEvent(eventId: string, data: z.infer<typeof updateEventSchema>, userId?: string) {
     const validatedData = updateEventSchema.parse(data);
     const event = await Event.findByPk(eventId);
@@ -86,6 +119,14 @@ export class EventService {
   // Resumen de TODO lo que se eliminará al borrar el evento (para la confirmación en la
   // interfaz). Cuenta lo visible/vivo, que es lo que el usuario reconoce; deleteEvent
   // además limpia por dentro los registros ya soft-deleted.
+  /**
+   * Cuenta lo que se eliminaría al borrar el evento (horarios, participantes, invitados, premios y
+   * acreditaciones), considerando lo vivo/visible, para la confirmación en la interfaz.
+   *
+   * @param eventId - ID del evento a resumir.
+   * @returns Objeto con `eventName` y los conteos `schedules`, `participants`, `guests`, `awards`, `accreditations`.
+   * @throws {Error} `'Event not found'` si el evento no existe.
+   */
   async getDeletionSummary(eventId: string) {
     const event = await Event.findByPk(eventId);
     if (!event) {
@@ -112,6 +153,19 @@ export class EventService {
     };
   }
 
+  /**
+   * Elimina un evento en cascada dentro de una transacción: borra de verdad (force) sus
+   * acreditaciones, premios asignados, inscripciones (join), invitados, participantes, premios y
+   * horarios, respetando el orden de las FKs; el evento queda como soft-delete (recuperable y con su
+   * slug reservado). Si algo falla, revierte toda la transacción.
+   *
+   * @param eventId - ID del evento a eliminar.
+   * @param userId - ID del usuario que elimina; si viene, se registra en auditoría (acción `DELETE`).
+   * @param reason - Motivo opcional de la eliminación (queda en el detalle de auditoría).
+   * @returns Objeto `{ message: 'Event deleted successfully' }`.
+   * @throws {Error} `'Event not found'` si el evento no existe.
+   * @throws {Error} Propaga cualquier error de la transacción de borrado (tras hacer rollback).
+   */
   async deleteEvent(eventId: string, userId?: string, reason?: string) {
     const event = await Event.findByPk(eventId);
     if (!event) {
@@ -182,6 +236,16 @@ export class EventService {
     return { message: 'Event deleted successfully' };
   }
 
+  /**
+   * Obtiene un evento por su ID, refrescando antes por tiempo el estado de sus horarios.
+   * Opcionalmente incluye los horarios ordenados por estado (accrediting, published, accredited,
+   * resto) y luego por fecha de inicio.
+   *
+   * @param eventId - ID del evento a buscar.
+   * @param includeSchedules - Si es `true`, incluye la asociación `schedules` ordenada. Por defecto `false`.
+   * @returns El evento (`Event`) encontrado.
+   * @throws {Error} `'Event not found'` si el evento no existe.
+   */
   async getEventById(eventId: string, includeSchedules = false) {
     // Update schedule statuses based on time
     await this._updateScheduleStatuses(eventId);
@@ -212,8 +276,20 @@ export class EventService {
     return event;
   }
 
-  async getAllEvents(filters: { 
-    isActive?: boolean; 
+  /**
+   * Lista eventos con paginación, búsqueda, filtro por estado de sus horarios y orden configurable.
+   * Refresca antes por tiempo el estado de todos los horarios y agrega a cada evento el conteo de
+   * participantes distintos (`participantCount`). Por defecto ordena priorizando los horarios en
+   * acreditación, luego los publicados más próximos, luego los acreditados recientes y, por último,
+   * por fecha de creación.
+   *
+   * @param filters - Filtros y opciones: `isActive`, `createdBy`, `page` (def. 1), `limit` (def. 10),
+   *   `search` (nombre/descripción/ubicación), `sortBy`/`sortOrder` (def. `DESC`), `includeSchedules`,
+   *   y `filter` (`all | accredited | accrediting | upcoming | cancelled`).
+   * @returns Objeto `{ events, total, page, limit }` con los eventos de la página y el total.
+   */
+  async getAllEvents(filters: {
+    isActive?: boolean;
     createdBy?: string; 
     page?: number; 
     limit?: number;
@@ -367,6 +443,13 @@ export class EventService {
     return { events: rows, total: count, page, limit };
   }
 
+  /**
+   * Devuelve los horarios de un evento ordenados por estado (accrediting, published, accredited,
+   * resto) y luego por fecha de inicio.
+   *
+   * @param eventId - ID del evento cuyos horarios se listan.
+   * @returns Arreglo de horarios (`EventSchedule`) del evento.
+   */
   async getSchedulesForEvent(eventId: string) {
     const schedules = await EventSchedule.findAll({ 
       where: { eventId },
@@ -384,10 +467,26 @@ export class EventService {
   }
 
   // Wrapper público para refrescar los estados de horarios (published→accrediting→accredited por tiempo).
+  /**
+   * Wrapper público para refrescar por tiempo el estado de los horarios (published → accrediting →
+   * accredited). Delega en el método privado interno.
+   *
+   * @param eventId - ID del evento a refrescar; si se omite, refresca todos los eventos.
+   * @returns Promesa que se resuelve cuando termina la actualización.
+   */
   async refreshScheduleStatuses(eventId?: string) {
     return this._updateScheduleStatuses(eventId);
   }
 
+  /**
+   * (Privado) Actualiza por tiempo el estado de los horarios: `published` → `accrediting` al llegar
+   * el inicio, y `accrediting` → `accredited` al pasar el término. Sin `eventId` opera sobre todos
+   * los eventos, pero se auto-limita a lo sumo una vez cada 5 minutos mediante un registro de
+   * auditoría `SYSTEM-BULK-UPDATE`, que crea al terminar.
+   *
+   * @param eventId - ID del evento a actualizar; si se omite, actualiza todos (con el límite de 5 min).
+   * @returns Promesa que se resuelve cuando termina la actualización.
+   */
   private async _updateScheduleStatuses(eventId?: string) {
     const now = new Date();
 

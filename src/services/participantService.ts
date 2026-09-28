@@ -1,4 +1,13 @@
 
+/**
+ * Servicio de participantes (Participant) de un evento.
+ *
+ * Responsable del ciclo completo del padrón: creación individual, carga masiva e importación desde
+ * Excel/CSV (con deduplicación por RUT normalizado o correo), edición, inscripción por fecha, paso a
+ * "precargado", borrado en cascada (individual y masivo) y consultas/listados con filtros. El RUT se
+ * compara siempre normalizado (sin puntos, guion ni espacios) para no depender del formato guardado.
+ * Las operaciones que tocan varias tablas usan transacción; toda escritura registra auditoría.
+ */
 import { z } from 'zod';
 import { Op, fn, col, where as sqlWhere } from 'sequelize';
 import { sequelize } from '@/lib/sequelize';
@@ -26,7 +35,25 @@ import { auditLogService } from './auditLogService';
 const normalizedRutCol = (column = 'document_number') =>
   fn('UPPER', fn('REPLACE', fn('REPLACE', fn('REPLACE', col(column), '.', ''), '-', ''), ' ', ''));
 
+/**
+ * Lógica de negocio para crear, importar, editar, inscribir, eliminar y consultar los participantes
+ * de un evento y sus invitados asociados, con deduplicación por RUT/correo y registro de auditoría.
+ */
 export class ParticipantService {
+  /**
+   * Valida y crea (o reutiliza) un participante de un evento y lo inscribe en los horarios indicados.
+   * El evento se determina por los horarios (`scheduleIds`) o por `eventId` (precarga sin fecha). Si ya
+   * existe en ESE evento por correo o documento, se reutiliza en vez de duplicar. Solo registra auditoría
+   * si se crea uno nuevo.
+   *
+   * @param data - Datos del participante (incluye `scheduleIds`/`eventId`); se validan con `createParticipantSchema`.
+   * @param createdBy - ID del usuario creador (queda en `createdBy` y en la auditoría, acción `CREATE`).
+   * @returns El participante (`Participant`) creado o reutilizado, ya inscrito en los horarios dados.
+   * @throws {z.ZodError} Si `data` no cumple `createParticipantSchema`.
+   * @throws {Error} `'One or more schedules not found'` si algún `scheduleId` no existe.
+   * @throws {Error} `'Se requiere el evento (eventId) o al menos un horario.'` si no se puede determinar el evento.
+   * @throws {Error} `'Number of allowed guests exceeds the event limit of N'` si `allowedGuests` supera el máximo del evento.
+   */
   async createParticipant(data: z.infer<typeof createParticipantSchema>, createdBy: string) {
     const validatedData = createParticipantSchema.parse(data);
     const { scheduleIds = [], eventId, ...participantData } = validatedData as any;
@@ -81,6 +108,19 @@ export class ParticipantService {
     return participant;
   }
 
+  /**
+   * Crea varios participantes en un evento y los inscribe en TODOS los horarios activos del evento.
+   * Procesa fila por fila en su propia transacción (un error no aborta el resto) y reutiliza por correo
+   * dentro del evento en vez de duplicar.
+   *
+   * @param participantsData - Lista de participantes; se valida con `bulkCreateParticipantSchema`.
+   * @param eventId - ID del evento al que se agregan.
+   * @param createdBy - ID del usuario creador (queda en `createdBy`).
+   * @returns `{ created, errors }`: nº de creados y detalle de las filas con error.
+   * @throws {z.ZodError} Si `participantsData` no cumple `bulkCreateParticipantSchema`.
+   * @throws {Error} `'Event not found'` si el evento no existe.
+   * @throws {Error} `'No active schedules found for this event to assign participants to.'` si el evento no tiene horarios activos.
+   */
   async bulkCreateParticipants(participantsData: z.infer<typeof bulkCreateParticipantSchema>, eventId: string, createdBy: string) {
     // For bulk create, we assume we are adding them to ALL active schedules of the event, 
     // or we need to change the input to include scheduleIds.
@@ -132,6 +172,20 @@ export class ParticipantService {
    * Si se entrega scheduleId, los participantes quedan "inscritos" a esa fecha;
    * si no, quedan "precargados" (se inscriben luego por la landing).
    * Cada fila trae: datos del participante + `guests` (invitados individuales).
+   *
+   * Cada fila corre en su propia transacción (un error no aborta el resto). Deduplica por RUT
+   * normalizado o correo; el RUT, si viene, debe ser válido. Con `overwriteNames` corrige solo nombre y
+   * apellido de los ya existentes (salvo acreditados/premiados, protegidos salvo `includeProtected`).
+   * Descarta nombres de invitado basura y evita invitados duplicados. Registra un resumen en auditoría.
+   *
+   * @param eventId - ID del evento al que se importan las filas.
+   * @param scheduleId - ID de la fecha para inscribir; `null` deja a los participantes precargados.
+   * @param rows - Filas ya mapeadas (datos del participante + `guests`).
+   * @param createdBy - ID del usuario que ejecuta la importación (queda en `createdBy` y en la auditoría).
+   * @param opts - Opciones: `overwriteNames` (sobrescribe solo nombre/apellido) e `includeProtected` (incluye acreditados/premiados).
+   * @returns Objeto con contadores: `created`, `reused`, `namesUpdated`, `namesProtected`, `guestsCreated`, `guestsDiscarded` y `errors` (detalle por fila).
+   * @throws {Error} `'Event not found'` si el evento no existe.
+   * @throws {Error} `'Schedule not found for this event'` si se pasa `scheduleId` y no pertenece al evento.
    */
   async importParticipants(
     eventId: string,
@@ -312,6 +366,18 @@ export class ParticipantService {
     return results;
   }
 
+  /**
+   * Valida y actualiza un participante. No permite moverlo de evento (`eventId` se descarta). Si se
+   * envían `scheduleIds`, fija sus fechas (solo del mismo evento) y limpia los enlaces por fecha de sus
+   * invitados a fechas que el participante ya no tiene, preservando los ya acreditados. Registra los cambios.
+   *
+   * @param participantId - ID del participante a actualizar.
+   * @param data - Campos a modificar (puede incluir `scheduleIds`); se validan con `updateParticipantSchema`.
+   * @param userId - ID del usuario que edita; si viene y hubo cambios reales, se registra en auditoría (acción `UPDATE`).
+   * @returns El participante (`Participant`) actualizado.
+   * @throws {z.ZodError} Si `data` no cumple `updateParticipantSchema`.
+   * @throws {Error} `'Participant not found'` si el participante no existe.
+   */
   async updateParticipant(participantId: string, data: z.infer<typeof updateParticipantSchema>, userId?: string) {
     const validatedData = updateParticipantSchema.parse(data);
     // `eventId` se descarta: un participante NO se mueve de evento por la API de
@@ -380,7 +446,13 @@ export class ParticipantService {
    * Vuelve un participante INSCRITO a estado "precargado" sin borrarlo. Deja el padrón
    * como lo dejó el organizador: sin fecha, sin acreditación y con las cargas precargadas
    * en estado precargado. Los acompañantes que la persona agregó al inscribirse
-   * (registrationSource PUBLIC_FORM) se eliminan, porque no eran parte de la precarga.
+   * (registrationSource PUBLIC_FORM) se eliminan, porque no eran parte de la precarga. Todo el
+   * proceso corre en una transacción.
+   *
+   * @param participantId - ID del participante a revertir a precargado.
+   * @param userId - ID del usuario que ejecuta la acción; si viene, se registra en auditoría (acción `UPDATE`).
+   * @returns Objeto `{ message: 'Participant reverted to preloaded' }`.
+   * @throws {Error} `'Participant not found'` si el participante no existe.
    */
   async revertToPreloaded(participantId: string, userId?: string) {
     const participant = await Participant.findByPk(participantId);
@@ -445,6 +517,17 @@ export class ParticipantService {
     return { message: 'Participant reverted to preloaded' };
   }
 
+  /**
+   * Elimina un participante y, en cascada dentro de una transacción, sus inscripciones (join) e
+   * invitados (borrado real). Solo si no tiene acreditaciones. Registra la eliminación en auditoría.
+   *
+   * @param participantId - ID del participante a eliminar.
+   * @param userId - ID del usuario que elimina; si viene, se registra en auditoría (acción `DELETE`).
+   * @param reason - Motivo opcional de la eliminación (queda en el detalle de auditoría).
+   * @returns Objeto `{ message: 'Participante e invitados eliminados correctamente' }`.
+   * @throws {Error} `'Cannot delete participant with existing accreditations.'` si el participante tiene acreditaciones.
+   * @throws {Error} `'Participant not found'` si el participante no existe.
+   */
   async deleteParticipant(participantId: string, userId?: string, reason?: string) {
     const accreditationCount = await Accreditation.count({ where: { participantId } });
     if (accreditationCount > 0) {
@@ -491,6 +574,16 @@ export class ParticipantService {
 
   // Elimina varios participantes (o todos los del evento) junto con sus invitados,
   // inscripciones y acreditaciones. Borrado definitivo, en una transacción.
+  /**
+   * Elimina varios participantes (o todos los del evento con `all`) junto con sus invitados,
+   * inscripciones y acreditaciones. Borrado definitivo dentro de una transacción. Registra auditoría.
+   *
+   * @param eventId - ID del evento cuyos participantes se eliminan.
+   * @param opts - `{ ids?, all? }`: lista de IDs a eliminar, o `all: true` para vaciar todo el evento.
+   * @param userId - ID del usuario que elimina; si viene, se registra en auditoría (acción `DELETE`).
+   * @returns `{ deleted, guestsDeleted }` con los conteos eliminados.
+   * @throws {Error} `'No hay participantes seleccionados.'` si `all` es falso y no se entregan `ids`.
+   */
   async bulkDeleteParticipants(eventId: string, opts: { ids?: string[]; all?: boolean }, userId?: string) {
     const tx = await sequelize.transaction();
     try {
@@ -540,6 +633,15 @@ export class ParticipantService {
    * índice único (participant_id, schedule_id), así que reinscribir en una fecha ya
    * asignada no duplica ni falla. Solo actúa sobre participantes y horarios del MISMO
    * evento (guardas por eventId), para no contaminar el cupo de otro evento.
+   *
+   * @param eventId - ID del evento (acota participantes y fechas a este evento).
+   * @param opts - `{ participantIds, scheduleIds }`: participantes y fechas a inscribir (se deduplican).
+   * @param userId - ID del usuario que ejecuta; si viene, se registra en auditoría (acción `UPDATE`).
+   * @returns `{ enrolled, schedules }`: nº de participantes inscritos y de fechas usadas.
+   * @throws {Error} `'No hay participantes seleccionados.'` si `participantIds` viene vacío.
+   * @throws {Error} `'Debes elegir al menos una fecha.'` si `scheduleIds` viene vacío.
+   * @throws {Error} `'Una o más fechas no pertenecen a este evento.'` si alguna fecha es de otro evento.
+   * @throws {Error} `'No hay participantes válidos para este evento.'` si ninguno de los IDs pertenece al evento.
    */
   async bulkEnrollParticipants(
     eventId: string,
@@ -596,7 +698,14 @@ export class ParticipantService {
    * (existente por id, o nuevo con nombre) fija su conjunto de fechas (GuestSchedule) dentro
    * de las fechas en las que el participante YA está inscrito. PRESERVA los enlaces
    * (invitado, fecha) que ya tengan una acreditación, para no romper check-ins hechos. Los
-   * invitados nuevos se crean con registrationSource MANUAL.
+   * invitados nuevos se crean con registrationSource MANUAL. Todo el proceso corre en una transacción.
+   *
+   * @param participantId - ID del participante titular de los invitados.
+   * @param guestsInput - Invitados a fijar: por `id` (existente) o `firstName` (nuevo), cada uno con sus `scheduleIds`.
+   * @param userId - ID del usuario que ejecuta; si viene, se registra en auditoría (acción `UPDATE`).
+   * @returns `{ ok: true, created }` con el nº de invitados nuevos creados.
+   * @throws {Error} `'Participant not found'` si el participante no existe.
+   * @throws {Error} `'El participante no está inscrito en ninguna fecha.'` si el participante no tiene fechas inscritas.
    */
   async setGuestDates(
     participantId: string,
@@ -661,6 +770,16 @@ export class ParticipantService {
     }
   }
 
+  /**
+   * Obtiene un participante por su ID, opcionalmente con sus invitados (y las fechas de cada invitado)
+   * y siempre con sus horarios inscritos (incluyendo la asistencia de la tabla puente).
+   *
+   * @param participantId - ID del participante a buscar.
+   * @param includeGuests - Si es `true`, incluye la asociación `guests` con sus fechas. Por defecto `false`.
+   * @param includeAwards - Reservado (actualmente sin efecto). Por defecto `false`.
+   * @returns El participante (`Participant`) con las asociaciones solicitadas.
+   * @throws {Error} `'Participant not found'` si el participante no existe.
+   */
   async getParticipant(participantId: string, includeGuests = false, includeAwards = false) {
     const include: any[] = [];
     if (includeGuests) {
@@ -681,6 +800,16 @@ export class ParticipantService {
     return participant;
   }
 
+  /**
+   * Lista los participantes de un evento (incluye precargados sin horario) con paginación, filtros y
+   * agregados: total de invitados (con nombre + numéricos), si está acreditado/inscrito y su hora de
+   * acreditación. El filtro por nombre reconoce el RUT en cualquier formato vía la columna normalizada.
+   *
+   * @param eventId - ID del evento cuyos participantes se listan.
+   * @param filters - Filtros: `name`, `email`, `accredited`, `withAward`, `awarded`, `registered` y `mail` (`sent | failed | unsent`).
+   * @param pagination - `{ page, limit }`; con `limit <= 0` no se pagina.
+   * @returns Objeto `{ participants, total, page, limit }` con las filas de la página.
+   */
   async listParticipants(eventId: string, filters: { name?: string, email?: string, accredited?: boolean, withAward?: boolean, awarded?: boolean, registered?: boolean, mail?: 'sent' | 'failed' | 'unsent' }, pagination: { page: number, limit: number }) {
     const { page = 1, limit = 10 } = pagination;
     
@@ -782,6 +911,16 @@ export class ParticipantService {
     return { participants: rows, total, page, limit };
   }
 
+  /**
+   * Busca hasta 10 participantes de un evento por nombre, apellido, correo o RUT (en cualquier formato,
+   * vía columna normalizada). Requiere al menos 3 caracteres. Si se pasa `scheduleId`, filtra los
+   * invitados de cada resultado a los ligados a esa fecha (los invitados sin fechas se muestran siempre).
+   *
+   * @param eventId - ID del evento en el que se busca.
+   * @param query - Texto a buscar (debe tener al menos 3 caracteres tras recortar espacios).
+   * @param scheduleId - ID de fecha opcional para filtrar los invitados por la fecha del check-in.
+   * @returns Arreglo (máx. 10) de participantes en JSON con sus invitados (filtrados por fecha si aplica); `[]` si la búsqueda es demasiado corta.
+   */
   async searchParticipants(eventId: string, query: string, scheduleId?: string) {
     if (!query || query.trim().length < 3) {
         return [];

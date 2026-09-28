@@ -1,3 +1,11 @@
+/**
+ * Utilidades de invitados para el correo de confirmación.
+ *
+ * Compone el texto legible de invitados a partir de los tres modos del evento
+ * ({@link buildGuestSummary}) y el desglose de "detalle de asistencia" cuando hay
+ * invitados distintos por fecha ({@link buildAttendanceDetail}). El resultado alimenta
+ * las variables de plantilla `{{guests_summary}}` y `{{detalle_asistencia}}`.
+ */
 import type { GuestMode } from './formFields';
 
 /**
@@ -7,6 +15,12 @@ import type { GuestMode } from './formFields';
  * - count:     "3"
  * - companion: "3 (1 acompañante + 2 cargas)"
  * - sin invitados: "Sin invitados"
+ *
+ * @param mode Modo de declaración de invitados del evento (`named` | `count` | `companion`).
+ * @param opts Datos según el modo: `names` (modo named), `count` (modo count),
+ *   `companion` y `loads` (modo companion). Valores negativos se acotan a 0 y los
+ *   nombres vacíos se descartan.
+ * @returns Objeto con `count` (total de invitados) y `summary` (texto listo para el correo).
  */
 export function buildGuestSummary(
   mode: GuestMode,
@@ -30,6 +44,10 @@ export function buildGuestSummary(
   return { count: names.length, summary: names.length ? `${names.length} (${names.join(', ')})` : 'Sin invitados' };
 }
 
+/**
+ * Una fecha/función a la que asiste el titular, con sus datos ya listos para el correo.
+ * Se usa como entrada de {@link buildAttendanceDetail}.
+ */
 export interface AttendanceDate {
   /** Nombre de la función/fecha (ej. "Función de Gala"). */
   name?: string | null;
@@ -49,6 +67,10 @@ export interface AttendanceDate {
  *
  * Devuelve texto con saltos de línea (\n). En la plantilla, colocar {{detalle_asistencia}}
  * dentro de un bloque con `white-space: pre-line` para que los saltos se rendericen.
+ *
+ * @param dates Lista de fechas de asistencia; los elementos nulos se ignoran.
+ * @returns Texto multilínea: formato simple si hay 0-1 fechas, o desglose por fecha si
+ *   hay varias. Devuelve `''` si no hay ninguna fecha.
  */
 export function buildAttendanceDetail(dates: AttendanceDate[]): string {
   const list = (dates || []).filter(Boolean);

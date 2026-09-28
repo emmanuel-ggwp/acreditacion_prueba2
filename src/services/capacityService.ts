@@ -1,9 +1,30 @@
+/**
+ * Servicio de capacidad (aforo por participantes).
+ *
+ * Calcula cuántos participantes hay inscritos por fecha/horario y por evento,
+ * y anota los objetos de evento con la información de capacidad que consume la
+ * landing pública (cupos ocupados, disponibles y estado "lleno").
+ *
+ * Todas las consultas son SQL cruda (`sequelize.query` con `QueryTypes.SELECT`)
+ * y filtran `participants.deleted_at IS NULL` explícitamente, porque el modelo
+ * usa borrado lógico (paranoid) y Sequelize no agrega ese filtro en SQL cruda.
+ * La capacidad cuenta PARTICIPANTES inscritos, nunca invitados.
+ */
 import { sequelize } from '@/lib/sequelize';
 import { QueryTypes } from 'sequelize';
 
 // La capacidad cuenta PARTICIPANTES inscritos (no invitados). Excluye participantes eliminados.
 
-/** Cuántos participantes hay inscritos a una fecha (horario). */
+/**
+ * Cuenta cuántos participantes hay inscritos a una fecha (horario) concreta.
+ *
+ * Ejecuta un `COUNT(*)` en SQL cruda uniendo `participant_schedules` con
+ * `participants`, excluyendo participantes con borrado lógico.
+ *
+ * @param scheduleId - Identificador del horario/fecha (`event_schedules.id`) a contar.
+ * @param transaction - Transacción Sequelize opcional para ejecutar la consulta dentro de ella.
+ * @returns Promesa que resuelve al número de participantes inscritos en esa fecha (0 si no hay ninguno).
+ */
 export async function getScheduleParticipantCount(scheduleId: string, transaction?: any): Promise<number> {
   const rows: any = await sequelize.query(
     `SELECT COUNT(*)::int AS c
@@ -15,7 +36,16 @@ export async function getScheduleParticipantCount(scheduleId: string, transactio
   return rows[0]?.c || 0;
 }
 
-/** Cuántos participantes distintos hay inscritos en el evento (con al menos una fecha). */
+/**
+ * Cuenta cuántos participantes DISTINTOS hay inscritos en un evento (con al menos una fecha).
+ *
+ * Usa `COUNT(DISTINCT ps.participant_id)` en SQL cruda para no contar dos veces
+ * a un participante inscrito en varias fechas; excluye participantes con borrado lógico.
+ *
+ * @param eventId - Identificador del evento (`events.id`) a contar.
+ * @param transaction - Transacción Sequelize opcional para ejecutar la consulta dentro de ella.
+ * @returns Promesa que resuelve al número de participantes distintos inscritos en el evento (0 si no hay ninguno).
+ */
 export async function getEventParticipantCount(eventId: string, transaction?: any): Promise<number> {
   const rows: any = await sequelize.query(
     `SELECT COUNT(DISTINCT ps.participant_id)::int AS c
@@ -29,9 +59,19 @@ export async function getEventParticipantCount(eventId: string, transaction?: an
 }
 
 /**
- * Anota (muta y devuelve) el evento con la info de capacidad para la landing:
- * - eventFull: si el evento alcanzó su capacidad máxima.
- * - por cada horario: registeredCount, full, spotsLeft.
+ * Anota (muta y devuelve) el objeto plano de un evento con la info de capacidad para la landing.
+ *
+ * Cuenta los inscritos de todos los horarios del evento en una sola consulta
+ * agrupada (SQL cruda) y luego, por cada horario y para el evento completo,
+ * agrega los campos derivados. MUTA `eventPlain` en el sitio además de devolverlo.
+ * Agrega:
+ * - `eventFull`: `true` si el evento alcanzó su capacidad máxima (`maxCapacity` > 0 y ocupados ≥ máximo).
+ * - `capacityInfo`: `{ eventCount, eventMax }` con los inscritos y el cupo del evento.
+ * - por cada horario en `schedules`: `registeredCount`, `full` y `spotsLeft`
+ *   (`null` cuando el horario no define `maxCapacity`).
+ *
+ * @param eventPlain - Objeto plano del evento (se espera un arreglo `schedules`; si falta se trata como vacío). Se MODIFICA in situ.
+ * @returns Promesa que resuelve al mismo objeto `eventPlain` ya anotado con la información de capacidad.
  */
 export async function annotateEventCapacity(eventPlain: any): Promise<any> {
   const schedules = Array.isArray(eventPlain.schedules) ? eventPlain.schedules : [];

@@ -1,3 +1,12 @@
+/**
+ * Servicio de acreditación (check-in) de participantes e invitados en las fechas de un evento.
+ *
+ * Responsable de acreditar y des-acreditar validando pertenencia al evento, actividad del
+ * evento/horario, invitados por fecha (GuestSchedule) y ausencia de acreditación previa. En la
+ * puerta NO se aplica tope de aforo ni de cupo; la concurrencia se serializa bloqueando la fila del
+ * horario (`LOCK.UPDATE`) dentro de una transacción. También expone estadísticas y listados de apoyo
+ * (asistencia por fecha, premiados y requerimientos alimentarios). Toda escritura registra auditoría.
+ */
 import { z } from 'zod';
 import { Op, Transaction, fn, col } from 'sequelize';
 import { sequelize } from '@/lib/sequelize';
@@ -12,8 +21,31 @@ import User from '@/models/User';
 import { auditLogService } from './auditLogService';
 import { dietaryFull, dietaryLabel } from '@/utils/dietary';
 
+/**
+ * Lógica de negocio del check-in: acredita/des-acredita a participantes e invitados con transacción
+ * y bloqueo de fila, y provee estadísticas y listados de apoyo para el panel de acreditación.
+ */
 export class AccreditationService {
 
+  /**
+   * (Privado) Bloquea la fila del horario (`LOCK.UPDATE`) y valida las precondiciones para acreditar:
+   * que el horario y su evento existan y estén activos; que la persona (participante o invitado)
+   * pertenezca al evento; que un invitado ligado a fechas concretas solo se acredite en una de ellas
+   * (un invitado sin fechas ligadas se permite en cualquiera, como fallback seguro); y que no exista
+   * acreditación previa. Si el horario está `published`, lo pasa a `accrediting`. No aplica tope de aforo/cupo.
+   *
+   * @param ids - `{ participantId?, guestId?, eventScheduleId }`: la persona a acreditar y el horario.
+   * @param transaction - Transacción en la que se toma el bloqueo y se ejecutan las validaciones.
+   * @returns `{ schedule, person }`: el horario bloqueado y la persona validada.
+   * @throws {Error} `'Event schedule not found.'` si el horario no existe.
+   * @throws {Error} `'Event schedule is not associated with an event.'` si el horario no tiene evento.
+   * @throws {Error} `'The event or schedule is not active.'` si el evento o el horario están inactivos.
+   * @throws {Error} `'Participant not found or does not belong to this event.'` si el participante no existe o es de otro evento.
+   * @throws {Error} `'Guest not found or does not belong to this event.'` si el invitado no existe o es de otro evento.
+   * @throws {Error} `'Este invitado no está registrado para esta fecha.'` si el invitado por fecha no está ligado a este horario.
+   * @throws {Error} `'Participant or Guest ID is required.'` si no se entrega ni participante ni invitado.
+   * @throws {Error} `'This person has already been accredited for this schedule.'` si ya estaba acreditada en este horario.
+   */
   private async _verifyAndLock(
     { participantId, guestId, eventScheduleId }: { participantId?: string; guestId?: string; eventScheduleId: string },
     transaction: Transaction
@@ -88,6 +120,18 @@ export class AccreditationService {
     return { schedule, person };
   }
 
+  /**
+   * Acredita a un participante en un horario dentro de una transacción (con bloqueo de fila vía
+   * `_verifyAndLock`), registrando cuántos invitados numéricos llegaron. Registra auditoría.
+   *
+   * @param participantId - ID del participante a acreditar.
+   * @param eventScheduleId - ID del horario en el que se acredita.
+   * @param accreditedBy - ID del usuario que acredita (queda en `accreditedBy` y en la auditoría).
+   * @param notes - Notas opcionales de la acreditación.
+   * @param guestCount - Nº de invitados numéricos que llegaron (se normaliza a un entero ≥ 0).
+   * @returns La acreditación creada, recargada con sus asociaciones vía `getAccreditationById`.
+   * @throws {Error} Cualquiera de los errores de `_verifyAndLock` (ver ese método); se revierte la transacción.
+   */
   async accreditParticipant(participantId: string, eventScheduleId: string, accreditedBy: string, notes?: string, guestCount?: number) {
 
     const transaction = await sequelize.transaction();
@@ -120,6 +164,17 @@ export class AccreditationService {
     }
   }
 
+  /**
+   * Acredita a un invitado en un horario dentro de una transacción (con bloqueo de fila vía
+   * `_verifyAndLock`). Registra auditoría.
+   *
+   * @param guestId - ID del invitado a acreditar.
+   * @param eventScheduleId - ID del horario en el que se acredita.
+   * @param accreditedBy - ID del usuario que acredita (queda en `accreditedBy` y en la auditoría).
+   * @param notes - Notas opcionales de la acreditación.
+   * @returns La acreditación creada, recargada con sus asociaciones vía `getAccreditationById`.
+   * @throws {Error} Cualquiera de los errores de `_verifyAndLock` (ver ese método); se revierte la transacción.
+   */
   async accreditGuest(guestId: string, eventScheduleId: string, accreditedBy: string, notes?: string) {
 
     const transaction = await sequelize.transaction();
@@ -151,6 +206,15 @@ export class AccreditationService {
   }
 
   // Des-acreditar un participante: elimina su acreditación y la de sus invitados en ese horario.
+  /**
+   * Des-acredita a un participante: elimina en una transacción su acreditación en el horario y la de
+   * sus invitados en ese mismo horario. Registra auditoría.
+   *
+   * @param participantId - ID del participante a des-acreditar.
+   * @param eventScheduleId - ID del horario del que se retira.
+   * @param accreditedBy - ID del usuario que realiza la operación (queda en la auditoría).
+   * @returns Objeto `{ removed }` con el número de acreditaciones eliminadas.
+   */
   async unaccreditParticipant(participantId: string, eventScheduleId: string, accreditedBy: string) {
     const transaction = await sequelize.transaction();
     try {
@@ -174,6 +238,15 @@ export class AccreditationService {
   }
 
   // Des-acreditar un invitado puntual (corregir su asistencia sin tocar al participante).
+  /**
+   * Des-acredita a un invitado puntual en un horario (corrige su asistencia sin tocar al titular).
+   * Registra auditoría.
+   *
+   * @param guestId - ID del invitado a des-acreditar.
+   * @param eventScheduleId - ID del horario del que se retira.
+   * @param accreditedBy - ID del usuario que realiza la operación (queda en la auditoría).
+   * @returns Objeto `{ removed }` con el número de acreditaciones eliminadas.
+   */
   async unaccreditGuest(guestId: string, eventScheduleId: string, accreditedBy: string) {
     const removed = await Accreditation.destroy({ where: { guestId, eventScheduleId } });
     await auditLogService.log({
@@ -185,6 +258,17 @@ export class AccreditationService {
 
   // Editar cuántos invitados llegaron (modos numéricos count/companion). No hay tope de
   // aforo en la puerta, así que es una edición simple del contador.
+  /**
+   * Edita cuántos invitados numéricos llegaron con un participante ya acreditado en un horario
+   * (el valor se normaliza a un entero ≥ 0). No hay tope de aforo en la puerta. Registra auditoría.
+   *
+   * @param participantId - ID del participante acreditado.
+   * @param eventScheduleId - ID del horario de la acreditación.
+   * @param guestCount - Nuevo número de invitados numéricos (se normaliza a un entero ≥ 0).
+   * @param accreditedBy - ID del usuario que edita (queda en la auditoría).
+   * @returns La acreditación (`Accreditation`) actualizada.
+   * @throws {Error} `'El participante no está acreditado en este horario.'` si no existe la acreditación.
+   */
   async setAccreditationGuestCount(participantId: string, eventScheduleId: string, guestCount: number, accreditedBy: string) {
     const acc = await Accreditation.findOne({ where: { participantId, eventScheduleId } });
     if (!acc) throw new Error('El participante no está acreditado en este horario.');
@@ -196,6 +280,17 @@ export class AccreditationService {
     return acc;
   }
 
+  /**
+   * Acredita en lote una lista de participantes/invitados. Cada ítem corre en su propio SAVEPOINT
+   * (transacción anidada): si uno falla a nivel de BD, se revierte solo ese ítem y el resto continúa.
+   * Acumula el nº de creados y los errores por ítem.
+   *
+   * @param accreditations - Lista de ítems a acreditar; se valida con `bulkAccreditationSchema`.
+   * @param accreditedBy - ID del usuario que realiza las acreditaciones.
+   * @returns `{ created, errors }`: nº de acreditaciones creadas y detalle de los ítems con error.
+   * @throws {z.ZodError} Si `accreditations` no cumple `bulkAccreditationSchema`.
+   * @throws {Error} `'Transaction failed: <mensaje>'` si falla el commit de la transacción padre (revierte todo).
+   */
   async bulkAccredit(accreditations: z.infer<typeof bulkAccreditationSchema>, accreditedBy: string) {
     const validatedData = bulkAccreditationSchema.parse(accreditations);
     const results = { created: 0, errors: [] as any[] };
@@ -231,6 +326,14 @@ export class AccreditationService {
     }
   }
 
+  /**
+   * Obtiene una acreditación por su ID con sus asociaciones (participante y su evento, invitado y su
+   * titular, horario y usuario acreditador).
+   *
+   * @param accreditationId - ID de la acreditación a buscar.
+   * @returns La acreditación (`Accreditation`) con sus asociaciones.
+   * @throws {Error} `'Accreditation not found'` si la acreditación no existe.
+   */
   async getAccreditationById(accreditationId: string) {
     const accreditation = await Accreditation.findByPk(accreditationId, {
       attributes: ['id', 'checkInTime', 'checkOutTime', 'notes'],
@@ -255,6 +358,13 @@ export class AccreditationService {
     return accreditation;
   }
 
+  /**
+   * Lista acreditaciones con paginación, opcionalmente filtradas por evento y/o horario, con
+   * desempate estable por id (para no saltar ni duplicar filas con el mismo `checkInTime`).
+   *
+   * @param filters - Filtros: `eventId`, `scheduleId`, `page` (def. 1), `limit` (def. 10).
+   * @returns Objeto `{ accreditations, total, page, limit }` con las filas de la página.
+   */
   async listAccreditations(filters: { eventId?: string, scheduleId?: string, page?: number, limit?: number }) {
     const { page = 1, limit = 10, eventId, scheduleId } = filters;
     const where: any = {};
@@ -299,6 +409,14 @@ export class AccreditationService {
 
   // Estadísticas para el panel de acreditación de un horario:
   // acreditados (participantes), invitados acreditados, total, y premiados del evento.
+  /**
+   * Calcula las estadísticas de un horario para el panel de acreditación: participantes acreditados,
+   * invitados (con nombre + numéricos), total y premiados del evento.
+   *
+   * @param scheduleId - ID del horario del que se calculan las estadísticas.
+   * @returns Objeto `{ participants, guests, total, awarded }`.
+   * @throws {Error} `'Schedule not found'` si el horario no existe.
+   */
   async getScheduleStats(scheduleId: string) {
     const schedule = await EventSchedule.findByPk(scheduleId);
     if (!schedule) throw new Error('Schedule not found');
@@ -323,6 +441,13 @@ export class AccreditationService {
 
   // Resumen de asistencia por fecha del evento: participantes e invitados acreditados
   // en cada horario, más los totales generales.
+  /**
+   * Resumen de asistencia por fecha de un evento: participantes e invitados acreditados en cada
+   * horario, más los totales generales.
+   *
+   * @param eventId - ID del evento a resumir.
+   * @returns Objeto `{ perSchedule, totals }` con el detalle por fecha y los totales generales.
+   */
   async getEventScheduleStats(eventId: string) {
     const schedules = await EventSchedule.findAll({
       where: { eventId },
@@ -377,6 +502,14 @@ export class AccreditationService {
   }
 
   // Lista de premiados del evento con su estado de acreditación en el horario dado.
+  /**
+   * Lista los participantes premiados del evento (por `isAwarded`) con su estado de acreditación en
+   * el horario dado.
+   *
+   * @param scheduleId - ID del horario en el que se comprueba la acreditación.
+   * @returns Arreglo de premiados con `isAccredited` y `checkInTime` para ese horario.
+   * @throws {Error} `'Schedule not found'` si el horario no existe.
+   */
   async getAwardedList(scheduleId: string) {
     const schedule = await EventSchedule.findByPk(scheduleId);
     if (!schedule) throw new Error('Schedule not found');
@@ -412,6 +545,14 @@ export class AccreditationService {
 
   // Lista de personas (participantes e invitados) con requerimiento alimentario en el evento
   // del horario dado, con su estado de acreditación en ese horario.
+  /**
+   * Lista las personas (participantes e invitados) con requerimiento alimentario en el evento del
+   * horario dado, con su estado de acreditación en ese horario.
+   *
+   * @param scheduleId - ID del horario cuyo evento se consulta y sobre el que se comprueba la acreditación.
+   * @returns Arreglo de ítems (participantes e invitados) con su preferencia alimentaria e `isAccredited`.
+   * @throws {Error} `'Schedule not found'` si el horario no existe.
+   */
   async getDietaryList(scheduleId: string) {
     const schedule = await EventSchedule.findByPk(scheduleId);
     if (!schedule) throw new Error('Schedule not found');
@@ -463,6 +604,16 @@ export class AccreditationService {
     return items;
   }
 
+  /**
+   * Comprueba si un participante o invitado ya está acreditado en un horario. Puede participar en una
+   * transacción externa (se usa dentro de `_verifyAndLock`).
+   *
+   * @param type - `'participant'` o `'guest'`, según a quién se consulta.
+   * @param id - ID del participante o del invitado.
+   * @param scheduleId - ID del horario a comprobar.
+   * @param transaction - Transacción opcional en la que ejecutar la consulta.
+   * @returns `{ isAccredited, accreditation }`: si está acreditado y la fila encontrada (o `null`).
+   */
   async verifyAccreditation(type: 'participant' | 'guest', id: string, scheduleId: string, transaction?: Transaction) {
     const whereClause: any = { eventScheduleId: scheduleId };
     if (type === 'participant') {

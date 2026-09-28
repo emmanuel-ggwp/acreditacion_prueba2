@@ -1,12 +1,40 @@
+/**
+ * Servicio de fechas/horarios de un evento (EventSchedule).
+ *
+ * Responsable del CRUD de horarios y de su ciclo de estado (published, accrediting, accredited,
+ * cancelled), aplicando las reglas de cupo y aforo: el cupo de participantes de una fecha no
+ * puede superar el del evento y el aforo total no puede ser menor que ese cupo. Protege los
+ * horarios con acreditaciones (no se les cambia la fecha ni se eliminan). Toda operación de
+ * escritura registra auditoría.
+ */
 import { z } from 'zod';
 import { Op, fn, col } from 'sequelize';
 import { Event, EventSchedule, Accreditation } from '@/models/index';
 import { createScheduleSchema, updateScheduleSchema } from '@/utils/validators/eventSchemas';
 import { auditLogService } from './auditLogService';
 
+/** Nombre legible de una fecha (`label` o, en su defecto, `scheduleName`) para la auditoría. */
 const scheduleName = (s: any) => s.label || s.scheduleName;
 
+/**
+ * Lógica de negocio para crear, editar, eliminar, consultar y cambiar el estado de las fechas
+ * de un evento, validando cupo/aforo y respetando los horarios que ya tienen acreditaciones.
+ */
 export class EventScheduleService {
+  /**
+   * Valida y crea una fecha/horario de un evento, comprobando que el cupo de la fecha no supere el
+   * del evento y que el aforo total no sea menor que el cupo de participantes. Se permiten horarios
+   * solapados (sesiones paralelas en distintas salas).
+   *
+   * @param eventId - ID del evento al que pertenece la fecha (se fija desde la ruta).
+   * @param data - Datos de la fecha; se validan con `createScheduleSchema`.
+   * @param userId - ID del usuario que crea; si viene, se registra en auditoría (acción `CREATE`).
+   * @returns La fecha (`EventSchedule`) creada.
+   * @throws {z.ZodError} Si `data` no cumple `createScheduleSchema`.
+   * @throws {Error} `'Evento <id> no encontrado para la agenda.'` si el evento no existe.
+   * @throws {Error} `'El cupo de participantes de la fecha (N) no puede superar el del evento (M).'` si el cupo de la fecha supera el del evento.
+   * @throws {Error} `'El aforo total (N) no puede ser menor que el cupo de participantes (M).'` si el aforo total es menor que el cupo.
+   */
   async createSchedule(eventId: string, data: z.infer<typeof createScheduleSchema>, userId?: string) {
     const validatedData = createScheduleSchema.parse(data);
     const event = await Event.findByPk(eventId);
@@ -34,6 +62,22 @@ export class EventScheduleService {
     return schedule;
   }
 
+  /**
+   * Valida y actualiza una fecha. Comprueba con los valores EFECTIVOS que el término sea posterior
+   * al inicio; impide cambiar las fechas si ya existen acreditaciones; y revalida cupo/aforo. El
+   * `eventId` nunca se cambia por edición.
+   *
+   * @param scheduleId - ID de la fecha a actualizar.
+   * @param data - Campos a modificar; se validan con `updateScheduleSchema`.
+   * @param userId - ID del usuario que edita; si viene y hubo cambios reales, se registra en auditoría (acción `UPDATE`).
+   * @returns La fecha (`EventSchedule`) actualizada.
+   * @throws {z.ZodError} Si `data` no cumple `updateScheduleSchema`.
+   * @throws {Error} `'Schedule not found'` si la fecha no existe.
+   * @throws {Error} `'La fecha y hora de término debe ser posterior a la de inicio.'` si el término no es posterior al inicio.
+   * @throws {Error} `'Cannot change dates of a schedule with existing accreditations.'` si se intenta cambiar la fecha teniendo acreditaciones.
+   * @throws {Error} `'El cupo de participantes de la fecha (N) no puede superar el del evento (M).'` si el cupo supera el del evento.
+   * @throws {Error} `'El aforo total (N) no puede ser menor que el cupo de participantes (M).'` si el aforo es menor que el cupo.
+   */
   async updateSchedule(scheduleId: string, data: z.infer<typeof updateScheduleSchema>, userId?: string) {
     const validatedData = updateScheduleSchema.parse(data);
     const schedule = await EventSchedule.findByPk(scheduleId);
@@ -97,6 +141,16 @@ export class EventScheduleService {
     return schedule;
   }
 
+  /**
+   * Elimina una fecha, siempre que no tenga acreditaciones (borrado real). Registra la eliminación.
+   *
+   * @param scheduleId - ID de la fecha a eliminar.
+   * @param userId - ID del usuario que elimina; si viene, se registra en auditoría (acción `DELETE`).
+   * @param reason - Motivo opcional de la eliminación (queda en el detalle de auditoría).
+   * @returns Objeto `{ message: 'Schedule deleted successfully' }`.
+   * @throws {Error} `'Cannot delete schedule with existing accreditations.'` si la fecha tiene acreditaciones.
+   * @throws {Error} `'Schedule not found'` si la fecha no existe.
+   */
   async deleteSchedule(scheduleId: string, userId?: string, reason?: string) {
     const accreditedCount = await Accreditation.count({ where: { eventScheduleId: scheduleId } });
     if (accreditedCount > 0) {
@@ -114,6 +168,13 @@ export class EventScheduleService {
     return { message: 'Schedule deleted successfully' };
   }
 
+  /**
+   * Lista las fechas de un evento con el número de acreditados de cada una y datos del evento
+   * (ubicación y cupo), ordenadas por fecha de inicio ascendente.
+   *
+   * @param eventId - ID del evento cuyas fechas se listan.
+   * @returns Arreglo de fechas (`EventSchedule`) con el agregado `accreditedCount`.
+   */
   async getSchedulesByEvent(eventId: string) {
     const schedules = await EventSchedule.findAll({
       where: { eventId },
@@ -138,6 +199,13 @@ export class EventScheduleService {
 
   // Horarios relevantes para acreditar (cross-evento): los que están EN acreditación ahora,
   // más los publicados de HOY (para abrirlos/prepararlos). Incluye evento y nº de acreditados.
+  /**
+   * Devuelve las fechas relevantes para acreditar (cross-evento): las que están EN acreditación
+   * ahora (`accrediting`) más las publicadas cuyo inicio es HOY. Incluye el evento y el número de
+   * acreditados, ordenadas por inicio ascendente.
+   *
+   * @returns Arreglo de fechas activas (`EventSchedule`) con `accreditedCount` y su evento.
+   */
   async getActiveSchedules() {
     const now = new Date();
     const startToday = new Date(now); startToday.setHours(0, 0, 0, 0);
@@ -164,6 +232,17 @@ export class EventScheduleService {
   }
 
   // Abrir/cerrar acreditación a mano (published|accrediting|accredited|cancelled).
+  /**
+   * Cambia manualmente el estado de una fecha (abrir/cerrar acreditación). Solo registra auditoría
+   * si el estado cambió realmente.
+   *
+   * @param scheduleId - ID de la fecha cuyo estado se cambia.
+   * @param status - Nuevo estado; debe ser uno de `published | accrediting | accredited | cancelled`.
+   * @param userId - ID del usuario que cambia el estado; si viene y hubo cambio, se registra en auditoría (acción `UPDATE`).
+   * @returns La fecha (`EventSchedule`) con el nuevo estado.
+   * @throws {Error} `'Estado de horario inválido'` si `status` no es uno de los permitidos.
+   * @throws {Error} `'Schedule not found'` si la fecha no existe.
+   */
   async setStatus(scheduleId: string, status: string, userId?: string) {
     const allowed = ['published', 'accrediting', 'accredited', 'cancelled'];
     if (!allowed.includes(status)) throw new Error('Estado de horario inválido');
@@ -184,6 +263,15 @@ export class EventScheduleService {
   }
 
   // Asignar/quitar la imagen de un horario (solo el campo imageUrl, sin tocar fechas).
+  /**
+   * Asigna o quita la imagen de una fecha (solo el campo `imageUrl`, sin tocar las fechas).
+   *
+   * @param scheduleId - ID de la fecha a modificar.
+   * @param imageUrl - URL de la imagen, o `null`/cadena vacía para quitarla.
+   * @param userId - ID del usuario que modifica; si viene, se registra en auditoría (acción `UPDATE`).
+   * @returns La fecha (`EventSchedule`) actualizada.
+   * @throws {Error} `'Schedule not found'` si la fecha no existe.
+   */
   async setImage(scheduleId: string, imageUrl: string | null, userId?: string) {
     const schedule = await EventSchedule.findByPk(scheduleId);
     if (!schedule) throw new Error('Schedule not found');
@@ -200,6 +288,13 @@ export class EventScheduleService {
     return schedule;
   }
 
+  /**
+   * Busca fechas por nombre (iLike) y/o rango sobre la fecha de inicio, incluyendo el nombre del
+   * evento, ordenadas por inicio ascendente y limitadas a 50 resultados.
+   *
+   * @param query - Filtros: `name` (coincidencia parcial), `startDate` y `endDate` (rango sobre `startDateTime`).
+   * @returns Arreglo de hasta 50 fechas (`EventSchedule`) que cumplen el filtro.
+   */
   async searchSchedules(query: { name?: string, startDate?: Date, endDate?: Date }) {
     const where: any = {};
     

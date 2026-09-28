@@ -1,3 +1,13 @@
+/**
+ * Utilidades de formato (presentación) compartidas por UI, servicios y landing pública.
+ *
+ * Agrupa helpers para dar formato a fechas/horas, nombres, capacidad, porcentajes y
+ * slugs. Incluye dos familias de fecha: los helpers basados en `date-fns`
+ * ({@link formatEventDate}, {@link formatDate}, {@link formatDateTime}) y los helpers
+ * PÚBLICOS y deterministas fijados a `es-CL` / `America/Santiago`
+ * ({@link formatDateCL}, {@link formatTimeCL}, {@link formatDateTimeCL}), pensados para
+ * que SSR y cliente coincidan y no haya errores de hidratación.
+ */
 import { format, parseISO, isToday, isTomorrow } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { DATE_FORMATS } from './constants';
@@ -74,6 +84,12 @@ const asValidDate = (date: string | Date): Date | null => {
   return isNaN(d.getTime()) ? null : d;
 };
 
+/**
+ * Formatea SOLO la fecha en locale `es-CL` y zona horaria `America/Santiago`.
+ * @param date Fecha a formatear (string ISO o `Date`).
+ * @param opts Opciones de `Intl.DateTimeFormat` (por defecto dd/mm/aaaa).
+ * @returns La fecha formateada, o `''` si la fecha es inválida o el formateo falla.
+ */
 export const formatDateCL = (
   date: string | Date,
   opts: Intl.DateTimeFormatOptions = { day: '2-digit', month: '2-digit', year: 'numeric' }
@@ -83,6 +99,12 @@ export const formatDateCL = (
   try { return d.toLocaleDateString(CL_LOCALE, { timeZone: CL_TIMEZONE, ...opts }); } catch { return ''; }
 };
 
+/**
+ * Formatea SOLO la hora en locale `es-CL` y zona horaria `America/Santiago`.
+ * @param date Fecha a formatear (string ISO o `Date`).
+ * @param opts Opciones de `Intl.DateTimeFormat` (por defecto hh:mm).
+ * @returns La hora formateada, o `''` si la fecha es inválida o el formateo falla.
+ */
 export const formatTimeCL = (
   date: string | Date,
   opts: Intl.DateTimeFormatOptions = { hour: '2-digit', minute: '2-digit' }
@@ -92,6 +114,12 @@ export const formatTimeCL = (
   try { return d.toLocaleTimeString(CL_LOCALE, { timeZone: CL_TIMEZONE, ...opts }); } catch { return ''; }
 };
 
+/**
+ * Formatea fecha y hora juntas en locale `es-CL` y zona horaria `America/Santiago`.
+ * @param date Fecha a formatear (string ISO o `Date`).
+ * @param opts Opciones de `Intl.DateTimeFormat` (por defecto dd/mm/aaaa hh:mm).
+ * @returns La fecha y hora formateadas, o `''` si la fecha es inválida o el formateo falla.
+ */
 export const formatDateTimeCL = (
   date: string | Date,
   opts: Intl.DateTimeFormatOptions = { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }

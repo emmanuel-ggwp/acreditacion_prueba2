@@ -1,9 +1,17 @@
+/**
+ * Utilidades de autorización por rol.
+ *
+ * Define el mapa de permisos {@link PERMISSIONS} (qué roles pueden cada acción) y los
+ * helpers para comprobar acceso: uno genérico ({@link canAccess}) y atajos por acción
+ * ({@link canManageEvent}, {@link canAccredit}, {@link canManageUsers}).
+ */
 import { ROLES, Role } from './constants';
 
 type User = {
   role: Role;
 } | null;
 
+/** Mapa de permisos: por cada acción, la lista de roles autorizados a ejecutarla. */
 export const PERMISSIONS = {
   MANAGE_EVENTS: [ROLES.ADMIN],
   ACCREDIT: [ROLES.ADMIN, ROLES.OPERATOR],

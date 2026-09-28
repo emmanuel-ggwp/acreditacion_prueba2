@@ -1,4 +1,13 @@
 
+/**
+ * Servicio de asignación y entrega de premios a participantes (tabla puente ParticipantAward).
+ *
+ * Responsable del ciclo de vida de un premio asignado a una persona: asignar (con control de
+ * stock y unicidad), entregar, cancelar, y listar/estadísticas. Las operaciones críticas usan
+ * transacción con bloqueo de fila (`LOCK.UPDATE`) para serializar concurrencia: asignar bloquea
+ * el premio para respetar el stock, y entregar bloquea la asignación para evitar doble entrega.
+ * Se apoya además en el índice único (participant_id, award_id).
+ */
 import { z } from 'zod';
 import { Op, Transaction } from 'sequelize';
 import { sequelize } from '@/lib/sequelize';
@@ -9,8 +18,28 @@ import { assignAwardSchema } from '@/utils/validators/awardSchemas';
 import User from '@/models/User';
 import Event from '@/models/Event';
 
+/**
+ * Lógica de negocio para asignar, entregar, cancelar, listar y resumir los premios asignados
+ * a los participantes, con control de stock, duplicados y concurrencia mediante transacciones.
+ */
 export class ParticipantAwardService {
 
+  /**
+   * Asigna un premio a un participante dentro de una transacción, bloqueando la fila del premio
+   * (`LOCK.UPDATE`) para respetar el stock frente a asignaciones concurrentes. Valida stock,
+   * pertenencia al mismo evento y que no exista ya la asignación.
+   *
+   * @param participantId - ID del participante que recibe el premio.
+   * @param awardId - ID del premio a asignar.
+   * @param assignedBy - ID del usuario que realiza la asignación (queda en `assignedBy`).
+   * @param notes - Notas opcionales de la asignación.
+   * @returns La asignación (`ParticipantAward`) creada.
+   * @throws {Error} `'Award not found.'` si el premio no existe.
+   * @throws {Error} `'Participant not found.'` si el participante no existe.
+   * @throws {Error} `'Participant and Award do not belong to the same event.'` si no comparten evento.
+   * @throws {Error} `'Award is out of stock.'` si ya se asignaron tantos premios como la cantidad disponible.
+   * @throws {Error} `'This participant has already been assigned this award.'` si la asignación ya existe.
+   */
   async assignAward(participantId: string, awardId: string, assignedBy: string, notes?: string | null) {
 
     return sequelize.transaction(async (transaction) => {
@@ -49,6 +78,17 @@ export class ParticipantAwardService {
     });
   }
 
+  /**
+   * Marca una asignación como entregada (fija `deliveredAt` y `deliveredBy`) dentro de una
+   * transacción con bloqueo de fila, de modo que dos entregas concurrentes se serializan y la
+   * segunda ve el premio ya entregado.
+   *
+   * @param participantAwardId - ID de la asignación (ParticipantAward) a entregar.
+   * @param deliveredBy - ID del usuario que registra la entrega.
+   * @returns La asignación (`ParticipantAward`) actualizada con la entrega.
+   * @throws {Error} `'Award assignment not found.'` si la asignación no existe.
+   * @throws {Error} `'Award has already been delivered.'` si la asignación ya tenía `deliveredAt`.
+   */
   async deliverAward(participantAwardId: string, deliveredBy: string) {
     // Transacción + lock de la fila: dos entregas concurrentes del mismo premio se
     // serializan y la segunda ve deliveredAt ya puesto (antes ambas pasaban el chequeo).
@@ -69,6 +109,15 @@ export class ParticipantAwardService {
     });
   }
 
+  /**
+   * Cancela (elimina) una asignación de premio que aún no ha sido entregada.
+   *
+   * @param participantAwardId - ID de la asignación (ParticipantAward) a cancelar.
+   * @param userId - ID del usuario que cancela (reservado para futuras validaciones de permiso).
+   * @returns Objeto `{ message: 'Award assignment cancelled successfully.' }`.
+   * @throws {Error} `'Award assignment not found.'` si la asignación no existe.
+   * @throws {Error} `'Cannot cancel an award assignment that has already been delivered.'` si ya fue entregada.
+   */
   async cancelAwardAssignment(participantAwardId: string, userId: string) {
     const participantAward = await ParticipantAward.findByPk(participantAwardId);
     if (!participantAward) {
@@ -83,6 +132,13 @@ export class ParticipantAwardService {
     return { message: 'Award assignment cancelled successfully.' };
   }
 
+  /**
+   * Lista los premios asignados a un participante, incluyendo el premio y los usuarios que
+   * asignaron y entregaron, ordenados del más reciente al más antiguo.
+   *
+   * @param participantId - ID del participante cuyas asignaciones se listan.
+   * @returns Arreglo de asignaciones (`ParticipantAward`) con `Award`, `Assigner` y `Deliverer`.
+   */
   async listParticipantAwards(participantId: string) {
     return ParticipantAward.findAll({
       where: { participantId },
@@ -95,6 +151,14 @@ export class ParticipantAwardService {
     });
   }
 
+  /**
+   * Lista las asignaciones de un premio, opcionalmente filtradas por estado de entrega,
+   * ordenadas de la más antigua a la más reciente.
+   *
+   * @param awardId - ID del premio cuyas asignaciones se listan.
+   * @param delivered - Si es `true`, solo entregadas; si es `false`, solo pendientes; si se omite, todas.
+   * @returns Arreglo de asignaciones (`ParticipantAward`) con los datos del participante.
+   */
   async listAwardAssignments(awardId: string, delivered?: boolean) {
     const where: any = { awardId };
     if (delivered === true) {
@@ -112,6 +176,14 @@ export class ParticipantAwardService {
     });
   }
 
+  /**
+   * Calcula estadísticas de premios de un evento: por cada premio su stock, asignados,
+   * entregados y disponibles; y un resumen de participantes premiados frente al total.
+   *
+   * @param eventId - ID del evento del que se calculan las estadísticas.
+   * @returns Objeto con `awardDetails` (detalle por premio) y `participantSummary`
+   *          (`totalParticipants`, `awardedParticipants`, `percentageAwarded`).
+   */
   async getAwardStatistics(eventId: string) {
     const awards = await Award.findAll({ where: { eventId } });
     const totalParticipants = await Participant.count({ where: { eventId } });

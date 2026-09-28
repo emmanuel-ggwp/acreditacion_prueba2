@@ -1,3 +1,21 @@
+/**
+ * Servicio de reportes y estadísticas (ReportService).
+ *
+ * Genera las métricas y exportaciones del sistema de acreditación: reporte por
+ * evento, estadísticas de dashboard y en tiempo real, reportes tabulares de
+ * participantes e invitados, y su exportación a CSV.
+ *
+ * Notas de implementación y reglas de negocio:
+ * - Combina el ORM (agregaciones de Sequelize) con SQL cruda (`sequelize.query`)
+ *   para las consultas complejas. Las consultas crudas filtran `deleted_at IS NULL`
+ *   explícitamente porque varias tablas usan borrado lógico (paranoid) y Sequelize
+ *   no agrega ese filtro en SQL cruda.
+ * - Distingue PERSONAS (participantes + invitados) de cupos: los invitados pueden
+ *   ser "con nombre" (filas `Guest`) o NUMÉRICOS (`guestCount`, modos count/companion).
+ * - El porcentaje de cupo se calcula solo sobre participantes para que no exceda 100%.
+ * - `generateCsv` antepone BOM UTF-8 (acentos correctos en Excel) y neutraliza la
+ *   inyección de fórmulas CSV.
+ */
 import { Op, fn, col, literal, Sequelize, QueryTypes } from 'sequelize';
 import { startOfHour, endOfHour, eachHourOfInterval, format, startOfDay, endOfDay, subMinutes } from 'date-fns';
 import { stringify } from 'csv-stringify/sync';
@@ -13,8 +31,25 @@ import {
   ParticipantAward
 } from '@/models/index';
 
+/**
+ * Encapsula la generación de reportes, estadísticas y exportaciones CSV del evento.
+ */
 export class ReportService {
 
+  /**
+   * Construye el reporte completo de un evento: estadísticas globales, por fecha, de premios y línea de tiempo.
+   *
+   * Reúne en lotes (para evitar N+1) los conteos de acreditaciones, inscripciones,
+   * invitados (con nombre y numéricos) y premios por horario, y agrega los totales
+   * a nivel evento. Cuenta a las personas de forma coherente entre "registrados" y
+   * "acreditados" (participantes + invitados con nombre + invitados numéricos) y
+   * calcula el `capacityUsedPercentage` solo sobre participantes. La línea de tiempo
+   * agrupa las acreditaciones por hora entre la primera y la última.
+   *
+   * @param eventId - Identificador del evento a reportar.
+   * @returns Promesa que resuelve a `{ eventInfo, participantStats, scheduleStats, awardStats, accreditationTimeline }`. Si el evento no tiene horarios, devuelve las estadísticas en cero.
+   * @throws {Error} `'Event not found'` si no existe un evento con ese `id`.
+   */
   async getEventReport(eventId: string) {
     const event = await Event.findByPk(eventId);
     if (!event) throw new Error('Event not found');
@@ -291,6 +326,17 @@ export class ReportService {
     };
   }
 
+  /**
+   * Obtiene las estadísticas del panel (dashboard), a nivel de un evento o globales.
+   *
+   * Si se pasa `eventId`, devuelve métricas de ese evento (participantes, acreditados
+   * y premios pendientes); si no, devuelve métricas globales (total y eventos activos,
+   * total de participantes y acreditaciones de hoy).
+   *
+   * @param eventId - Identificador opcional del evento; si se omite se devuelven las estadísticas globales.
+   * @returns Promesa que resuelve a `{ eventName, totalParticipants, totalAccredited, awardsPending }` (con evento) o a `{ totalEvents, activeEvents, totalParticipants, accreditationsToday }` (global).
+   * @throws {Error} `'Event not found'` si se pasa `eventId` y no existe ese evento.
+   */
   async getDashboardStats(eventId?: number) {
     if (eventId) {
       const event = await Event.findByPk(eventId);
@@ -329,6 +375,16 @@ export class ReportService {
     }
   }
 
+  /**
+   * Calcula estadísticas en tiempo real de un evento para monitoreo en vivo.
+   *
+   * Devuelve las acreditaciones de los últimos 30 minutos, la capacidad actual de
+   * cada horario activo (los que están en curso ahora) con cupos disponibles, y el
+   * ritmo de acreditación por minuto (acreditados totales / minutos desde la primera).
+   *
+   * @param eventId - Identificador del evento a monitorear.
+   * @returns Promesa que resuelve a `{ accreditationsLast30Min, currentCapacity, accreditationRatePerMinute }`, donde `currentCapacity` lista por horario `{ scheduleName, capacity, accredited, available }` (`available` es `Infinity` si no hay cupo definido).
+   */
   async getRealTimeStats(eventId: string) {
     const now = new Date();
     const thirtyMinutesAgo = subMinutes(now, 30);
@@ -370,6 +426,17 @@ export class ReportService {
     };
   }
 
+  /**
+   * Genera el reporte general por participante de un evento (una fila por inscripción).
+   *
+   * Ejecuta una consulta SQL cruda que une participantes, sus fechas y acreditaciones,
+   * e incluye subconsultas para cantidad de invitados, invitados asistentes, premios
+   * entregados y el detalle de invitados. Excluye participantes e invitados con borrado
+   * lógico. Mapea el resultado a claves en español y formatea fechas/horas para exportar.
+   *
+   * @param eventId - Identificador del evento a reportar.
+   * @returns Promesa que resuelve a un arreglo de objetos, uno por inscripción, con columnas en español (datos del participante, asistencia, invitados y premios) listas para CSV.
+   */
   async getGeneralReport(eventId: string) {
     const query = `
         SELECT 
@@ -439,6 +506,17 @@ export class ReportService {
 
   // Reporte de INVITADOS: una fila por invitado con nombre, RUT, edad, dieta y asistencia.
   // El reporte general es por participante (solo cuenta invitados); este da el detalle por carga.
+  /**
+   * Genera el reporte detallado de invitados de un evento (una fila por invitado con nombre).
+   *
+   * A diferencia del reporte general (por participante), este da el detalle por carga:
+   * ejecuta SQL cruda uniendo invitados con su participante, marca la asistencia y la
+   * hora de acreditación, excluye borrados lógicos y traduce el tipo (`CARGA`→"Carga",
+   * `ACOMPANANTE`→"Acompañante") y la dieta (`'NONE'` se muestra vacío).
+   *
+   * @param eventId - Identificador del evento a reportar.
+   * @returns Promesa que resuelve a un arreglo de objetos, uno por invitado, con columnas en español (`Participante`, `Invitado`, `RUT`, `Edad`, `Tipo`, `Dieta`, `Asistió`, `Hora Acreditación`) listas para CSV.
+   */
   async getGuestsReport(eventId: string) {
     const query = `
         SELECT
@@ -473,6 +551,17 @@ export class ReportService {
     }));
   }
 
+  /**
+   * Serializa un arreglo de objetos a una cadena CSV apta para Excel y segura.
+   *
+   * Toma las columnas de las claves del primer objeto e incluye cabecera. Antepone
+   * BOM UTF-8 para que Excel en Windows no rompa los acentos/ñ, y neutraliza la
+   * inyección de fórmulas CSV: a toda celda de texto que empiece por `= + - @`
+   * (o tabulador/retorno) le antepone un apóstrofo para que se muestre como texto.
+   *
+   * @param data - Arreglo de filas (objetos); las columnas se toman de las claves del primer elemento.
+   * @returns Promesa que resuelve a la cadena CSV (con BOM y cabecera), o a una cadena vacía `''` si `data` es nulo o vacío.
+   */
   async generateCsv(data: any[]): Promise<string> {
     if (!data || data.length === 0) {
       return '';
