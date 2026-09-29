@@ -5,7 +5,7 @@ import apiClient from '@/utils/apiClient';
 import { dietaryLabel, dietaryFull } from '@/utils/dietary';
 import { formatDateCL, formatDateTimeCL } from '@/utils/formatters';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line } from 'recharts';
-import { Users, Award, CheckCircle, Percent, Download, Utensils } from 'lucide-react';
+import { Users, Award, CheckCircle, Percent, Download, Utensils, ChevronDown, CalendarDays } from 'lucide-react';
 import { utils, writeFile } from 'xlsx';
 
 
@@ -68,6 +68,8 @@ const EventReport: React.FC<EventReportProps> = ({ eventId }) => {
   const [attendees, setAttendees] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Restricción alimenticia desplegada (para mostrar quiénes la tienen).
+  const [openDiet, setOpenDiet] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchReport = async () => {
@@ -97,12 +99,21 @@ const EventReport: React.FC<EventReportProps> = ({ eventId }) => {
   if (!data) return <div className="p-8 text-center">No hay datos disponibles</div>;
 
   // Resumen de preferencias alimenticias (participantes + invitados), excluyendo "Ninguna".
+  // dietPeople guarda, por preferencia, quiénes la tienen (para desplegar al presionar).
   const dietCounts: Record<string, number> = {};
+  const dietPeople: Record<string, { name: string; tipo: 'Participante' | 'Invitado'; pertenece?: string }[]> = {};
   let dietTotal = 0;
   for (const p of attendees) {
-    const add = (v: any) => { if (v && v !== 'NONE') { dietCounts[v] = (dietCounts[v] || 0) + 1; dietTotal++; } };
-    add(p?.dietaryPreference);
-    for (const g of (p?.guests || [])) add(g?.dietaryPreference);
+    const add = (v: any, name: string, tipo: 'Participante' | 'Invitado', pertenece?: string) => {
+      if (v && v !== 'NONE') {
+        dietCounts[v] = (dietCounts[v] || 0) + 1;
+        (dietPeople[v] = dietPeople[v] || []).push({ name: name || '(sin nombre)', tipo, pertenece });
+        dietTotal++;
+      }
+    };
+    const pName = `${p?.firstName || ''} ${p?.lastName || ''}`.trim();
+    add(p?.dietaryPreference, pName, 'Participante');
+    for (const g of (p?.guests || [])) add(g?.dietaryPreference, `${g?.firstName || ''} ${g?.lastName || ''}`.trim(), 'Invitado', pName);
   }
   const dietEntries = Object.entries(dietCounts).sort((a, b) => b[1] - a[1]);
 
@@ -218,21 +229,74 @@ const EventReport: React.FC<EventReportProps> = ({ eventId }) => {
         </div>
       </div>
 
+      {/* Inscritos por fecha */}
+      <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+        <div className="flex items-center gap-2 mb-4">
+          <div className="p-2 bg-indigo-50 rounded-lg"><CalendarDays className="w-5 h-5 text-indigo-600" /></div>
+          <h3 className="text-lg font-semibold text-gray-800">Inscritos por fecha</h3>
+        </div>
+        {data.scheduleStats.length > 0 ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {data.scheduleStats.map((s, i) => (
+              <div key={i} className="flex items-center justify-between bg-gray-50 border border-gray-100 rounded-lg px-4 py-3">
+                <div className="min-w-0 pr-3">
+                  <div className="text-sm font-medium text-gray-800 truncate capitalize">{s.scheduleName} · {fmtDateShort(s.startDateTime)}</div>
+                  <div className="text-xs text-gray-400 mt-0.5">{s.registeredParticipants} particip. · {s.registeredGuests} invitados</div>
+                  <div className="text-[11px] text-green-600 mt-0.5">{s.accreditedTotal} acreditados</div>
+                </div>
+                <div className="text-right shrink-0">
+                  <div className="text-2xl font-bold text-indigo-600 leading-none tabular-nums">{s.registered}</div>
+                  <div className="text-[10px] uppercase tracking-wide text-gray-400 mt-1">inscritos</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-gray-500">Este evento aún no tiene fechas.</p>
+        )}
+      </div>
+
       {/* Preferencias alimenticias */}
       <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
         <div className="flex items-center gap-2 mb-4">
           <div className="p-2 bg-emerald-50 rounded-lg"><Utensils className="w-5 h-5 text-emerald-600" /></div>
           <h3 className="text-lg font-semibold text-gray-800">Preferencias alimenticias</h3>
           <span className="text-sm text-gray-400">({dietTotal} con preferencia)</span>
+          {dietEntries.length > 0 && <span className="text-xs text-gray-400 ml-auto hidden sm:inline">Presiona una para ver quiénes</span>}
         </div>
         {dietEntries.length > 0 ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-            {dietEntries.map(([k, n]) => (
-              <div key={k} className="flex items-center justify-between bg-emerald-50/60 border border-emerald-100 rounded-lg px-3 py-2">
-                <span className="text-sm text-gray-700">{dietaryLabel(k)}</span>
-                <span className="text-sm font-bold text-emerald-700">{n}</span>
-              </div>
-            ))}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 items-start">
+            {dietEntries.map(([k, n]) => {
+              const isOpen = openDiet === k;
+              return (
+                <div key={k} className={`bg-emerald-50/60 border rounded-lg overflow-hidden ${isOpen ? 'border-emerald-300 ring-1 ring-emerald-200' : 'border-emerald-100'}`}>
+                  <button
+                    type="button"
+                    onClick={() => setOpenDiet(isOpen ? null : k)}
+                    aria-expanded={isOpen}
+                    className="w-full flex items-center justify-between gap-2 px-3 py-2 text-left hover:bg-emerald-50 transition-colors"
+                  >
+                    <span className="text-sm text-gray-700 truncate">{dietaryLabel(k)}</span>
+                    <span className="flex items-center gap-1 shrink-0">
+                      <span className="text-sm font-bold text-emerald-700 tabular-nums">{n}</span>
+                      <ChevronDown className={`w-4 h-4 text-emerald-600 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                    </span>
+                  </button>
+                  {isOpen && (
+                    <ul className="border-t border-emerald-100 max-h-44 overflow-auto px-3 py-2 space-y-1 bg-white/70">
+                      {(dietPeople[k] || []).map((per, i) => (
+                        <li key={i} className="flex items-center justify-between gap-2 text-xs">
+                          <span className="text-gray-700 truncate">{per.name}</span>
+                          <span className="text-[10px] text-gray-400 whitespace-nowrap shrink-0">
+                            {per.tipo === 'Invitado' ? `Inv. · ${per.pertenece}` : 'Particip.'}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              );
+            })}
           </div>
         ) : (
           <p className="text-sm text-gray-500">Nadie registró una preferencia alimenticia especial{attendees.length ? '.' : ' (o aún no hay asistentes).'}</p>
