@@ -5,7 +5,7 @@ import apiClient from '@/utils/apiClient';
 import { dietaryLabel, dietaryFull } from '@/utils/dietary';
 import { formatDateCL, formatDateTimeCL } from '@/utils/formatters';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line } from 'recharts';
-import { Users, Award, CheckCircle, Percent, Download, Utensils, ChevronDown, CalendarDays } from 'lucide-react';
+import { Users, Award, CheckCircle, Download, Utensils, ChevronDown, CalendarDays } from 'lucide-react';
 import { utils, writeFile } from 'xlsx';
 
 
@@ -170,7 +170,7 @@ const EventReport: React.FC<EventReportProps> = ({ eventId }) => {
       </div>
 
       {/* Key Metrics Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
           <div className="flex justify-between items-start">
             <div>
@@ -204,18 +204,6 @@ const EventReport: React.FC<EventReportProps> = ({ eventId }) => {
         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
           <div className="flex justify-between items-start">
             <div>
-              <p className="text-sm font-medium text-gray-500">Tasa de asistencia</p>
-              <h3 className="text-3xl font-bold text-gray-900 mt-2">{data.participantStats.attendanceRate.toFixed(1)}%</h3>
-            </div>
-            <div className="p-2 bg-purple-50 rounded-lg">
-              <Percent className="w-6 h-6 text-purple-600" />
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-          <div className="flex justify-between items-start">
-            <div>
               <p className="text-sm font-medium text-gray-500">Premios entregados</p>
               <h3 className="text-3xl font-bold text-gray-900 mt-2">{data.awardStats.delivered} <span className="text-sm text-gray-400 font-normal">/ {data.awardStats.assigned}</span></h3>
               <p className="text-xs text-gray-500 mt-1">
@@ -233,20 +221,23 @@ const EventReport: React.FC<EventReportProps> = ({ eventId }) => {
       <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
         <div className="flex items-center gap-2 mb-4">
           <div className="p-2 bg-indigo-50 rounded-lg"><CalendarDays className="w-5 h-5 text-indigo-600" /></div>
-          <h3 className="text-lg font-semibold text-gray-800">Inscritos por fecha</h3>
+          <h3 className="text-lg font-semibold text-gray-800">Inscritos y acreditados por fecha</h3>
         </div>
         {data.scheduleStats.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {data.scheduleStats.map((s, i) => (
-              <div key={i} className="flex items-center justify-between bg-gray-50 border border-gray-100 rounded-lg px-4 py-3">
-                <div className="min-w-0 pr-3">
-                  <div className="text-sm font-medium text-gray-800 truncate capitalize">{s.scheduleName} · {fmtDateShort(s.startDateTime)}</div>
-                  <div className="text-xs text-gray-400 mt-0.5">{s.registeredParticipants} particip. · {s.registeredGuests} invitados</div>
-                  <div className="text-[11px] text-green-600 mt-0.5">{s.accreditedTotal} acreditados</div>
-                </div>
-                <div className="text-right shrink-0">
-                  <div className="text-2xl font-bold text-indigo-600 leading-none tabular-nums">{s.registered}</div>
-                  <div className="text-[10px] uppercase tracking-wide text-gray-400 mt-1">inscritos</div>
+              <div key={i} className="bg-gray-50 border border-gray-100 rounded-lg px-4 py-3">
+                <div className="text-sm font-medium text-gray-800 truncate capitalize">{s.scheduleName} · {fmtDateShort(s.startDateTime)}</div>
+                <div className="text-xs text-gray-400 mt-0.5 mb-3">{s.registeredParticipants} particip. · {s.registeredGuests} invitados</div>
+                <div className="flex items-end gap-6">
+                  <div>
+                    <div className="text-2xl font-bold text-indigo-600 leading-none tabular-nums">{s.registered}</div>
+                    <div className="text-[10px] uppercase tracking-wide text-gray-400 mt-1">inscritos</div>
+                  </div>
+                  <div>
+                    <div className="text-2xl font-bold text-green-600 leading-none tabular-nums">{s.accreditedTotal}</div>
+                    <div className="text-[10px] uppercase tracking-wide text-gray-400 mt-1">acreditados</div>
+                  </div>
                 </div>
               </div>
             ))}
