@@ -510,7 +510,7 @@ export class ParticipantService {
         action: 'UPDATE',
         entity: 'Participant',
         entityId: participantId,
-        details: { name: `${(participant as any).firstName} ${(participant as any).lastName}`.trim(), action: 'revert_to_preloaded' },
+        details: { name: `${(participant as any).firstName} ${(participant as any).lastName}`.trim(), action: 'revert_to_preloaded', summary: 'Revertido a precargado (se le quitaron sus fechas)' },
       });
     }
 
@@ -760,7 +760,7 @@ export class ParticipantService {
       if (userId) {
         await auditLogService.log({
           userId, action: 'UPDATE', entity: 'Participant', entityId: participantId,
-          details: { name: `${participant.firstName} ${participant.lastName}`.trim(), action: 'set_guest_dates', invitadosNuevos: created },
+          details: { name: `${participant.firstName} ${participant.lastName}`.trim(), action: 'set_guest_dates', invitadosNuevos: created, summary: `Invitados por fecha actualizados${created ? ` · ${created} invitado(s) nuevo(s)` : ''}` },
         });
       }
       return { ok: true, created };

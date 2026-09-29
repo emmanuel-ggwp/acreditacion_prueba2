@@ -7,6 +7,7 @@ import { History } from 'lucide-react';
 
 const ENTITY_LABELS: Record<string, string> = {
   Event: 'Evento', Participant: 'Participante', Award: 'Premio', Guest: 'Invitado', EventSchedule: 'Horario',
+  Accreditation: 'Acreditación', User: 'Usuario',
 };
 const entityLabel = (e: string) => ENTITY_LABELS[e] || e;
 const fmt = (d: string) => { try { return new Date(d).toLocaleString('es-CL'); } catch { return ''; } };

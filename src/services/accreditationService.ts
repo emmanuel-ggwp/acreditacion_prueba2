@@ -21,6 +21,19 @@ import User from '@/models/User';
 import { auditLogService } from './auditLogService';
 import { dietaryFull, dietaryLabel } from '@/utils/dietary';
 
+// Ayudantes para la auditoría de acreditación: nombre de la persona y texto legible
+// de la fecha ("Ceremonia (16 sep)"), en hora de Chile.
+const personName = (p: any): string => `${p?.firstName || ''} ${p?.lastName || ''}`.trim() || '(sin nombre)';
+const scheduleText = (s: any): string => {
+  const base = s?.label || s?.scheduleName || 'la fecha';
+  try {
+    const d = s?.startDateTime
+      ? new Date(s.startDateTime).toLocaleDateString('es-CL', { timeZone: 'America/Santiago', day: '2-digit', month: 'short' })
+      : '';
+    return d ? `${base} (${d})` : base;
+  } catch { return base; }
+};
+
 /**
  * Lógica de negocio del check-in: acredita/des-acredita a participantes e invitados con transacción
  * y bloqueo de fila, y provee estadísticas y listados de apoyo para el panel de acreditación.
@@ -136,24 +149,33 @@ export class AccreditationService {
 
     const transaction = await sequelize.transaction();
     try {
-      await this._verifyAndLock({ participantId, eventScheduleId }, transaction);
+      const { schedule, person } = await this._verifyAndLock({ participantId, eventScheduleId }, transaction);
 
+      // Invitados que llegaron (modos numéricos count/companion; en 'named' se acreditan aparte).
+      const invitados = Math.max(0, Number(guestCount) || 0);
       const accreditation = await Accreditation.create({
         participantId,
         eventScheduleId,
         accreditedBy,
         checkInTime: new Date(),
         notes,
-        // Invitados que llegaron (modos numéricos count/companion; en 'named' se acreditan aparte).
-        guestCount: Math.max(0, Number(guestCount) || 0),
+        guestCount: invitados,
       }, { transaction });
 
+      // Auditoría legible: quién se acreditó, en qué fecha y con cuántos invitados/cargas.
       await auditLogService.log({
         userId: accreditedBy,
         action: 'CREATE',
         entity: 'Accreditation',
         entityId: accreditation.id,
-        details: { participantId, eventScheduleId },
+        details: {
+          name: personName(person),
+          summary: `${scheduleText(schedule)}${invitados ? ` · ${invitados} invitado(s)/carga(s)` : ''}`,
+          fecha: scheduleText(schedule),
+          invitados,
+          participantId,
+          eventScheduleId,
+        },
       });
 
       await transaction.commit();
@@ -179,7 +201,7 @@ export class AccreditationService {
 
     const transaction = await sequelize.transaction();
     try {
-      await this._verifyAndLock({ guestId, eventScheduleId }, transaction);
+      const { schedule, person } = await this._verifyAndLock({ guestId, eventScheduleId }, transaction);
 
       const accreditation = await Accreditation.create({
         guestId,
@@ -189,12 +211,20 @@ export class AccreditationService {
         notes,
       }, { transaction });
 
+      // Auditoría legible: qué invitado se acreditó, en qué fecha y de qué participante es.
+      const guestParticipant = (person as any)?.participant;
       await auditLogService.log({
         userId: accreditedBy,
         action: 'CREATE',
         entity: 'Accreditation',
         entityId: accreditation.id,
-        details: { guestId, eventScheduleId },
+        details: {
+          name: personName(person),
+          summary: `Invitado · ${scheduleText(schedule)}${guestParticipant ? ` · de ${personName(guestParticipant)}` : ''}`,
+          fecha: scheduleText(schedule),
+          guestId,
+          eventScheduleId,
+        },
       });
 
       await transaction.commit();
