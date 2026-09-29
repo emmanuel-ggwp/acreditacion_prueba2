@@ -2,22 +2,35 @@ import * as XLSX from 'xlsx';
 import apiClient from './apiClient';
 import { dietaryFull, dietaryLabel } from './dietary';
 import { getCustomQuestions, answerText } from './customQuestions';
+import { formatDateCL, formatDateTimeCL } from './formatters';
 
-const fmtDate = (d?: string) => {
-  if (!d) return '';
-  try { return new Date(d).toLocaleDateString('es-CL'); } catch { return ''; }
-};
-const fmtDateTime = (d?: string | null) => {
-  if (!d) return '';
-  try { return new Date(d).toLocaleString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }); } catch { return ''; }
-};
+// Fecha corta (solo día) y fecha+hora, siempre en hora de Chile (es-CL + America/Santiago)
+// para que la exportación no dependa del reloj/zona del navegador que la genera.
+const fmtDate = (d?: string) => (d ? formatDateCL(d) : '');
+const fmtDateTime = (d?: string | null) => (d ? formatDateTimeCL(d) : '');
+
 const guestTypeLabel = (t?: string) =>
   t === 'CARGA' ? 'Carga' : t === 'ACOMPANANTE' ? 'Acompañante' : (t || '');
 
+// Etiqueta de una fecha del evento: "Nombre de la fecha (dd-mm-aaaa)".
+const scheduleLabel = (s: any) => `${s.label || s.scheduleName} (${fmtDate(s.startDateTime)})`;
+
+/**
+ * Fechas elegidas de un invitado. Con "invitados por fecha" cada invitado puede ir a
+ * fechas distintas (Guest.schedules). Si el invitado no está ligado a ninguna fecha
+ * concreta (cargas antiguas / agregado sin fecha), va a todas las del participante:
+ * en ese caso se muestran las del participante, que es donde efectivamente asiste.
+ */
+const guestFechas = (g: any, p: any) => {
+  const gs = Array.isArray(g.schedules) && g.schedules.length ? g.schedules : (p.schedules || []);
+  return gs.map(scheduleLabel).join(' ; ');
+};
+
 /**
  * Descarga un Excel (.xlsx) con los participantes del evento + sus invitados + fechas.
- * Hoja 1 "Participantes": una fila por participante (con lista de invitados).
- * Hoja 2 "Invitados": una fila por invitado.
+ * Hoja 1 "Participantes": UNA fila por participante; cada invitado sale en la misma fila
+ *   en columnas propias (Invitado N · Dieta invitado N · Fecha invitado N).
+ * Hoja 2 "Invitados": una fila por invitado (lista plana), con su dieta y su fecha real.
  */
 export async function exportParticipantsToExcel(eventId: string, eventName: string) {
   const participants = await apiClient.get<any[]>(`/api/events/${eventId}/export`);
@@ -28,18 +41,33 @@ export async function exportParticipantsToExcel(eventId: string, eventName: stri
     customQuestions = getCustomQuestions(event?.registrationConfig);
   } catch { /* si no se puede leer la config, se exporta sin esas columnas */ }
 
+  // Máximo de invitados con nombre entre todos los participantes: define cuántos
+  // bloques de columnas (Invitado N …) lleva la hoja. Todas las filas comparten las
+  // mismas columnas (vacías donde no haya invitado) para que el Excel quede parejo.
+  const maxGuests = participants.reduce((m, p) => Math.max(m, (p.guests || []).length), 0);
+
   const partRows = participants.map((p) => {
     const schedules = p.schedules || [];
-    const fechas = schedules.map((s: any) => `${s.label || s.scheduleName} (${fmtDate(s.startDateTime)})`).join(' ; ');
+    const fechas = schedules.map(scheduleLabel).join(' ; ');
     const lugares = Array.from(new Set(schedules.map((s: any) => s.location).filter(Boolean))).join(' ; ');
     const guests = p.guests || [];
-    // Respuesta a cada pregunta configurable del evento (usa la respuesta guardada
-    // en customData; si falta, se lee "No" cuando la pregunta existe).
+
+    // Respuesta a cada pregunta configurable del evento.
     const customCols: Record<string, string> = {};
     for (const q of customQuestions) {
       const a = (p.customData && typeof p.customData === 'object') ? p.customData[q.key] : null;
       customCols[q.label] = a ? answerText(a) : '';
     }
+
+    // Un bloque de columnas por invitado (nombre · dieta · fecha), hasta maxGuests.
+    const guestCols: Record<string, string> = {};
+    for (let i = 0; i < maxGuests; i++) {
+      const g = guests[i];
+      guestCols[`Invitado ${i + 1}`] = g ? `${g.firstName} ${g.lastName || ''}`.trim() : '';
+      guestCols[`Dieta invitado ${i + 1}`] = g ? dietaryLabel(g.dietaryPreference) : '';
+      guestCols[`Fecha invitado ${i + 1}`] = g ? guestFechas(g, p) : '';
+    }
+
     return {
       'Nombre': p.firstName || '',
       'Apellido': p.lastName || '',
@@ -60,14 +88,13 @@ export async function exportParticipantsToExcel(eventId: string, eventName: stri
       'Cant. invitados': guests.length + (Number(p.guestCount) || 0),
       'Acompañante': p.guestCompanion ? 'Sí' : (Number(p.guestLoads) > 0 ? 'No' : ''),
       'Cargas': Number(p.guestLoads) > 0 ? p.guestLoads : '',
-      'Invitados': guests.map((g: any) => `${g.firstName} ${g.lastName || ''}`.trim()).join(' ; '),
+      ...guestCols,
       ...customCols,
     };
   });
 
   const guestRows: any[] = [];
   participants.forEach((p) => {
-    const fecha = (p.schedules || []).map((s: any) => fmtDate(s.startDateTime)).join(' ; ');
     (p.guests || []).forEach((g: any) => {
       guestRows.push({
         'Participante': `${p.firstName} ${p.lastName || ''}`.trim(),
@@ -79,7 +106,7 @@ export async function exportParticipantsToExcel(eventId: string, eventName: stri
         'Acreditado': g.isAccredited ? 'Sí' : 'No',
         'Hora de acreditación': fmtDateTime(g.accreditedAt),
         'Requerimiento alimentario': dietaryLabel(g.dietaryPreference),
-        'Fecha': fecha,
+        'Fecha': guestFechas(g, p),
       });
     });
   });

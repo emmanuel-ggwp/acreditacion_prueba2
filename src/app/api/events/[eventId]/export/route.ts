@@ -19,7 +19,12 @@ export const GET = withAuth(async (req: AuthenticatedRequest, { params }: { para
         {
           model: Guest,
           as: 'guests',
-          include: [{ model: Accreditation, attributes: ['id', 'checkInTime'], required: false }],
+          include: [
+            { model: Accreditation, attributes: ['id', 'checkInTime'], required: false },
+            // Fechas a las que va cada invitado ("invitados por fecha"): así el Excel
+            // puede mostrar la fecha elegida de cada invitado, no solo la del participante.
+            { model: EventSchedule, as: 'schedules', through: { attributes: [] } },
+          ],
         },
         { model: EventSchedule, as: 'schedules', through: { attributes: [] } },
         { model: Accreditation, attributes: ['id', 'checkInTime'], required: false },
