@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import apiClient from '@/utils/apiClient';
 import { dietaryLabel, dietaryFull } from '@/utils/dietary';
+import { formatDateCL, formatDateTimeCL } from '@/utils/formatters';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line } from 'recharts';
 import { Users, Award, CheckCircle, Percent, Download, Utensils } from 'lucide-react';
 import { utils, writeFile } from 'xlsx';
@@ -48,17 +49,18 @@ interface ReportData {
   }[];
 }
 
-const fmtCheckIn = (d?: string | null) => {
-  if (!d) return '';
-  try { return new Date(d).toLocaleString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }); } catch { return ''; }
-};
-const fmtDate = (d?: string | null) => {
-  if (!d) return '';
-  try { return new Date(d).toLocaleDateString('es-CL', { weekday: 'short', day: '2-digit', month: 'short' }); } catch { return ''; }
-};
-const fmtDateShort = (d?: string | null) => {
-  if (!d) return '';
-  try { return new Date(d).toLocaleDateString('es-CL', { day: '2-digit', month: 'short' }); } catch { return ''; }
+// Fechas en hora de Chile (es-CL + America/Santiago), no la del navegador.
+const fmtCheckIn = (d?: string | null) => (d ? formatDateTimeCL(d) : '');
+const fmtDate = (d?: string | null) => (d ? formatDateCL(d, { weekday: 'short', day: '2-digit', month: 'short' }) : '');
+const fmtDateShort = (d?: string | null) => (d ? formatDateCL(d, { day: '2-digit', month: 'short' }) : '');
+// Etiqueta de una fecha del evento para la exportación: "Nombre (dd-mm-aaaa)".
+const scheduleLabel = (s: any) => `${s.label || s.scheduleName} (${formatDateCL(s.startDateTime)})`;
+const partFechas = (p: any) => (p?.schedules || []).map(scheduleLabel).join(' ; ');
+// Fechas elegidas de un invitado: las suyas ("invitados por fecha") o, si no está
+// ligado a ninguna, las del participante (donde efectivamente asiste).
+const guestFechas = (g: any, p: any) => {
+  const gs = Array.isArray(g?.schedules) && g.schedules.length ? g.schedules : (p?.schedules || []);
+  return gs.map(scheduleLabel).join(' ; ');
 };
 
 const EventReport: React.FC<EventReportProps> = ({ eventId }) => {
@@ -117,15 +119,21 @@ const EventReport: React.FC<EventReportProps> = ({ eventId }) => {
     for (const p of attendees) {
       rows.push({
         Tipo: 'Participante', Nombre: p.firstName || '', Apellido: p.lastName || '',
-        'RUT/Documento': p.documentNumber || '', Empresa: p.company || '', Cargo: p.position || '',
-        'Código SAP': p.numeroSap || '', 'Preferencia alimenticia': dietaryFull(p.dietaryPreference, p.dietaryComments),
+        'RUT/Documento': p.documentNumber || '', Correo: p.email || '', 'Teléfono': p.phone || '',
+        Empresa: p.company || '', Cargo: p.position || '', 'Código SAP': p.numeroSap || '',
+        Estado: (p.schedules || []).length ? 'Inscrito' : 'Precargado',
+        'Fecha(s)': partFechas(p),
+        'Preferencia alimenticia': dietaryFull(p.dietaryPreference, p.dietaryComments),
         Acreditado: p.isAccredited ? 'Sí' : 'No', 'Hora acreditación': fmtCheckIn(p.accreditedAt), 'Pertenece a': '',
       });
       for (const g of (p.guests || [])) {
         rows.push({
           Tipo: 'Invitado', Nombre: g.firstName || '', Apellido: g.lastName || '',
-          'RUT/Documento': g.documentNumber || '', Empresa: '', Cargo: '',
-          'Código SAP': '', 'Preferencia alimenticia': dietaryFull(g.dietaryPreference, (g as any).dietaryComments),
+          'RUT/Documento': g.documentNumber || '', Correo: g.email || '', 'Teléfono': g.phone || '',
+          Empresa: '', Cargo: '', 'Código SAP': '',
+          Estado: '',
+          'Fecha(s)': guestFechas(g, p),
+          'Preferencia alimenticia': dietaryFull(g.dietaryPreference, (g as any).dietaryComments),
           Acreditado: g.isAccredited ? 'Sí' : 'No', 'Hora acreditación': fmtCheckIn(g.accreditedAt), 'Pertenece a': `${p.firstName || ''} ${p.lastName || ''}`.trim(),
         });
       }
