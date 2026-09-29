@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import apiClient from '@/utils/apiClient';
 import { dietaryLabel, dietaryFull } from '@/utils/dietary';
-import { formatDateCL, formatDateTimeCL } from '@/utils/formatters';
+import { formatDateCL, formatTimeCL, formatDateTimeCL } from '@/utils/formatters';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line } from 'recharts';
 import { Users, Award, CheckCircle, Download, Utensils, ChevronDown, CalendarDays } from 'lucide-react';
 import { utils, writeFile } from 'xlsx';
@@ -376,7 +376,7 @@ const EventReport: React.FC<EventReportProps> = ({ eventId }) => {
                   <td className="px-6 py-4 font-medium text-gray-900 capitalize whitespace-nowrap">{fmtDate(schedule.startDateTime)}</td>
                   <td className="px-6 py-4">{schedule.scheduleName}</td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    {new Date(schedule.startDateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} – {new Date(schedule.endDateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    {formatTimeCL(schedule.startDateTime)} – {formatTimeCL(schedule.endDateTime)}
                   </td>
                   <td className="px-6 py-4 text-center">
                     <div className="font-medium text-gray-800">{schedule.capacity > 0 ? schedule.capacity : 'Ilimitado'}</div>
