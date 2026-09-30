@@ -5,7 +5,7 @@ import { Calendar, MapPin, ArrowRight, CheckCircle2, Clock, Loader2, Info, Mail,
 import { isValidRut } from '@/utils/validators/rut';
 import { sendConfirmationEmail } from '@/lib/emailjs';
 import { buildGuestSummary, buildAttendanceDetail } from '@/utils/guests';
-import { getFormFields, guestDietaryEnabled, getGuestMode, getGuestFields } from '@/utils/formFields';
+import { getFormFields, guestDietaryEnabled, guestDietaryRequired, getGuestMode, getGuestFields } from '@/utils/formFields';
 import CustomQuestionFields from '@/components/public/CustomQuestionFields';
 import { getCustomQuestions, initCustomAnswers, missingRequiredCustom, type CustomAnswers } from '@/utils/customQuestions';
 import { getDietaryOptions, isFreeTextDiet, dietaryFull, dietaryLabel, ensureDietOption, DIET_COMMENTS_MAX, GUEST_DIET_DETAIL_MAX } from '@/utils/dietary';
@@ -93,6 +93,8 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
   const ff = getFormFields(event.registrationConfig);
   ff.documentNumber = { enabled: true, required: true }; // RUT siempre visible y obligatorio.
   const guestDiet = guestDietaryEnabled(event.registrationConfig);
+  // ¿La dieta de cada invitado es OBLIGATORIA? Debe elegir una opción (puede ser "Ninguna").
+  const guestDietReq = guestDietaryRequired(event.registrationConfig);
   const dietOpts = getDietaryOptions(event.registrationConfig);
   // Preguntas configurables del evento (Sí/No + lista, ej. transporte + recorrido).
   const customQuestions = getCustomQuestions(event.registrationConfig);
@@ -166,7 +168,9 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
   const addGuestFor = (sid: string) => setDateState((st) => {
     const cur = st[sid] || { cargas: [], news: [] };
     if (cur.news.length >= maxGuests) return st;
-    return { ...st, [sid]: { ...cur, news: [...cur.news, { firstName: '', lastName: '', documentNumber: '', age: '', dietaryPreference: 'NONE', dietaryComments: '' }] } };
+    // Si la dieta es OBLIGATORIA, el invitado nuevo arranca SIN elección ('') para forzar
+    // que la persona escoja una opción; si no, se deja "Ninguna" (NONE) por defecto.
+    return { ...st, [sid]: { ...cur, news: [...cur.news, { firstName: '', lastName: '', documentNumber: '', age: '', dietaryPreference: guestDietReq ? '' : 'NONE', dietaryComments: '' }] } };
   });
   const updateGuestFor = (sid: string, i: number, k: string, v: string) => setDateState((st) => {
     const cur = st[sid] || { cargas: [], news: [] };
@@ -255,6 +259,15 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
     e.preventDefault();
     setError('');
     if (!selectedScheduleIds.length) { setError('Selecciona al menos una fecha de asistencia.'); return; }
+    // Dieta de invitados OBLIGATORIA (modo 'named'): cada invitado NUEVO con nombre debe
+    // haber elegido una opción (puede ser "Ninguna"); no se guarda vacío en silencio. Se
+    // valida aquí para cubrir tanto el flujo RUT como el abierto.
+    if (guestDiet && guestDietReq && guestMode === 'named' && event.allowGuests && maxGuests > 0) {
+      const anyGuestDietMissing = selectedScheduleIds.some((sid) =>
+        stateFor(sid).news.some((g) => g.firstName.trim() && !(g.dietaryPreference || '').trim())
+      );
+      if (anyGuestDietMissing) { setError('Elige la preferencia alimenticia de cada invitado (puede ser «Ninguna»).'); return; }
+    }
 
     let payload: any;
     if (mode === 'rut') {
@@ -552,7 +565,8 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
                 </div>
               )}
               {guestDiet && (
-                <select className={`${inputClass} mt-2`} style={inputStyle} value={g.dietaryPreference || 'NONE'} onChange={(e) => updateGuestFor(sid, i, 'dietaryPreference', e.target.value)}>
+                <select className={`${inputClass} mt-2`} style={inputStyle} value={g.dietaryPreference || (guestDietReq ? '' : 'NONE')} onChange={(e) => updateGuestFor(sid, i, 'dietaryPreference', e.target.value)}>
+                  {guestDietReq && <option value="" style={{ color: '#111' }}>Preferencia alimenticia: elige una opción</option>}
                   {ensureDietOption(dietOpts, g.dietaryPreference).map((o) => <option key={o.value} value={o.value} style={{ color: '#111' }}>{`Preferencia alimenticia: ${o.label}`}</option>)}
                 </select>
               )}

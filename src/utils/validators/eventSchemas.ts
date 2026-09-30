@@ -43,6 +43,9 @@ export const guestsConfigSchema = z.object({
   formFields: z.record(z.string(), z.object({ enabled: z.boolean().optional(), required: z.boolean().optional() })).optional(),
   // ¿Se pide preferencia alimenticia a cada invitado? (solo aplica al modo 'named')
   dietary: z.boolean().optional(),
+  // ¿Esa preferencia alimenticia es OBLIGATORIA? (requiere dietary=true). Obligatoria =
+  // la persona debe elegir una opción (puede ser "Ninguna"), no dejarla sin tocar.
+  dietaryRequired: z.boolean().optional(),
   // Etiqueta VISUAL con que se nombra a los invitados en la landing (singular/plural),
   // ej. "Carga"/"Cargas". Si no se define, se usa "Invitado"/"Invitados".
   termSingular: z.string().optional(),

@@ -212,6 +212,7 @@ const EventForm: React.FC<EventFormProps> = ({ event, onClose, onSuccess }) => {
           ...(event?.registrationConfig?.guests || {}),
           mode: event?.registrationConfig?.guests?.mode || 'named',
           dietary: !!event?.registrationConfig?.guests?.dietary,
+          dietaryRequired: !!event?.registrationConfig?.guests?.dietaryRequired,
           termSingular: event?.registrationConfig?.guests?.termSingular || 'Invitado',
           termPlural: event?.registrationConfig?.guests?.termPlural || 'Invitados',
           // Campos por invitado (apellido / RUT / edad): {enabled, required}. El nombre siempre se pide.
@@ -1033,6 +1034,12 @@ const EventForm: React.FC<EventFormProps> = ({ event, onClose, onSuccess }) => {
                         <input type="checkbox" {...register('registrationConfig.guests.dietary' as any)} className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
                         Preguntar preferencia alimenticia a cada invitado
                       </label>
+                      {watch('registrationConfig.guests.dietary' as any) && (
+                        <label className="flex items-center gap-2 text-sm text-gray-700 px-3 py-2.5 pl-9 cursor-pointer">
+                          <input type="checkbox" {...register('registrationConfig.guests.dietaryRequired' as any)} className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
+                          Obligatoria — cada invitado debe elegir una opción (puede ser «Ninguna»)
+                        </label>
+                      )}
                     </div>
                     <p className="mt-1 text-xs text-gray-500">Nombre y Apellido siempre se piden.</p>
                     {emailOn && (

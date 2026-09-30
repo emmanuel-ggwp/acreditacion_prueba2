@@ -5,7 +5,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { publicRegistrationSchema } from '@/utils/validators/participantSchemas';
-import { getFormFields, guestDietaryEnabled, getGuestMode, getGuestFields } from '@/utils/formFields';
+import { getFormFields, guestDietaryEnabled, guestDietaryRequired, getGuestMode, getGuestFields } from '@/utils/formFields';
 import { getDietaryOptions, isFreeTextDiet, dietaryFull, ensureDietOption, DIET_COMMENTS_MAX, GUEST_DIET_DETAIL_MAX } from '@/utils/dietary';
 import { sendConfirmationEmail } from '@/lib/emailjs';
 import { buildGuestSummary, buildAttendanceDetail } from '@/utils/guests';
@@ -68,6 +68,8 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
   // Con varias fechas, el modal se abre primero (elegir fecha antes del formulario).
   const [showDateModal, setShowDateModal] = useState(availableSchedules.length > 1);
   const guestDiet = guestDietaryEnabled((event as any).registrationConfig);
+  // ¿La dieta de cada invitado es OBLIGATORIA? Debe elegir una opción (puede ser "Ninguna").
+  const guestDietReq = guestDietaryRequired((event as any).registrationConfig);
   // Campos configurables por evento para cada invitado (apellido / RUT / edad).
   const guestFields = getGuestFields((event as any).registrationConfig);
   const dietOpts = getDietaryOptions((event as any).registrationConfig);
@@ -112,7 +114,9 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
   const addDateGuest = (sid: string) => setDateState((st) => {
     const cur = st[sid] || { cargas: [], news: [] };
     if (cur.news.length >= maxGuests) return st;
-    return { ...st, [sid]: { ...cur, news: [...cur.news, { firstName: '', lastName: '', documentNumber: '', age: '', dietaryPreference: 'NONE', dietaryComments: '' }] } };
+    // Si la dieta es OBLIGATORIA, el invitado nuevo arranca SIN elección (''), para forzar
+    // que la persona escoja una opción; si no, se deja "Ninguna" (NONE) por defecto.
+    return { ...st, [sid]: { ...cur, news: [...cur.news, { firstName: '', lastName: '', documentNumber: '', age: '', dietaryPreference: guestDietReq ? '' : 'NONE', dietaryComments: '' }] } };
   });
   const updateDateGuest = (sid: string, i: number, k: string, v: string) => setDateState((st) => {
     const cur = st[sid] || { cargas: [], news: [] };
@@ -160,7 +164,11 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
     defaultValues: {
       // Con una sola fecha disponible se pre-selecciona; con varias se deja vacío
       // para que el asistente abra el modal y elija (más claro).
-      scheduleIds: availableSchedules.length === 1 ? [availableSchedules[0].id] : []
+      scheduleIds: availableSchedules.length === 1 ? [availableSchedules[0].id] : [],
+      // Si la preferencia alimenticia del titular es OBLIGATORIA, arranca sin elección
+      // ('') para forzar escoger una opción (puede ser "Ninguna"); si no, se deja que el
+      // selector muestre "Ninguna" por defecto (comportamiento de siempre).
+      ...(ff.dietary.enabled && ff.dietary.required ? { dietaryPreference: '' } : {}),
     }
   });
 
@@ -243,10 +251,10 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
       const missing: string[] = [];
       for (const key of Object.keys(ff)) {
         if (!ff[key].enabled || !ff[key].required) continue;
-        // "Ninguna" (NONE) ES una respuesta válida para la preferencia alimenticia:
-        // no bloquea el envío (igual que Gala y que el servidor).
-        if (key === 'dietary') continue;
-        const val = (data as any)[key];
+        // La preferencia alimenticia obligatoria se cumple ELIGIENDO una opción (incluida
+        // "Ninguna"/NONE); solo bloquea si quedó sin elegir (vacío). El campo real es
+        // `dietaryPreference`, no `dietary`.
+        const val = key === 'dietary' ? (data as any).dietaryPreference : (data as any)[key];
         if (!val || val === '') missing.push(FIELD_LABELS[key]);
       }
       // Preguntas configurables obligatorias (Sí + sin opción elegida).
@@ -260,6 +268,18 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
         setError('Elige al menos una fecha nueva para inscribirte.');
         setIsSubmitting(false);
         return;
+      }
+      // Dieta de invitados OBLIGATORIA (modo 'named'): cada invitado NUEVO con nombre debe
+      // haber elegido una opción (puede ser "Ninguna"); no se guarda vacío en silencio.
+      if (guestDiet && guestDietReq && guestMode === 'named' && allowGuests && maxGuests > 0) {
+        const anyGuestDietMissing = selectedIds.some((sid) =>
+          stateFor(sid).news.some((g) => g.firstName.trim() && !(g.dietaryPreference || '').trim())
+        );
+        if (anyGuestDietMissing) {
+          setError('Elige la preferencia alimenticia de cada invitado (puede ser «Ninguna»).');
+          setIsSubmitting(false);
+          return;
+        }
       }
       let guestsBySchedule: Record<string, any[]> | undefined;
       const guestData: any = {};
@@ -667,6 +687,7 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
               {...register('dietaryPreference')}
               className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
             >
+              {ff.dietary.required && <option value="">Selecciona una opción…</option>}
               {ensureDietOption(dietOpts, watch('dietaryPreference')).map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
           </div>
@@ -787,7 +808,8 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
                           </div>
                         )}
                         {guestDiet && (
-                          <select value={g.dietaryPreference || 'NONE'} onChange={(e) => updateDateGuest(sid, i, 'dietaryPreference', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white">
+                          <select value={g.dietaryPreference || (guestDietReq ? '' : 'NONE')} onChange={(e) => updateDateGuest(sid, i, 'dietaryPreference', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white">
+                            {guestDietReq && <option value="">Preferencia alimenticia: elige una opción</option>}
                             {ensureDietOption(dietOpts, g.dietaryPreference).map((o) => <option key={o.value} value={o.value}>Preferencia alimenticia: {o.label}</option>)}
                           </select>
                         )}

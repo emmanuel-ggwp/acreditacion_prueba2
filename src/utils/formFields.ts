@@ -102,6 +102,18 @@ export function guestDietaryEnabled(registrationConfig: any): boolean {
   return getGuestMode(registrationConfig) === 'named' && !!registrationConfig?.guests?.dietary;
 }
 
+/**
+ * ¿La preferencia alimenticia de cada invitado es OBLIGATORIA?
+ * Solo cuenta si además está habilitada ({@link guestDietaryEnabled}). "Obligatoria"
+ * significa que la persona debe ELEGIR una opción (puede elegir "Ninguna"), no dejar el
+ * selector en su valor por defecto sin tocarlo.
+ * @param registrationConfig Config de inscripción del evento.
+ * @returns `true` solo si la dieta de invitados está habilitada y marcada como obligatoria.
+ */
+export function guestDietaryRequired(registrationConfig: any): boolean {
+  return guestDietaryEnabled(registrationConfig) && !!registrationConfig?.guests?.dietaryRequired;
+}
+
 // Campos configurables por evento para cada INVITADO (modo 'named'). El NOMBRE siempre
 // se pide (identifica al invitado); esto controla apellido, RUT y edad.
 /** Campos configurables por cada INVITADO en modo 'named' (el nombre siempre se pide). */
