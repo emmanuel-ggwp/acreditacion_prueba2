@@ -6,8 +6,9 @@ import { uploadImage } from '@/utils/upload';
 import useEventStore from '@/store/eventStore';
 import EventSchedule from '@/models/EventSchedule';
 import toast from 'react-hot-toast';
+import { formatDateCL } from '@/utils/formatters';
 
-const fmt = (d: string) => { try { return new Date(d).toLocaleDateString('es-CL', { day: '2-digit', month: 'short' }); } catch { return ''; } };
+const fmt = (d: string) => formatDateCL(d, { day: '2-digit', month: 'short' });
 
 const ScheduleImageManager: React.FC<{ eventId: string }> = ({ eventId }) => {
   const { EventSchedules, setScheduleImage } = useEventStore();

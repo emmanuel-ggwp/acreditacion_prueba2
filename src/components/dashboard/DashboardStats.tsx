@@ -7,6 +7,7 @@ import useEventStore from '@/store/eventStore';
 import { ButtonEventReport } from '../events/ButtonEventReport';
 import { showToast } from '@/components/ui/Toast';
 import DashboardHero from './DashboardHero';
+import { formatDateTimeCL } from '@/utils/formatters';
 
 interface ScheduleStat {
   id: string;
@@ -123,7 +124,7 @@ const EventStatCard = React.memo(({ stat, viewMode }: { stat: EventStat, viewMod
             <div className="mb-4">
                 <p className="text-base font-semibold text-gray-900">{schedule.scheduleName}</p>
                 <p className="text-sm text-gray-500 mt-0.5">
-                    {new Date(schedule.startDateTime).toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }).replace(/\//g, '-')}
+                    {formatDateTimeCL(schedule.startDateTime, { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                 </p>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
@@ -230,7 +231,7 @@ const DashboardStats: React.FC = () => {
             if (schedules.length > 0) {
                 const dates = schedules.map((s: any) => new Date(s.startDateTime).getTime());
                 const minDate = new Date(Math.min(...dates));
-                date = minDate.toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }).replace(/\//g, '-');
+                date = formatDateTimeCL(minDate, { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
                 
                 scheduleStats = schedules.map((s: any, index: number) => ({
                   id: `${event.id}-${index}`,

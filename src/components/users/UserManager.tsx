@@ -8,6 +8,7 @@ import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import DeleteReasonModal from '@/components/ui/DeleteReasonModal';
 import { Plus, Pencil, Trash2, UserCheck, UserX, X } from 'lucide-react';
 import { passwordError } from '@/utils/validators/authSchemas';
+import { formatDateTimeCL } from '@/utils/formatters';
 
 // Pista de contraseña, alineada con la política única del servidor (D2.6/SB-31).
 const PASSWORD_HINT = 'Mínimo 8 caracteres, con mayúscula, minúscula, número y símbolo';
@@ -18,7 +19,7 @@ const roleBadge: Record<string, string> = {
   OPERATOR: 'bg-teal-100 text-teal-700',
   GUARDIA: 'bg-amber-100 text-amber-700',
 };
-const fmt = (d?: string) => (d ? new Date(d).toLocaleString('es-CL') : '—');
+const fmt = (d?: string) => (d ? formatDateTimeCL(d) : '—');
 
 const UserManager: React.FC = () => {
   const [users, setUsers] = useState<any[]>([]);

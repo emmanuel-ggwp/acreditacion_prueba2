@@ -12,6 +12,7 @@ import { errorHandler } from '@/utils/errors';
 import { Clock } from 'lucide-react';
 import EventSchedule from '@/models/EventSchedule';
 import { showToast } from '@/components/ui/Toast';
+import { formatDateTimeCL } from '@/utils/formatters';
 import GuestList from './GuestList';
 import { getFormFields, guestDietaryEnabled, getGuestMode } from '@/utils/formFields';
 import { getDietaryOptions } from '@/utils/dietary';
@@ -391,7 +392,7 @@ const ParticipantForm: React.FC<ParticipantFormProps> = ({ eventId, participant,
                       className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
                     />
                     <label htmlFor={`schedule-${schedule.id}`} className="ml-2 block text-sm text-gray-900">
-                      {schedule.scheduleName} ({new Date(schedule.startDateTime).toLocaleString()})
+                      {schedule.scheduleName} ({formatDateTimeCL(schedule.startDateTime)})
                     </label>
                   </div>
                 ))

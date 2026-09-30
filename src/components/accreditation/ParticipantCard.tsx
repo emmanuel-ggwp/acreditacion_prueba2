@@ -9,6 +9,7 @@ import { Check, X, User, Users, Award, Mail, FileText, Loader2, CalendarClock, U
 import { dietaryFull, dietaryLabel } from '@/utils/dietary';
 import { describeStoredAnswers } from '@/utils/customQuestions';
 import { showToast } from '@/components/ui/Toast';
+import { formatDateCL } from '@/utils/formatters';
 
 interface ParticipantCardProps {
   person: Participant | Guest;
@@ -21,10 +22,7 @@ interface ParticipantCardProps {
   onAccredited?: () => void;
 }
 
-const fmtScheduleDate = (d?: string) => {
-  if (!d) return '';
-  try { return new Date(d).toLocaleDateString('es-CL', { weekday: 'long', day: '2-digit', month: 'long' }); } catch { return ''; }
-};
+const fmtScheduleDate = (d?: string) => (d ? formatDateCL(d, { weekday: 'long', day: '2-digit', month: 'long' }) : '');
 
 // Traduce los mensajes de error del backend (en inglés) a algo claro para la puerta.
 const traducirError = (msg?: string): string => {

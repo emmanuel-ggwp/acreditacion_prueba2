@@ -18,13 +18,10 @@ import GuestDatesModal from './GuestDatesModal';
 import { getGuestMode } from '@/utils/formFields';
 import { buildGuestSummary } from '@/utils/guests';
 import { getDietaryOptions } from '@/utils/dietary';
+import { formatDateCL, formatDateTimeCL } from '@/utils/formatters';
 
-const fmtAccreditedAt = (d?: string | null) => {
-  if (!d) return null;
-  try {
-    return new Date(d).toLocaleString('es-CL', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
-  } catch { return null; }
-};
+const fmtAccreditedAt = (d?: string | null) =>
+  d ? (formatDateTimeCL(d, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) || null) : null;
 
 // Celda de estado del correo de confirmación. Si falló, el error va en el tooltip (title).
 const EmailStatusCell = ({ p }: { p: any }) => {
@@ -185,7 +182,7 @@ const ParticipantList = ({ eventId }: { eventId: string }) => {
         participant_name: nombre, nombre,
         event_name: info.eventName,
         schedule_name: sched ? (sched.label || sched.scheduleName || '') : '',
-        fechaEvento: sched ? new Date(sched.startDateTime).toLocaleDateString('es-CL') : '',
+        fechaEvento: sched ? formatDateCL(sched.startDateTime) : '',
         lugarEvento: sched?.location || info.location || '',
         guests_count: String(gs.count), guests_summary: gs.summary,
       });
@@ -805,7 +802,7 @@ const ParticipantList = ({ eventId }: { eventId: string }) => {
                   <div className="space-y-2 max-h-[45vh] overflow-y-auto">
                     {EventSchedules.map((s: any) => {
                       const checked = enrollScheduleIds.includes(s.id);
-                      const when = s.startDateTime ? new Date(s.startDateTime).toLocaleString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+                      const when = s.startDateTime ? formatDateTimeCL(s.startDateTime, { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
                       return (
                         <label key={s.id} className={`flex items-start gap-2 p-3 rounded-lg border cursor-pointer transition-colors ${checked ? 'bg-emerald-50 border-emerald-300' : 'bg-white border-gray-200 hover:bg-gray-50'}`}>
                           <input

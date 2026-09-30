@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { RefreshCw, Activity, Gauge } from 'lucide-react';
 import apiClient from '@/utils/apiClient';
+import { formatTimeCL } from '@/utils/formatters';
 
 const RealtimeStats: React.FC = () => {
   const [events, setEvents] = useState<any[]>([]);
@@ -44,7 +45,7 @@ const RealtimeStats: React.FC = () => {
           {lastUpdated && (
             <span className="text-sm text-gray-500 flex items-center whitespace-nowrap">
               <RefreshCw size={14} className={`mr-2 ${loading ? 'animate-spin' : ''}`} />
-              {lastUpdated.toLocaleTimeString()}
+              {formatTimeCL(lastUpdated, { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
             </span>
           )}
           <select value={eventId} onChange={(e) => setEventId(e.target.value)} className="border border-gray-300 rounded-md px-3 py-2 text-sm bg-white">

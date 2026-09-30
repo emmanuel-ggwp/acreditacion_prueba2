@@ -342,7 +342,7 @@ export class ParticipantService {
 
     // Log de auditoría de la importación (carga masiva o precarga).
     const scheduleLabel = schedule
-      ? `${schedule.scheduleName || 'Fecha'}${schedule.startDateTime ? ' · ' + new Date(schedule.startDateTime).toLocaleString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''}${schedule.location ? ' · ' + schedule.location : ''}`
+      ? `${schedule.scheduleName || 'Fecha'}${schedule.startDateTime ? ' · ' + new Date(schedule.startDateTime).toLocaleString('es-CL', { timeZone: 'America/Santiago', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''}${schedule.location ? ' · ' + schedule.location : ''}`
       : 'Sin fecha (precarga)';
     await auditLogService.log({
       userId: createdBy,

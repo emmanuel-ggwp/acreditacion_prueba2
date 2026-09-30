@@ -4,13 +4,14 @@ import React, { useEffect, useState } from 'react';
 import apiClient from '@/utils/apiClient';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { History } from 'lucide-react';
+import { formatDateTimeCL } from '@/utils/formatters';
 
 const ENTITY_LABELS: Record<string, string> = {
   Event: 'Evento', Participant: 'Participante', Award: 'Premio', Guest: 'Invitado', EventSchedule: 'Horario',
   Accreditation: 'Acreditación', User: 'Usuario',
 };
 const entityLabel = (e: string) => ENTITY_LABELS[e] || e;
-const fmt = (d: string) => { try { return new Date(d).toLocaleString('es-CL'); } catch { return ''; } };
+const fmt = (d: string) => formatDateTimeCL(d);
 
 const actionMeta: Record<string, { label: string; cls: string }> = {
   CREATE: { label: 'Creación', cls: 'bg-green-50 text-green-700' },

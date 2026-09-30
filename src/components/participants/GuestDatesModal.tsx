@@ -5,6 +5,7 @@ import apiClient from '@/utils/apiClient';
 import useParticipantStore from '@/store/participantStore';
 import { showToast } from '@/components/ui/Toast';
 import { X, Loader2, CalendarClock, PlusCircle, Trash2 } from 'lucide-react';
+import { formatDateCL } from '@/utils/formatters';
 
 interface Props {
   participantId: string;
@@ -22,11 +23,7 @@ type Row = {
   isNew?: boolean;
 };
 
-const fmtDate = (s: any) => {
-  try {
-    return new Date(s.startDateTime).toLocaleDateString('es-CL', { day: '2-digit', month: 'short' });
-  } catch { return ''; }
-};
+const fmtDate = (s: any) => formatDateCL(s?.startDateTime, { day: '2-digit', month: 'short' });
 
 // Modal admin: asigna qué invitados de un participante asisten a cada fecha en la que el
 // participante está inscrito (invitados distintos por fecha). Guarda los enlaces

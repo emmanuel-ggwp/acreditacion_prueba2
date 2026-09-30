@@ -10,6 +10,7 @@ import DietaryModal from './DietaryModal';
 import Participant from '@/models/Participant';
 import Guest from '@/models/Guest';
 import { getAccreditationFields } from '@/utils/formFields';
+import { formatDateCL, formatTimeCL } from '@/utils/formatters';
 import { Clock, MapPin, Users, UserCheck, UsersRound, Award, DoorOpen, DoorClosed, Calendar, ChevronRight, Utensils } from 'lucide-react';
 
 interface AccreditationPanelProps {
@@ -27,8 +28,8 @@ const STATUS: Record<string, { label: string; cls: string }> = {
   accredited: { label: 'Cerrado', cls: 'bg-gray-100 text-gray-600' },
   cancelled: { label: 'Cancelado', cls: 'bg-red-100 text-red-700' },
 };
-const fmtTime = (d: string) => { try { return new Date(d).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' }); } catch { return ''; } };
-const fmtDate = (d: string) => { try { return new Date(d).toLocaleDateString('es-CL', { weekday: 'short', day: '2-digit', month: 'short' }); } catch { return ''; } };
+const fmtTime = (d: string) => formatTimeCL(d, { hour: '2-digit', minute: '2-digit' });
+const fmtDate = (d: string) => formatDateCL(d, { weekday: 'short', day: '2-digit', month: 'short' });
 
 const StatCard: React.FC<{ icon: React.ElementType; label: string; value: React.ReactNode; color: string; onClick?: () => void }> = ({ icon: Icon, label, value, color, onClick }) => {
   const cls = `bg-white border border-gray-200 rounded-xl p-3 text-center ${onClick ? 'cursor-pointer hover:border-amber-300 hover:shadow-sm transition' : ''}`;

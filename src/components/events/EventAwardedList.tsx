@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import apiClient from '@/utils/apiClient';
 import { Award, Check, Loader2 } from 'lucide-react';
+import { formatDateTimeCL } from '@/utils/formatters';
 
 interface AwardedParticipant {
   id: string;
@@ -14,10 +15,7 @@ interface AwardedParticipant {
   accreditedAt?: string | null;
 }
 
-const fmtCheckIn = (d?: string | null) => {
-  if (!d) return null;
-  try { return new Date(d).toLocaleString('es-CL', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }); } catch { return null; }
-};
+const fmtCheckIn = (d?: string | null) => (d ? (formatDateTimeCL(d, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) || null) : null);
 
 const EventAwardedList: React.FC<{ eventId: string }> = ({ eventId }) => {
   const [list, setList] = useState<AwardedParticipant[]>([]);

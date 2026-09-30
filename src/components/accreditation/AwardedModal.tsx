@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import apiClient from '@/utils/apiClient';
 import { Award, X, Check, Clock, Loader2 } from 'lucide-react';
+import { formatTimeCL } from '@/utils/formatters';
 
 interface AwardedPerson {
   id: string;
@@ -19,10 +20,7 @@ interface AwardedModalProps {
   onClose: () => void;
 }
 
-const fmtTime = (d?: string | null) => {
-  if (!d) return '';
-  try { return new Date(d).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' }); } catch { return ''; }
-};
+const fmtTime = (d?: string | null) => (d ? formatTimeCL(d, { hour: '2-digit', minute: '2-digit' }) : '');
 
 const AwardedModal: React.FC<AwardedModalProps> = ({ scheduleId, onClose }) => {
   const [list, setList] = useState<AwardedPerson[]>([]);

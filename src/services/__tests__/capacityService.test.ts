@@ -115,8 +115,8 @@ describe('capacityService', () => {
       // Muta y devuelve el mismo objeto.
       expect(result).toBe(event);
 
-      expect(event.eventFull).toBe(false);
-      expect(event.capacityInfo).toEqual({ eventCount: 40, eventMax: 100 });
+      expect((event as any).eventFull).toBe(false);
+      expect((event as any).capacityInfo).toEqual({ eventCount: 40, eventMax: 100 });
 
       const [s1, s2, s3] = event.schedules as any[];
       expect(s1).toMatchObject({ registeredCount: 8, full: false, spotsLeft: 2 });
@@ -148,8 +148,8 @@ describe('capacityService', () => {
 
       await annotateEventCapacity(event);
 
-      expect(event.eventFull).toBe(true);
-      expect(event.capacityInfo).toEqual({ eventCount: 30, eventMax: 30 });
+      expect((event as any).eventFull).toBe(true);
+      expect((event as any).capacityInfo).toEqual({ eventCount: 30, eventMax: 30 });
     });
 
     it('never marks the event full when maxCapacity is 0/unset', async () => {
@@ -164,8 +164,8 @@ describe('capacityService', () => {
 
       await annotateEventCapacity(event);
 
-      expect(event.eventFull).toBe(false);
-      expect(event.capacityInfo).toEqual({ eventCount: 999, eventMax: 0 });
+      expect((event as any).eventFull).toBe(false);
+      expect((event as any).capacityInfo).toEqual({ eventCount: 999, eventMax: 0 });
     });
 
     it('skips the per-schedule query when there are no schedules', async () => {

@@ -7,6 +7,7 @@ import useEventStore from '@/store/eventStore';
 import apiClient from '@/utils/apiClient';
 import { showToast } from '@/components/ui/Toast';
 import { isValidRut } from '@/utils/validators/rut';
+import { formatDateCL, formatTimeCL } from '@/utils/formatters';
 
 interface ParticipantImportProps {
   eventId: string;
@@ -114,7 +115,7 @@ const ParticipantImport: React.FC<ParticipantImportProps> = ({ eventId, guestMod
     let dt = '';
     try {
       const d = new Date(s.startDateTime);
-      dt = ` · ${d.toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric' })} ${d.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })}`;
+      dt = ` · ${formatDateCL(d, { day: '2-digit', month: '2-digit', year: 'numeric' })} ${formatTimeCL(d, { hour: '2-digit', minute: '2-digit' })}`;
     } catch { /* fecha inválida */ }
     return `${name}${dt}${s.location ? ` · ${s.location}` : ''}`;
   };
