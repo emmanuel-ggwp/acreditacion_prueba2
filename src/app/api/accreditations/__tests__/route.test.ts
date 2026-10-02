@@ -92,6 +92,15 @@ describe('/api/accreditations', () => {
       expect(mockedService.accreditGuest).not.toHaveBeenCalled();
     });
 
+    it('devuelve 400 (Datos inválidos) si falta el id, sin tocar el servicio', async () => {
+      const res = await (POST as any)(makeRequest('POST', { type: 'participant', scheduleId: 's1' }));
+      const body = await res.json();
+
+      expect(res.status).toBe(400);
+      expect(body.message).toBe('Datos inválidos');
+      expect(mockedService.accreditParticipant).not.toHaveBeenCalled();
+    });
+
     it('devuelve 400 cuando el servicio lanza (p. ej. cupo lleno)', async () => {
       mockedService.accreditParticipant.mockRejectedValue(new Error('Cupo lleno'));
 

@@ -33,7 +33,7 @@ const FIELD_LABELS: Record<string, string> = {
   scheduleName: 'Nombre del horario', startDateTime: 'Inicio', endDateTime: 'Término',
   blockType: 'Tipo de bloque', label: 'Etiqueta', imageUrl: 'Imagen',
   // Acreditación y controles de fecha (inscripción/landing por horario).
-  invitados: 'Invitados', inscripcion: 'Inscripción', landing: 'Landing', status: 'Estado',
+  invitados: 'Invitados', inscripcion: 'Inscripción', landing: 'Landing', status: 'Estado', imagen: 'Imagen',
 };
 const fieldLabel = (k: string) => FIELD_LABELS[k] || k;
 const fmtVal = (v: any) => {
@@ -125,14 +125,24 @@ const AuditLogView: React.FC = () => {
                       ) : l.action === 'UPDATE' && d.changes && Object.keys(d.changes).length ? (
                         <>
                           <ul className="space-y-0.5">
-                            {Object.entries<any>(d.changes).map(([k, v]) => (
-                              <li key={k} className="text-xs">
-                                <span className="font-medium text-gray-800">{fieldLabel(k)}:</span>{' '}
-                                <span className="text-gray-400 line-through">{fmtVal(v.from)}</span>{' '}
-                                <span className="text-gray-400">→</span>{' '}
-                                <span className="text-gray-900">{fmtVal(v.to)}</span>
-                              </li>
-                            ))}
+                            {Object.entries<any>(d.changes).map(([k, v]) => {
+                              // La mayoría son { from, to }; algunos (ej. imagen) son un texto suelto.
+                              const pair = v && typeof v === 'object' && ('from' in v || 'to' in v);
+                              return (
+                                <li key={k} className="text-xs">
+                                  <span className="font-medium text-gray-800">{fieldLabel(k)}:</span>{' '}
+                                  {pair ? (
+                                    <>
+                                      <span className="text-gray-400 line-through">{fmtVal(v.from)}</span>{' '}
+                                      <span className="text-gray-400">→</span>{' '}
+                                      <span className="text-gray-900">{fmtVal(v.to)}</span>
+                                    </>
+                                  ) : (
+                                    <span className="text-gray-900">{fmtVal(v)}</span>
+                                  )}
+                                </li>
+                              );
+                            })}
                           </ul>
                           {d.fecha && <span className="block text-xs text-gray-500 mt-0.5">{d.fecha}</span>}
                         </>

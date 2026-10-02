@@ -37,3 +37,15 @@ export const verifyAccreditationSchema = z.object({
   scheduleId: z.guid(),
 });
 
+// Cuerpo del POST /api/accreditations (acreditar una persona). Valida la FORMA: `type` y
+// los ids presentes, y `notes`/`guestCount` bien tipados. No exige GUID (el servicio
+// resuelve por findByPk y un id inexistente ya da "no encontrado"); `type` se deja como
+// string para que el handler devuelva su propio mensaje "Invalid accreditation type".
+export const accreditPersonSchema = z.object({
+  type: z.string(),
+  id: z.string().trim().min(1, 'Falta el id de la persona.'),
+  scheduleId: z.string().trim().min(1, 'Falta la fecha (scheduleId).'),
+  notes: z.string().max(2000).optional().nullable(),
+  guestCount: z.number().int().min(0).optional(),
+});
+

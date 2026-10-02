@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { withAuth } from '@/middleware/auth';
 import { accreditationService } from '@/services/accreditationService';
-import { accreditationSchema, bulkAccreditationSchema } from '@/utils/validators/accreditationSchemas';
+import { accreditPersonSchema, bulkAccreditationSchema } from '@/utils/validators/accreditationSchemas';
 import { AuthenticatedRequest } from '@/types/auth';
 import { z } from 'zod';
 import { ROLES } from '@/utils/constants';
@@ -11,20 +11,24 @@ const { ADMIN, MANAGER, OPERATOR, GUARD } = ROLES;
 export const POST = withAuth(async (req: AuthenticatedRequest) => {
   try {
     const body = await req.json();
-    const { type, id, scheduleId, notes, guestCount } = body;
+    // Valida la forma del cuerpo (ids presentes, tipos correctos) antes de tocar el servicio.
+    const { type, id, scheduleId, notes, guestCount } = accreditPersonSchema.parse(body);
     const accreditedBy = req.user.id;
     let accreditation;
 
     if (type === 'participant') {
-      accreditation = await accreditationService.accreditParticipant(id, scheduleId, accreditedBy, notes, guestCount);
+      accreditation = await accreditationService.accreditParticipant(id, scheduleId, accreditedBy, notes ?? undefined, guestCount);
     } else if (type === 'guest') {
-      accreditation = await accreditationService.accreditGuest(id, scheduleId, accreditedBy, notes);
+      accreditation = await accreditationService.accreditGuest(id, scheduleId, accreditedBy, notes ?? undefined);
     } else {
       return NextResponse.json({ message: 'Invalid accreditation type' }, { status: 400 });
     }
 
     return NextResponse.json(accreditation, { status: 201 });
   } catch (error: any) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json({ message: 'Datos inválidos', errors: error.issues }, { status: 400 });
+    }
     return NextResponse.json({ message: error.message }, { status: 400 });
   }
 }, [ADMIN, MANAGER, OPERATOR, GUARD]);
