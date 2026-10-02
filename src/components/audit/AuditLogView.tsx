@@ -32,6 +32,8 @@ const FIELD_LABELS: Record<string, string> = {
   quantity: 'Cantidad', category: 'Categoría',
   scheduleName: 'Nombre del horario', startDateTime: 'Inicio', endDateTime: 'Término',
   blockType: 'Tipo de bloque', label: 'Etiqueta', imageUrl: 'Imagen',
+  // Acreditación y controles de fecha (inscripción/landing por horario).
+  invitados: 'Invitados', inscripcion: 'Inscripción', landing: 'Landing', status: 'Estado',
 };
 const fieldLabel = (k: string) => FIELD_LABELS[k] || k;
 const fmtVal = (v: any) => {
@@ -119,18 +121,21 @@ const AuditLogView: React.FC = () => {
                     </td>
                     <td className="px-4 py-2 text-gray-700 max-w-sm">
                       {l.action === 'DELETE' ? (
-                        d.reason || '—'
+                        d.reason || d.summary || '—'
                       ) : l.action === 'UPDATE' && d.changes && Object.keys(d.changes).length ? (
-                        <ul className="space-y-0.5">
-                          {Object.entries<any>(d.changes).map(([k, v]) => (
-                            <li key={k} className="text-xs">
-                              <span className="font-medium text-gray-800">{fieldLabel(k)}:</span>{' '}
-                              <span className="text-gray-400 line-through">{fmtVal(v.from)}</span>{' '}
-                              <span className="text-gray-400">→</span>{' '}
-                              <span className="text-gray-900">{fmtVal(v.to)}</span>
-                            </li>
-                          ))}
-                        </ul>
+                        <>
+                          <ul className="space-y-0.5">
+                            {Object.entries<any>(d.changes).map(([k, v]) => (
+                              <li key={k} className="text-xs">
+                                <span className="font-medium text-gray-800">{fieldLabel(k)}:</span>{' '}
+                                <span className="text-gray-400 line-through">{fmtVal(v.from)}</span>{' '}
+                                <span className="text-gray-400">→</span>{' '}
+                                <span className="text-gray-900">{fmtVal(v.to)}</span>
+                              </li>
+                            ))}
+                          </ul>
+                          {d.fecha && <span className="block text-xs text-gray-500 mt-0.5">{d.fecha}</span>}
+                        </>
                       ) : (d.summary || '—')}
                     </td>
                     <td className="px-4 py-2 whitespace-nowrap">

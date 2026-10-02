@@ -6,6 +6,7 @@ import Guest from '@/models/Guest';
 import GuestSchedule from '@/models/GuestSchedule';
 import EventSchedule from '@/models/EventSchedule';
 import Event from '@/models/Event';
+import AuditLog from '@/models/AuditLog';
 
 // Los modelos ya están mockeados por jest.setup.js; aquí solo los tipamos como mocks.
 const AccreditationMock = Accreditation as jest.Mocked<typeof Accreditation>;
@@ -14,6 +15,7 @@ const GuestMock = Guest as jest.Mocked<typeof Guest>;
 const GuestScheduleMock = GuestSchedule as jest.Mocked<typeof GuestSchedule>;
 const EventScheduleMock = EventSchedule as jest.Mocked<typeof EventSchedule>;
 const EventMock = Event as jest.Mocked<typeof Event>;
+const AuditLogMock = AuditLog as jest.Mocked<typeof AuditLog>;
 
 describe('AccreditationService', () => {
   let accreditationService: AccreditationService;
@@ -262,6 +264,70 @@ describe('AccreditationService', () => {
       expect(results.errors).toHaveLength(1);
       expect(results.errors[0].error).toContain('Participant not found');
       expect(AccreditationMock.create).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  // ------------------------------------------------------------------------------
+  // Des-acreditar y editar: el log debe guardar NOMBRE y FECHA legibles (no solo UUIDs).
+  // ------------------------------------------------------------------------------
+  describe('unaccreditParticipant', () => {
+    it('des-acredita (participante + invitados) y registra log con nombre y fecha', async () => {
+      (GuestMock.findAll as jest.Mock).mockResolvedValue([{ id: 'g1' }]);
+      (AccreditationMock.destroy as jest.Mock).mockResolvedValue(2);
+      (ParticipantMock.findByPk as jest.Mock).mockResolvedValue({ id: 'p1', firstName: 'Juan', lastName: 'Pérez' });
+      (EventScheduleMock.findByPk as jest.Mock).mockResolvedValue({ id: 's1', scheduleName: 'Función 1', startDateTime: '2026-09-16T15:00:00.000Z' });
+
+      const res = await accreditationService.unaccreditParticipant('p1', 's1', 'user-1');
+
+      expect(res).toEqual({ removed: 2 });
+      const log: any = (AuditLogMock.create as jest.Mock).mock.calls[0][0];
+      expect(log.action).toBe('DELETE');
+      expect(log.entity).toBe('Accreditation');
+      expect(log.details.name).toBe('Juan Pérez');
+      expect(log.details.fecha).toContain('Función 1');
+      expect(log.details.removed).toBe(2);
+    });
+  });
+
+  describe('unaccreditGuest', () => {
+    it('des-acredita un invitado y registra log con nombre, fecha y titular', async () => {
+      (AccreditationMock.destroy as jest.Mock).mockResolvedValue(1);
+      (GuestMock.findByPk as jest.Mock).mockResolvedValue({
+        id: 'g1', firstName: 'Ana', lastName: 'Soto', participant: { firstName: 'Juan', lastName: 'Pérez' },
+      });
+      (EventScheduleMock.findByPk as jest.Mock).mockResolvedValue({ id: 's1', scheduleName: 'Función 1', startDateTime: '2026-09-16T15:00:00.000Z' });
+
+      const res = await accreditationService.unaccreditGuest('g1', 's1', 'user-1');
+
+      expect(res).toEqual({ removed: 1 });
+      const log: any = (AuditLogMock.create as jest.Mock).mock.calls[0][0];
+      expect(log.details.name).toBe('Ana Soto');
+      expect(log.details.fecha).toContain('Función 1');
+      expect(log.details.summary).toContain('Juan Pérez');
+    });
+  });
+
+  describe('setAccreditationGuestCount', () => {
+    it('lanza error si el participante no está acreditado', async () => {
+      (AccreditationMock.findOne as jest.Mock).mockResolvedValue(null);
+      await expect(
+        accreditationService.setAccreditationGuestCount('p1', 's1', 3, 'user-1')
+      ).rejects.toThrow('no está acreditado');
+    });
+
+    it('actualiza el conteo y registra el cambio (antes → ahora) con fecha', async () => {
+      const acc: any = { id: 'a1', guestCount: 2, update: jest.fn().mockResolvedValue(undefined) };
+      (AccreditationMock.findOne as jest.Mock).mockResolvedValue(acc);
+      (ParticipantMock.findByPk as jest.Mock).mockResolvedValue({ firstName: 'Juan', lastName: 'Pérez' });
+      (EventScheduleMock.findByPk as jest.Mock).mockResolvedValue({ scheduleName: 'Función 1', startDateTime: '2026-09-16T15:00:00.000Z' });
+
+      await accreditationService.setAccreditationGuestCount('p1', 's1', 5, 'user-1');
+
+      expect(acc.update).toHaveBeenCalledWith({ guestCount: 5 });
+      const log: any = (AuditLogMock.create as jest.Mock).mock.calls[0][0];
+      expect(log.details.changes.invitados).toEqual({ from: 2, to: 5 });
+      expect(log.details.name).toBe('Juan Pérez');
+      expect(log.details.fecha).toContain('Función 1');
     });
   });
 });

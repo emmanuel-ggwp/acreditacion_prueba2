@@ -255,9 +255,17 @@ export class AccreditationService {
         [Op.or]: [{ participantId }, ...(guestIds.length ? [{ guestId: { [Op.in]: guestIds } }] : [])],
       };
       const removed = await Accreditation.destroy({ where, transaction });
+      // Log legible: quién se des-acreditó y en qué FECHA (no solo UUIDs), igual que al acreditar.
+      const participant = await Participant.findByPk(participantId, { transaction });
+      const schedule = await EventSchedule.findByPk(eventScheduleId, { transaction });
       await auditLogService.log({
         userId: accreditedBy, action: 'DELETE', entity: 'Accreditation', entityId: participantId,
-        details: { participantId, eventScheduleId, removed },
+        details: {
+          name: personName(participant),
+          fecha: scheduleText(schedule),
+          summary: `Des-acreditado · ${scheduleText(schedule)}${removed > 1 ? ` · ${removed} registro(s)` : ''}`,
+          participantId, eventScheduleId, removed,
+        },
       });
       await transaction.commit();
       return { removed };
@@ -279,9 +287,18 @@ export class AccreditationService {
    */
   async unaccreditGuest(guestId: string, eventScheduleId: string, accreditedBy: string) {
     const removed = await Accreditation.destroy({ where: { guestId, eventScheduleId } });
+    // Log legible: qué invitado se des-acreditó, en qué FECHA y de qué titular es.
+    const guest = await Guest.findByPk(guestId, { include: [{ model: Participant, as: 'participant', attributes: ['firstName', 'lastName'] }] });
+    const schedule = await EventSchedule.findByPk(eventScheduleId);
+    const guestParticipant = (guest as any)?.participant;
     await auditLogService.log({
       userId: accreditedBy, action: 'DELETE', entity: 'Accreditation', entityId: guestId,
-      details: { guestId, eventScheduleId, removed },
+      details: {
+        name: personName(guest),
+        fecha: scheduleText(schedule),
+        summary: `Invitado des-acreditado · ${scheduleText(schedule)}${guestParticipant ? ` · de ${personName(guestParticipant)}` : ''}`,
+        guestId, eventScheduleId, removed,
+      },
     });
     return { removed };
   }
@@ -302,10 +319,20 @@ export class AccreditationService {
   async setAccreditationGuestCount(participantId: string, eventScheduleId: string, guestCount: number, accreditedBy: string) {
     const acc = await Accreditation.findOne({ where: { participantId, eventScheduleId } });
     if (!acc) throw new Error('El participante no está acreditado en este horario.');
-    await acc.update({ guestCount: Math.max(0, Number(guestCount) || 0) });
+    const prev = Math.max(0, Number((acc as any).guestCount) || 0);
+    const next = Math.max(0, Number(guestCount) || 0);
+    await acc.update({ guestCount: next });
+    // Log legible: quién, en qué FECHA y el cambio de invitados (antes → ahora).
+    const participant = await Participant.findByPk(participantId);
+    const schedule = await EventSchedule.findByPk(eventScheduleId);
     await auditLogService.log({
       userId: accreditedBy, action: 'UPDATE', entity: 'Accreditation', entityId: (acc as any).id,
-      details: { participantId, eventScheduleId, guestCount: Math.max(0, Number(guestCount) || 0) },
+      details: {
+        name: personName(participant),
+        fecha: scheduleText(schedule),
+        changes: { invitados: { from: prev, to: next } },
+        participantId, eventScheduleId,
+      },
     });
     return acc;
   }
