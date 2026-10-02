@@ -462,15 +462,16 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
             companion,
             loads: Math.min(loads, serverCap),
           });
-          // Detalle POR FECHA (modo 'named'): un solo bloque {{detalle_asistencia}}.
-          const detalle = guestMode === 'named'
-            ? buildAttendanceDetail(selDates.map((s) => ({
-                name: s.label || s.scheduleName,
-                when: fmtWhen(s),
-                location: s.location || '',
-                guestNames: namesForDate(s.id),
-              })))
-            : '';
+          // Detalle de asistencia para {{detalle_asistencia}} (TODOS los modos): una fecha →
+          // bloque simple; varias → desglose por fecha. 'named' lista invitados por fecha;
+          // numéricos usan el resumen (mismo para todas las fechas).
+          const detalle = buildAttendanceDetail(selDates.map((s: any) => ({
+            label: s.label,
+            when: fmtWhen(s),
+            location: s.location || '',
+            guestNames: guestMode === 'named' ? namesForDate(s.id) : undefined,
+            guestsText: guestMode !== 'named' && gs.count > 0 ? gs.summary : undefined,
+          })));
           const emailRes = await sendConfirmationEmail(templateId, {
             to_email: form.email,
             email: form.email,

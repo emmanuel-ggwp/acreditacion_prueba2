@@ -10,96 +10,87 @@
     <meta name="supported-color-schemes" content="light dark">
     <style>
       :root { color-scheme: light dark; supported-color-schemes: light dark; }
-      body { margin:0; padding:0; }
+      body { margin:0; padding:0; -webkit-text-size-adjust:100%; }
       a { color:#1E3A8A; }
 
       /* ---- Responsive ---- */
       @media (max-width:600px){
-        .content-pad { padding:22px !important; }
-        .header-pad  { padding:22px !important; }
-        .email-title { font-size:18px !important; }
+        .content-pad { padding:26px 20px !important; }
+        .header-pad  { padding:28px 20px !important; }
+        .box-pad     { padding:18px 18px !important; }
+        .email-title { font-size:20px !important; }
       }
 
-      /* ---- Modo oscuro (clientes compatibles: Apple Mail, iOS, etc.) ---- */
+      /* ---- Modo oscuro (Apple Mail, Mail de iOS y clientes que respetan la media query).
+             Regla: cada color está inline (modo claro) y aquí se sobrescribe por clase.
+             Gmail y Outlook suelen ignorar esta media query y aplican su propia inversión;
+             por eso el modo claro se ve bien por sí solo como respaldo. ---- */
       @media (prefers-color-scheme: dark){
-        .email-bg, .wrapper       { background:#0b0f1a !important; }
-        .email-card               { background:#121826 !important; border-color:#222b3d !important; }
-        .email-body, .email-body p, .email-greeting { color:#e5e7eb !important; }
-        .email-box                { background:#1a2232 !important; border-color:#2a3447 !important; }
-        .email-label              { color:#93b4ff !important; }
-        .email-value              { color:#e5e7eb !important; }
-        .email-divider            { background:#232c3d !important; }
-        .email-footer, .email-footer td { color:#8a93a3 !important; }
-        .email-link               { color:#93b4ff !important; }
+        .email-bg, .wrapper   { background:#0b0f19 !important; }
+        .email-card           { background:#141b2b !important; border-color:#242e42 !important; }
+        .email-body           { color:#e8eaed !important; }
+        .email-muted          { color:#9aa3b2 !important; }
+        .email-strong         { color:#f3f5f8 !important; }
+        .email-box            { background:#1b2436 !important; border-color:#2a3550 !important; }
+        .email-divider        { background:#242e42 !important; }
+        .email-footer         { color:#7e879a !important; }
+        .email-link           { color:#9db8ff !important; }
       }
     </style>
   </head>
-  <body class="email-bg" style="margin:0; padding:0; background:#eceef2; font-family:'Segoe UI', Arial, Helvetica, sans-serif;">
-    <div class="email-bg wrapper" style="width:100%; background:#eceef2; padding:28px 0;">
-      <table role="presentation" class="email-card" cellpadding="0" cellspacing="0" width="100%" style="width:100%; max-width:600px; margin:0 auto; background:#ffffff; border:1px solid #e7e9ef; border-radius:12px; overflow:hidden;">
+  <body class="email-bg" style="margin:0; padding:0; background:#eceef2; font-family:'Segoe UI', Roboto, Arial, Helvetica, sans-serif;">
+    <!-- Texto de vista previa en la bandeja (oculto en el cuerpo) -->
+    <div style="display:none; max-height:0; overflow:hidden; mso-hide:all; opacity:0; color:transparent; height:0; width:0;">Tu inscripción a {{event_name}} quedó confirmada. Acá tienes el detalle de tu inscripción.</div>
+
+    <div class="email-bg wrapper" style="width:100%; background:#eceef2; padding:30px 12px;">
+      <table role="presentation" class="email-card" cellpadding="0" cellspacing="0" width="100%" style="width:100%; max-width:580px; margin:0 auto; background:#ffffff; border:1px solid #e7e9ef; border-radius:14px; overflow:hidden;">
 
         <!-- Encabezado -->
         <tr>
-          <td class="header-pad" style="background:#1E3A8A; padding:26px 28px; text-align:center;">
-            <!-- Opcional: agrega tu logo poniendo la URL absoluta en src y quitando los comentarios
-            <img src="https://TU-DOMINIO/logo.png" alt="Logo" width="160" style="max-width:160px; height:auto; display:inline-block; margin-bottom:12px;">
-            -->
-            <div class="email-title" style="color:#ffffff; font-size:20px; font-weight:700; letter-spacing:.2px; margin:0;">
-              Confirmación de inscripción
-            </div>
+          <td class="header-pad" style="background:#1E3A8A; padding:30px 32px;">
+            <!-- Para usar tu logo: reemplaza este texto por una <img> con la URL absoluta.
+                 <img src="https://TU-DOMINIO/logo.png" alt="Grupo Lo Castillo" width="150" style="height:auto; display:block;"> -->
+            <div style="color:#b9c6ef; font-size:11px; font-weight:700; letter-spacing:1.6px; text-transform:uppercase; margin:0 0 7px;">Grupo Lo Castillo</div>
+            <div class="email-title" style="color:#ffffff; font-size:22px; font-weight:700; line-height:1.25; margin:0;">Inscripción confirmada</div>
+            <div style="width:42px; height:3px; background:#8aa4e6; border-radius:3px; margin:14px 0 0;"></div>
           </td>
         </tr>
 
         <!-- Contenido -->
         <tr>
-          <td class="email-card content-pad email-body" style="padding:28px; color:#1f2937; font-size:15px; line-height:1.6;">
-            <p class="email-greeting" style="margin:0; font-size:16px; color:#1f2937;">
-              Hola <strong>{{nombre}}</strong>,
+          <td class="content-pad email-body" style="padding:30px 32px; color:#374151; font-size:15px; line-height:1.65;">
+            <p style="margin:0 0 14px;">Hola <strong class="email-strong" style="color:#111827;">{{nombre}}</strong>,</p>
+            <p style="margin:0 0 22px;">
+              Tu inscripción a <strong class="email-strong" style="color:#111827;">{{event_name}}</strong> quedó registrada.
+              Acá tienes el detalle de tu inscripción:
             </p>
 
-            <p style="margin:12px 0 0;">
-              Tu inscripción a <strong>{{event_name}}</strong> quedó registrada correctamente.
-              Te compartimos los detalles:
-            </p>
-
-            <!-- Detalle del evento -->
-            <table role="presentation" class="email-box" cellpadding="0" cellspacing="0" width="100%" style="width:100%; border:1px solid #e5e7eb; border-left:4px solid #1E3A8A; border-radius:8px; background:#f8fafc; margin:18px 0;">
-              <tr><td style="padding:14px 16px 0;">
-                <span class="email-label" style="color:#1E3A8A; font-weight:700;">Evento:</span>
-                <span class="email-value" style="color:#1f2937;"> {{event_name}}</span>
-              </td></tr>
-              <tr><td style="padding:6px 16px 0;">
-                <span class="email-label" style="color:#1E3A8A; font-weight:700;">Fecha:</span>
-                <span class="email-value" style="color:#1f2937;"> {{fechaEvento}}</span>
-              </td></tr>
-              <tr><td style="padding:6px 16px 0;">
-                <span class="email-label" style="color:#1E3A8A; font-weight:700;">Lugar:</span>
-                <span class="email-value" style="color:#1f2937;"> {{lugarEvento}}</span>
-              </td></tr>
-              <!-- Invitados: {{guests_summary}} se adapta al modo del evento
-                   (nombres / solo número / acompañante + cargas). -->
-              <tr><td style="padding:6px 16px 14px;">
-                <span class="email-label" style="color:#1E3A8A; font-weight:700;">Invitados:</span>
-                <span class="email-value" style="color:#1f2937;"> {{guests_summary}}</span>
+            <!-- Detalle de asistencia: {{detalle_asistencia}} trae fecha(s), lugar e invitados en un
+                 solo bloque. Una fecha → formato simple; varias → desglose con los invitados de cada una.
+                 white-space:pre-line respeta los saltos de línea del texto. -->
+            <table role="presentation" class="email-box" cellpadding="0" cellspacing="0" width="100%" style="width:100%; background:#f6f8fc; border:1px solid #e6eaf2; border-radius:10px; margin:0 0 24px;">
+              <tr><td class="box-pad" style="padding:20px 22px;">
+                <div class="email-muted" style="color:#6b7a99; font-size:11px; font-weight:700; letter-spacing:1.2px; text-transform:uppercase; margin:0 0 10px;">Detalle de tu inscripción</div>
+                <div class="email-body" style="color:#1f2937; font-size:15px; line-height:1.7; white-space:pre-line;">{{detalle_asistencia}}</div>
               </td></tr>
             </table>
 
-            <p style="margin:0;">
-              Si tienes cualquier duda, escríbenos a
-              <a class="email-link" href="mailto:confirmaciones@grupolocastillo.com" style="color:#1E3A8A; font-weight:700; text-decoration:none;">confirmaciones@grupolocastillo.com</a>.
+            <p class="email-muted" style="margin:0; color:#6b7280;">
+              ¿Alguna duda o necesitas un cambio? Escríbenos a
+              <a class="email-link" href="mailto:confirmaciones@grupolocastillo.com" style="color:#1E3A8A; font-weight:600; text-decoration:none;">confirmaciones@grupolocastillo.com</a>.
             </p>
 
-            <div class="email-divider" style="height:1px; background:#ececf1; margin:22px 0;"></div>
+            <div class="email-divider" style="height:1px; background:#edf0f5; margin:24px 0;"></div>
 
-            <p style="margin:0; font-size:16px;">¡Te esperamos!</p>
+            <p class="email-strong" style="margin:0; font-size:16px; color:#111827;">¡Te esperamos!</p>
           </td>
         </tr>
 
         <!-- Pie -->
         <tr>
-          <td class="email-footer" style="text-align:center; color:#9aa1ad; font-size:12px; line-height:1.6; padding:4px 28px 24px;">
-            © 2026 Grupo LoCastillo. Todos los derechos reservados.<br>
-            Este es un correo informativo. No respondas a esta dirección.
+          <td class="email-footer" style="text-align:center; color:#9aa1ad; font-size:12px; line-height:1.7; padding:2px 32px 26px;">
+            © 2026 Grupo Lo Castillo · Todos los derechos reservados.<br>
+            Correo informativo — por favor no respondas a esta dirección.
           </td>
         </tr>
 

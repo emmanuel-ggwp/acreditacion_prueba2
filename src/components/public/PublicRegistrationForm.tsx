@@ -371,16 +371,16 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
             companion,
             loads: Math.min(loads, serverCap),
           });
-          // Detalle POR FECHA (modo 'named'): un solo bloque {{detalle_asistencia}}. Una
-          // fecha → formato simple; varias → desglose con los invitados de cada una.
-          const detalle = guestMode === 'named'
-            ? buildAttendanceDetail(selDates.map((s: any) => ({
-                name: s.label || s.scheduleName,
-                when: fmtWhen(s),
-                location: s.location || event.location || '',
-                guestNames: namesForDate(s.id),
-              })))
-            : '';
+          // Detalle de asistencia para {{detalle_asistencia}} (TODOS los modos): una fecha →
+          // bloque simple; varias → desglose por fecha. En 'named' lista los invitados de
+          // cada fecha; en modos numéricos usa el resumen (mismo para todas las fechas).
+          const detalle = buildAttendanceDetail(selDates.map((s: any) => ({
+            label: s.label,
+            when: fmtWhen(s),
+            location: s.location || event.location || '',
+            guestNames: guestMode === 'named' ? namesForDate(s.id) : undefined,
+            guestsText: guestMode !== 'named' && gs.count > 0 ? gs.summary : undefined,
+          })));
           const emailRes = await sendConfirmationEmail(templateId, {
             to_email: data.email,
             email: data.email,

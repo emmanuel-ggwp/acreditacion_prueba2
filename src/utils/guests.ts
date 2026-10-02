@@ -49,14 +49,18 @@ export function buildGuestSummary(
  * Se usa como entrada de {@link buildAttendanceDetail}.
  */
 export interface AttendanceDate {
-  /** Nombre de la función/fecha (ej. "Función de Gala"). */
-  name?: string | null;
+  /** Etiqueta corta OPCIONAL de la fecha (ej. "Mañana", "Tarde"). Solo se muestra si existe;
+   *  NO se usa el nombre interno del horario. La fecha/hora (`when`) va primero. */
+  label?: string | null;
   /** Fecha ya formateada para el correo (ej. "vie 25 de septiembre, 20:00"). */
   when?: string | null;
   /** Lugar (opcional). */
   location?: string | null;
-  /** Nombres de los invitados de ESA fecha (sin el titular). */
+  /** Nombres de los invitados de ESA fecha (sin el titular). Para modo 'named'. */
   guestNames?: string[];
+  /** Texto ya resumido de invitados (modos numéricos: "3", "1 acompañante + 2 cargas").
+   *  Si viene, se usa para la línea "Invitados:" en lugar de `guestNames`. */
+  guestsText?: string | null;
 }
 
 /**
@@ -74,25 +78,31 @@ export interface AttendanceDate {
  */
 export function buildAttendanceDetail(dates: AttendanceDate[]): string {
   const list = (dates || []).filter(Boolean);
-  const guestsLine = (names?: string[]) => {
+  const guestsLine = (names?: string[], text?: string | null) => {
+    const t = (text || '').trim();
+    if (t) return `Invitados: ${t}`;
     const clean = (names || []).map((n) => (n || '').trim()).filter(Boolean);
     return clean.length ? `Invitados: ${clean.join(', ')}` : 'Sin invitados';
   };
+  // Fecha/hora primero; la etiqueta corta (Mañana/Tarde) se agrega solo si existe.
+  const whenLabel = (d: AttendanceDate) =>
+    [(d.when || '').trim(), (d.label || '').trim()].filter(Boolean).join(' · ');
 
   if (list.length <= 1) {
     const d = list[0];
     if (!d) return '';
     const lines: string[] = [];
-    if (d.when) lines.push(`Fecha: ${d.when}`);
+    const wl = whenLabel(d);
+    if (wl) lines.push(`Fecha: ${wl}`);
     if (d.location) lines.push(`Lugar: ${d.location}`);
-    lines.push(guestsLine(d.guestNames));
+    lines.push(guestsLine(d.guestNames, d.guestsText));
     return lines.join('\n');
   }
 
   const blocks = list.map((d) => {
-    const head = [d.name, d.when].map((x) => (x || '').trim()).filter(Boolean).join(' — ');
+    const head = whenLabel(d);
     const place = d.location ? ` · ${d.location}` : '';
-    return `• ${head}${place}\n  ${guestsLine(d.guestNames)}`;
+    return `• ${head}${place}\n  ${guestsLine(d.guestNames, d.guestsText)}`;
   });
   return `Estás inscrito en ${list.length} fechas:\n\n${blocks.join('\n\n')}`;
 }
