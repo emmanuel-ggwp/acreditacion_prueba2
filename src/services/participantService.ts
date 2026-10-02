@@ -52,7 +52,9 @@ export class ParticipantService {
    * @throws {z.ZodError} Si `data` no cumple `createParticipantSchema`.
    * @throws {Error} `'One or more schedules not found'` si algún `scheduleId` no existe.
    * @throws {Error} `'Se requiere el evento (eventId) o al menos un horario.'` si no se puede determinar el evento.
-   * @throws {Error} `'Number of allowed guests exceeds the event limit of N'` si `allowedGuests` supera el máximo del evento.
+   *
+   * Nota: desde el admin NO se limita la cantidad de invitados (`allowedGuests`); el
+   * máximo del evento (`maxGuestsPerParticipant`) es solo para la inscripción pública.
    */
   async createParticipant(data: z.infer<typeof createParticipantSchema>, createdBy: string) {
     const validatedData = createParticipantSchema.parse(data);
@@ -75,9 +77,10 @@ export class ParticipantService {
       throw new Error('Se requiere el evento (eventId) o al menos un horario.');
     }
 
-    if (participantData.allowedGuests > event.maxGuestsPerParticipant && event.maxGuestsPerParticipant > 0 && participantData.allowedGuests > 0) {
-      throw new Error(`Number of allowed guests exceeds the event limit of ${event.maxGuestsPerParticipant}`);
-    }
+    // Desde el ADMIN no se limita la cantidad de invitados: `maxGuestsPerParticipant`
+    // es un tope de la INSCRIPCIÓN PÚBLICA (lo aplican la landing y
+    // /api/public/.../register), no de la carga manual. El operador puede asignar los
+    // invitados que necesite; por eso aquí NO se compara contra el máximo del evento.
 
     // Reutilizar si ya existe en ESTE evento (por correo o documento).
     const orConds: any[] = [{ email: participantData.email }];
@@ -143,9 +146,8 @@ export class ParticipantService {
     for (const participantData of validatedData) {
         const transaction = await sequelize.transaction();
         try {
-            if (participantData.allowedGuests > event.maxGuestsPerParticipant && event.maxGuestsPerParticipant > 0 && participantData.allowedGuests > 0) {
-                throw new Error(`Number of allowed guests exceeds the event limit of ${event.maxGuestsPerParticipant}`);
-            }
+            // Sin tope de invitados en la carga desde el ADMIN: el máximo del evento
+            // (`maxGuestsPerParticipant`) es solo para la inscripción pública.
 
             let participant = await Participant.findOne({ where: { eventId, email: participantData.email }, transaction });
 

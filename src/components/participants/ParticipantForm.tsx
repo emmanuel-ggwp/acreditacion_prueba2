@@ -48,7 +48,8 @@ const ParticipantForm: React.FC<ParticipantFormProps> = ({ eventId, participant,
   const dietOpts = getDietaryOptions(eventForCfg?.registrationConfig);
   const guestDiet = guestDietaryEnabled(eventForCfg?.registrationConfig);
   const guestMode = getGuestMode(eventForCfg?.registrationConfig);
-  const maxGuests = Number(eventForCfg?.maxGuestsPerParticipant) || 0;
+  // Nota: el máximo de invitados del evento (maxGuestsPerParticipant) NO se aplica en el
+  // admin; es un tope solo de la inscripción pública. Aquí el operador asigna los que necesite.
   const allowGuests = eventForCfg?.allowGuests !== false;
   // Preguntas configurables del evento (Sí/No + lista). Se editan aquí por si la
   // persona se retracta y hay que corregir su respuesta.
@@ -213,15 +214,16 @@ const ParticipantForm: React.FC<ParticipantFormProps> = ({ eventId, participant,
       // Respuestas a las preguntas configurables (Sí/No + lista).
       if (customQuestions.length) participantData.customData = customAnswers;
 
-      // Invitados numéricos: normalizamos guestCount según el modo del evento.
-      if (allowGuests && maxGuests > 0) {
+      // Invitados numéricos: desde el ADMIN no se topa por el máximo del evento (ese
+      // límite es solo para la inscripción pública). Solo se normaliza: no negativos y,
+      // en modo acompañante, guestCount = (acompañante ? 1 : 0) + cargas.
+      if (allowGuests) {
         if (guestMode === 'companion') {
-          // El máximo se aplica a las CARGAS; el acompañante es aparte (+1).
-          const loads = Math.max(0, Math.min(Number((data as any).guestLoads) || 0, maxGuests));
+          const loads = Math.max(0, Number((data as any).guestLoads) || 0);
           participantData.guestLoads = loads;
           participantData.guestCount = ((data as any).guestCompanion ? 1 : 0) + loads;
         } else if (guestMode === 'count') {
-          participantData.guestCount = Math.max(0, Math.min(Number((data as any).guestCount) || 0, maxGuests));
+          participantData.guestCount = Math.max(0, Number((data as any).guestCount) || 0);
         }
       }
 
@@ -258,7 +260,6 @@ const ParticipantForm: React.FC<ParticipantFormProps> = ({ eventId, participant,
     : guestMode === 'count' ? 'count'
     : guestMode === 'companion' ? 'companion'
     : numericByData; // modo 'named': solo si hay datos numéricos que mostrar/editar
-  const guestMax = maxGuests > 0 ? maxGuests : Math.max(gCount, gLoads, 20);
 
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 flex justify-center items-center">
@@ -348,10 +349,10 @@ const ParticipantForm: React.FC<ParticipantFormProps> = ({ eventId, participant,
 
           {numericEditor === 'count' && (
             <div className="col-span-2">
-              <label htmlFor="guestCount" className="block text-sm font-medium text-gray-700 mb-1">N° de invitados <span className="text-gray-400 font-normal">(hasta {guestMax})</span></label>
+              <label htmlFor="guestCount" className="block text-sm font-medium text-gray-700 mb-1">N° de invitados</label>
               <input
                 id="guestCount"
-                type="number" min={0} max={guestMax}
+                type="number" min={0}
                 {...register('guestCount' as any, { setValueAs: (v) => (v === '' ? 0 : parseInt(v, 10) || 0) })}
                 className="block w-full sm:w-48 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
               />
@@ -366,10 +367,10 @@ const ParticipantForm: React.FC<ParticipantFormProps> = ({ eventId, participant,
                 Va con acompañante
               </label>
               <div>
-                <label htmlFor="guestLoads" className="block text-sm text-gray-700 mb-1">N° de cargas <span className="text-gray-400 font-normal">(hasta {guestMax})</span></label>
+                <label htmlFor="guestLoads" className="block text-sm text-gray-700 mb-1">N° de cargas</label>
                 <input
                   id="guestLoads"
-                  type="number" min={0} max={guestMax}
+                  type="number" min={0}
                   {...register('guestLoads' as any, { setValueAs: (v) => (v === '' ? 0 : parseInt(v, 10) || 0) })}
                   className="block w-full sm:w-48 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
                 />

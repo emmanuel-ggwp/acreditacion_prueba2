@@ -127,12 +127,21 @@ describe('ParticipantService', () => {
       );
     });
 
-    it('lanza error si los invitados permitidos superan el máximo del evento', async () => {
+    it('NO limita los invitados desde el admin: crea aunque superen el máximo del evento', async () => {
+      // El máximo del evento (maxGuestsPerParticipant) es solo para la inscripción
+      // pública; la carga manual asigna los invitados que el operador necesite.
       (EventMock.findByPk as jest.Mock).mockResolvedValue({ id: EVENT_ID, maxGuestsPerParticipant: 5 });
+      (ParticipantMock.findOne as jest.Mock).mockResolvedValue(null);
+      const created = { id: PARTICIPANT_ID, firstName: 'John', lastName: 'Doe', email: 'john@example.com', addSchedules: jest.fn() };
+      (ParticipantMock.create as jest.Mock).mockResolvedValue(created);
+
       const data = { firstName: 'John', lastName: 'Doe', email: 'john@example.com', eventId: EVENT_ID, allowedGuests: 10 };
-      await expect(service.createParticipant(data as any, USER_ID)).rejects.toThrow(
-        'Number of allowed guests exceeds the event limit of 5'
+      const result = await service.createParticipant(data as any, USER_ID);
+
+      expect(ParticipantMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({ allowedGuests: 10, eventId: EVENT_ID })
       );
+      expect(result).toBe(created);
     });
 
     it('rechaza datos inválidos (ZodError)', async () => {
@@ -194,15 +203,23 @@ describe('ParticipantService', () => {
       expect(existing.addSchedules).toHaveBeenCalled();
     });
 
-    it('captura por fila el error de exceso de invitados y continúa', async () => {
+    it('NO limita los invitados desde el admin: crea la fila aunque superen el máximo del evento', async () => {
+      // maxGuestsPerParticipant es solo para la inscripción pública; la carga masiva
+      // desde el admin no lo aplica.
       (EventMock.findByPk as jest.Mock).mockResolvedValue({ id: EVENT_ID, maxGuestsPerParticipant: 2 });
       (EventScheduleMock.findAll as jest.Mock).mockResolvedValue([{ id: SCHEDULE_ID_1, isActive: true }]);
+      (ParticipantMock.findOne as jest.Mock).mockResolvedValue(null);
+      const created = { id: PARTICIPANT_ID, addSchedules: jest.fn() };
+      (ParticipantMock.create as jest.Mock).mockResolvedValue(created);
 
       const result = await service.bulkCreateParticipants([validRow({ allowedGuests: 5 })] as any, EVENT_ID, USER_ID);
 
-      expect(result.created).toBe(0);
-      expect(result.errors).toHaveLength(1);
-      expect(result.errors[0].error).toContain('exceeds the event limit');
+      expect(result.created).toBe(1);
+      expect(result.errors).toHaveLength(0);
+      expect(ParticipantMock.create).toHaveBeenCalledWith(
+        expect.objectContaining({ allowedGuests: 5 }),
+        expect.any(Object)
+      );
     });
   });
 
