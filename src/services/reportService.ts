@@ -113,18 +113,28 @@ export class ReportService {
 
     const regMap = new Map(registrationCounts.map(r => [r.scheduleId, r.count]));
 
-    // 3b. Batch: Get Registered Guests per schedule.
-    // Se cuenta por la FECHA del invitado (guest.schedule_id), que es la que queda al
-    // confirmar una carga o crear un acompañante. La versión anterior unía por
-    // participant_id y contaba TODOS los invitados del participante en CADA fecha en la
-    // que estuviera inscrito (los duplicaba en multi-fecha e incluía cargas sin confirmar
-    // y borrados). `deleted_at IS NULL` porque `guests` usa borrado lógico (paranoid) y
-    // esta consulta es SQL cruda (Sequelize no agrega ese filtro solo).
+    // 3b. Batch: invitados con NOMBRE registrados por fecha.
+    // Fuente autoritativa = guest_schedules (invitados por fecha): cada invitado cuenta en
+    // CADA fecha a la que está ligado, así una carga que va a varias fechas se cuenta en
+    // TODAS. (Antes se contaba por guest.schedule_id, que solo guarda UNA fecha —la última—
+    // y dejaba fuera a las demás: undercount en multi-fecha.) `COUNT(DISTINCT gid)` evita
+    // duplicar dentro de una misma fecha. Fallback: invitados SIN ninguna fila
+    // guest_schedules se cuentan por su fecha heredada (guest.schedule_id), para datos
+    // previos a la feature. `deleted_at IS NULL` porque guests es paranoid y esto es SQL cruda.
     const guestRegistrationQuery = `
-        SELECT g.schedule_id as "scheduleId", COUNT(g.id)::int as count
-        FROM guests g
-        WHERE g.schedule_id IN (:scheduleIds) AND g.deleted_at IS NULL
-        GROUP BY g.schedule_id
+        SELECT sub.sid as "scheduleId", COUNT(DISTINCT sub.gid)::int as count
+        FROM (
+            SELECT gs.schedule_id AS sid, gs.guest_id AS gid
+            FROM guest_schedules gs
+            INNER JOIN guests g ON g.id = gs.guest_id AND g.deleted_at IS NULL
+            WHERE gs.schedule_id IN (:scheduleIds)
+            UNION
+            SELECT g.schedule_id AS sid, g.id AS gid
+            FROM guests g
+            WHERE g.schedule_id IN (:scheduleIds) AND g.deleted_at IS NULL
+              AND NOT EXISTS (SELECT 1 FROM guest_schedules gs2 WHERE gs2.guest_id = g.id)
+        ) sub
+        GROUP BY sub.sid
     `;
 
     const guestRegistrationCounts = await sequelize.query<{ scheduleId: string; count: number }>(guestRegistrationQuery, {
