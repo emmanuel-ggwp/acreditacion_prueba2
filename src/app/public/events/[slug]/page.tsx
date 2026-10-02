@@ -31,6 +31,11 @@ async function getEvent(slug: string) {
     if (!event) return null;
 
     const plain: any = event.get({ plain: true });
+    // Ocultar de la landing las fechas marcadas como NO visibles (visibleInLanding=false).
+    // Siguen existiendo (acreditación y reportes las conservan); solo no se ofrecen aquí.
+    if (Array.isArray(plain.schedules)) {
+      plain.schedules = plain.schedules.filter((s: any) => s.visibleInLanding !== false);
+    }
     // Resolver la plantilla de correo (para enviar EmailJS desde el cliente)
     if (plain.emailTemplateId) {
       const tpl = await EmailTemplate.findByPk(plain.emailTemplateId);

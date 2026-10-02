@@ -262,6 +262,64 @@ export class EventScheduleService {
     return schedule;
   }
 
+  // Abrir/cerrar la INSCRIPCIÓN de una fecha en la landing (independiente de la
+  // acreditación). Cerrada: la landing la muestra como "Inscripción cerrada" y el registro
+  // público la rechaza; no afecta a inscritos ni acreditación.
+  /**
+   * Abre o cierra la inscripción pública de una fecha (campo `registrationOpen`). Solo
+   * registra auditoría si cambió.
+   *
+   * @param scheduleId - ID de la fecha.
+   * @param open - `true` abre la inscripción, `false` la cierra.
+   * @param userId - ID del usuario; si viene y hubo cambio, se registra en auditoría (acción `UPDATE`).
+   * @returns La fecha (`EventSchedule`) actualizada.
+   * @throws {Error} `'Schedule not found'` si la fecha no existe.
+   */
+  async setRegistrationOpen(scheduleId: string, open: boolean, userId?: string) {
+    const schedule = await EventSchedule.findByPk(scheduleId);
+    if (!schedule) throw new Error('Schedule not found');
+    const from = (schedule as any).registrationOpen !== false;
+    await schedule.update({ registrationOpen: !!open });
+    if (userId && from !== !!open) {
+      await auditLogService.log({
+        userId,
+        action: 'UPDATE',
+        entity: 'EventSchedule',
+        entityId: schedule.id,
+        details: { name: scheduleName(schedule), changes: { inscripcion: { from: from ? 'abierta' : 'cerrada', to: open ? 'abierta' : 'cerrada' } } },
+      });
+    }
+    return schedule;
+  }
+
+  // Mostrar/ocultar una fecha en la landing pública (sin afectar acreditación ni reportes).
+  /**
+   * Muestra u oculta una fecha en la landing pública (campo `visibleInLanding`). Solo
+   * registra auditoría si cambió.
+   *
+   * @param scheduleId - ID de la fecha.
+   * @param visible - `true` la muestra en la landing, `false` la oculta.
+   * @param userId - ID del usuario; si viene y hubo cambio, se registra en auditoría (acción `UPDATE`).
+   * @returns La fecha (`EventSchedule`) actualizada.
+   * @throws {Error} `'Schedule not found'` si la fecha no existe.
+   */
+  async setVisibleInLanding(scheduleId: string, visible: boolean, userId?: string) {
+    const schedule = await EventSchedule.findByPk(scheduleId);
+    if (!schedule) throw new Error('Schedule not found');
+    const from = (schedule as any).visibleInLanding !== false;
+    await schedule.update({ visibleInLanding: !!visible });
+    if (userId && from !== !!visible) {
+      await auditLogService.log({
+        userId,
+        action: 'UPDATE',
+        entity: 'EventSchedule',
+        entityId: schedule.id,
+        details: { name: scheduleName(schedule), changes: { landing: { from: from ? 'visible' : 'oculta', to: visible ? 'visible' : 'oculta' } } },
+      });
+    }
+    return schedule;
+  }
+
   // Asignar/quitar la imagen de un horario (solo el campo imageUrl, sin tocar fechas).
   /**
    * Asigna o quita la imagen de una fecha (solo el campo `imageUrl`, sin tocar las fechas).

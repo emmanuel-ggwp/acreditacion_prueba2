@@ -66,7 +66,9 @@ export default function DateSelectModal({ open, onClose, schedules, selectedIds,
             const sel = selectedIds.includes(s.id);
             const registered = registeredIds.includes(s.id);
             const full = !!s.full;
-            const blocked = full || registered;
+            // Inscripción cerrada para esta fecha: se muestra pero no se puede elegir.
+            const closed = s.registrationOpen === false;
+            const blocked = full || registered || closed;
             return (
               <button
                 key={s.id}
@@ -86,6 +88,8 @@ export default function DateSelectModal({ open, onClose, schedules, selectedIds,
                   <div className="flex-shrink-0 text-right">
                     {registered ? (
                       <span className="text-[11px] font-semibold block max-w-[90px]" style={{ color: accent }}>✓ Ya inscrito</span>
+                    ) : closed ? (
+                      <span className="text-[11px] font-semibold text-amber-500 block max-w-[90px]">Inscripción cerrada</span>
                     ) : full ? (
                       <span className="text-[11px] font-semibold text-red-500 block max-w-[90px]">Capacidad máxima alcanzada</span>
                     ) : sel ? (

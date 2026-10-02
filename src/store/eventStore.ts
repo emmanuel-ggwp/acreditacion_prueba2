@@ -48,6 +48,8 @@ interface EventState {
   updateSchedule: (id: string, eventId: string, scheduleData: z.infer<typeof updateScheduleSchema>) => Promise<void>;
   deleteSchedule: (id: string, eventId: string, reason?: string) => Promise<void>;
   setScheduleStatus: (scheduleId: string, eventId: string, status: string) => Promise<void>;
+  setScheduleRegistrationOpen: (scheduleId: string, eventId: string, open: boolean) => Promise<void>;
+  setScheduleVisibleInLanding: (scheduleId: string, eventId: string, visible: boolean) => Promise<void>;
   setScheduleImage: (scheduleId: string, eventId: string, imageUrl: string | null) => Promise<void>;
   setCurrentEvent: (event: Event | null) => void;
 }
@@ -220,6 +222,30 @@ const useEventStore = create<EventState>()(
         set({ loading: true, error: null });
         try {
           await apiClient.patch(`/api/events/${eventId}/schedules/${scheduleId}`, { status });
+          await useEventStore.getState().fetchSchedulesForEvent(eventId);
+          set({ loading: false });
+        } catch (error: any) {
+          set({ error: error.message, loading: false });
+          throw error;
+        }
+      },
+
+      setScheduleRegistrationOpen: async (scheduleId, eventId, open) => {
+        set({ loading: true, error: null });
+        try {
+          await apiClient.patch(`/api/events/${eventId}/schedules/${scheduleId}`, { registrationOpen: open });
+          await useEventStore.getState().fetchSchedulesForEvent(eventId);
+          set({ loading: false });
+        } catch (error: any) {
+          set({ error: error.message, loading: false });
+          throw error;
+        }
+      },
+
+      setScheduleVisibleInLanding: async (scheduleId, eventId, visible) => {
+        set({ loading: true, error: null });
+        try {
+          await apiClient.patch(`/api/events/${eventId}/schedules/${scheduleId}`, { visibleInLanding: visible });
           await useEventStore.getState().fetchSchedulesForEvent(eventId);
           set({ loading: false });
         } catch (error: any) {

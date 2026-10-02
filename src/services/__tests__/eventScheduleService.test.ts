@@ -346,6 +346,76 @@ describe('EventScheduleService', () => {
     });
   });
 
+  // ------------------------------------------------------------ setRegistrationOpen
+  describe('setRegistrationOpen', () => {
+    it('lanza error si el horario no existe', async () => {
+      (ScheduleMock.findByPk as jest.Mock).mockResolvedValue(null);
+      await expect(service.setRegistrationOpen('sch-1', false)).rejects.toThrow('Schedule not found');
+    });
+
+    it('cierra la inscripción y audita el cambio', async () => {
+      const schedule = makeSchedule({ registrationOpen: true });
+      (ScheduleMock.findByPk as jest.Mock).mockResolvedValue(schedule);
+
+      const result = await service.setRegistrationOpen('sch-1', false, 'user-1');
+
+      expect(schedule.update).toHaveBeenCalledWith({ registrationOpen: false });
+      const details: any = (AuditLogMock.create as jest.Mock).mock.calls[0][0].details;
+      expect(details.changes.inscripcion).toEqual({ from: 'abierta', to: 'cerrada' });
+      expect(result).toBe(schedule);
+    });
+
+    it('no audita si no cambia (ya cerrada)', async () => {
+      const schedule = makeSchedule({ registrationOpen: false });
+      (ScheduleMock.findByPk as jest.Mock).mockResolvedValue(schedule);
+
+      await service.setRegistrationOpen('sch-1', false, 'user-1');
+
+      expect(AuditLogMock.create).not.toHaveBeenCalled();
+    });
+
+    it('trata registrationOpen ausente (undefined) como abierta', async () => {
+      // Fechas creadas antes de la migración: sin la columna se asumen abiertas.
+      const schedule = makeSchedule();
+      delete (schedule as any).registrationOpen;
+      (ScheduleMock.findByPk as jest.Mock).mockResolvedValue(schedule);
+
+      await service.setRegistrationOpen('sch-1', false, 'user-1');
+
+      const details: any = (AuditLogMock.create as jest.Mock).mock.calls[0][0].details;
+      expect(details.changes.inscripcion).toEqual({ from: 'abierta', to: 'cerrada' });
+    });
+  });
+
+  // ----------------------------------------------------------- setVisibleInLanding
+  describe('setVisibleInLanding', () => {
+    it('lanza error si el horario no existe', async () => {
+      (ScheduleMock.findByPk as jest.Mock).mockResolvedValue(null);
+      await expect(service.setVisibleInLanding('sch-1', false)).rejects.toThrow('Schedule not found');
+    });
+
+    it('oculta la fecha y audita el cambio', async () => {
+      const schedule = makeSchedule({ visibleInLanding: true });
+      (ScheduleMock.findByPk as jest.Mock).mockResolvedValue(schedule);
+
+      const result = await service.setVisibleInLanding('sch-1', false, 'user-1');
+
+      expect(schedule.update).toHaveBeenCalledWith({ visibleInLanding: false });
+      const details: any = (AuditLogMock.create as jest.Mock).mock.calls[0][0].details;
+      expect(details.changes.landing).toEqual({ from: 'visible', to: 'oculta' });
+      expect(result).toBe(schedule);
+    });
+
+    it('no audita si no cambia (ya visible)', async () => {
+      const schedule = makeSchedule({ visibleInLanding: true });
+      (ScheduleMock.findByPk as jest.Mock).mockResolvedValue(schedule);
+
+      await service.setVisibleInLanding('sch-1', true, 'user-1');
+
+      expect(AuditLogMock.create).not.toHaveBeenCalled();
+    });
+  });
+
   // -------------------------------------------------------------- searchSchedules
   describe('searchSchedules', () => {
     it('filtra por nombre (iLike)', async () => {

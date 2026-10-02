@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { format } from 'date-fns';
-import { Plus, Edit, Trash2, Clock, Users, MapPin, DoorOpen, DoorClosed } from 'lucide-react';
+import { Plus, Edit, Trash2, Clock, Users, MapPin, DoorOpen, DoorClosed, Lock, Unlock, Eye, EyeOff } from 'lucide-react';
 import EventSchedule from '@/models/EventSchedule';
 import ScheduleForm from '@/components/events/ScheduleForm';
 import RoleGuard from '../auth/RoleGuard';
@@ -21,7 +21,7 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ eventId }) => {
   const [editingSchedule, setEditingSchedule] = useState<EventSchedule | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<EventSchedule | null>(null);
 
-  const { EventSchedules, fetchSchedulesForEvent, deleteSchedule, setScheduleStatus } = useEventStore();
+  const { EventSchedules, fetchSchedulesForEvent, deleteSchedule, setScheduleStatus, setScheduleRegistrationOpen, setScheduleVisibleInLanding } = useEventStore();
   useEffect(() => { fetchSchedulesForEvent(eventId); }, [eventId, fetchSchedulesForEvent]);
 
   const STATUS: Record<string, { label: string; cls: string }> = {
@@ -37,6 +37,26 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ eventId }) => {
       toast.success(status === 'accrediting' ? 'Acreditación abierta' : 'Acreditación cerrada');
     } catch {
       toast.error('No se pudo cambiar el estado del horario');
+    }
+  };
+
+  const handleToggleRegistration = async (schedule: EventSchedule) => {
+    const open = (schedule as any).registrationOpen !== false;
+    try {
+      await setScheduleRegistrationOpen(schedule.id, eventId, !open);
+      toast.success(open ? 'Inscripción cerrada para esta fecha' : 'Inscripción abierta para esta fecha');
+    } catch {
+      toast.error('No se pudo cambiar la inscripción de la fecha');
+    }
+  };
+
+  const handleToggleVisible = async (schedule: EventSchedule) => {
+    const visible = (schedule as any).visibleInLanding !== false;
+    try {
+      await setScheduleVisibleInLanding(schedule.id, eventId, !visible);
+      toast.success(visible ? 'Fecha oculta en la landing' : 'Fecha visible en la landing');
+    } catch {
+      toast.error('No se pudo cambiar la visibilidad de la fecha');
     }
   };
 
@@ -104,6 +124,12 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ eventId }) => {
                   <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${(STATUS[(schedule as any).status] || STATUS.published).cls}`}>
                     {(STATUS[(schedule as any).status] || STATUS.published).label}
                   </span>
+                  {(schedule as any).registrationOpen === false && (
+                    <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">Inscripción cerrada</span>
+                  )}
+                  {(schedule as any).visibleInLanding === false && (
+                    <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-gray-200 text-gray-600">Oculta en landing</span>
+                  )}
                 </div>
                 <div className="flex items-center text-sm text-gray-500 mt-2 space-x-4">
                   <div className="flex items-center">
@@ -154,6 +180,30 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ eventId }) => {
                       <DoorOpen size={16} /> Abrir
                     </button>
                   )}
+                  {(schedule as any).registrationOpen === false ? (
+                    <button
+                      onClick={() => handleToggleRegistration(schedule)}
+                      className="flex items-center gap-1 px-2.5 py-1.5 text-sm font-medium text-green-700 bg-green-50 hover:bg-green-100 rounded-md transition-colors"
+                      title="Abrir la inscripción de esta fecha en la landing"
+                    >
+                      <Unlock size={16} /> Abrir inscr.
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => handleToggleRegistration(schedule)}
+                      className="flex items-center gap-1 px-2.5 py-1.5 text-sm font-medium text-amber-700 bg-amber-50 hover:bg-amber-100 rounded-md transition-colors"
+                      title="Cerrar la inscripción de esta fecha (la landing la mostrará como cerrada)"
+                    >
+                      <Lock size={16} /> Cerrar inscr.
+                    </button>
+                  )}
+                  <button
+                    onClick={() => handleToggleVisible(schedule)}
+                    className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-full transition-colors"
+                    title={(schedule as any).visibleInLanding === false ? 'Mostrar esta fecha en la landing' : 'Ocultar esta fecha de la landing (sin perder inscripciones ni acreditación)'}
+                  >
+                    {(schedule as any).visibleInLanding === false ? <Eye size={18} /> : <EyeOff size={18} />}
+                  </button>
                   <button
                     onClick={() => handleEdit(schedule)}
                     className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-full transition-colors"

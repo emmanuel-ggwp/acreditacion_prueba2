@@ -247,6 +247,24 @@ export async function POST(
     // 4. Enlazar solo los horarios nuevos (alias de la asociación: 'schedules')
     const schedulesToAdd = schedules.filter((s: any) => !existingScheduleIds.includes(s.id));
 
+    // Fecha con inscripción CERRADA u OCULTA de la landing: no se puede inscribir a ella.
+    // Defensa server-side (la landing ya no la ofrece, pero un cliente podría enviar una
+    // fecha cerrada). Solo aplica a fechas NUEVAS; no afecta a inscripciones existentes.
+    const blockedSchedule = schedulesToAdd.find(
+      (s: any) => s.registrationOpen === false || s.visibleInLanding === false
+    );
+    if (blockedSchedule) {
+      await t.rollback();
+      return NextResponse.json(
+        {
+          error: `La inscripción para la fecha "${(blockedSchedule as any).scheduleName}" está cerrada.`,
+          code: 'SCHEDULE_CLOSED',
+          scheduleId: (blockedSchedule as any).id,
+        },
+        { status: 409 }
+      );
+    }
+
     // Capacidad: respetar el máximo del evento y de cada fecha (cuenta participantes inscritos).
     const eventMax = Number((event as any).maxCapacity) || 0;
     const isNewToEvent = existingScheduleIds.length === 0;

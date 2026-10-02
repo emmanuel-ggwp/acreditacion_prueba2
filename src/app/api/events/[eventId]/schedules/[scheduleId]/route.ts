@@ -48,6 +48,18 @@ export const PATCH = withAuth(async (req: AuthenticatedRequest, { params }: Para
         return NextResponse.json({ message: 'No autorizado para cambiar la imagen del horario' }, { status: 403 });
       }
       updated = await eventScheduleService.setImage(scheduleId, body.imageUrl, req.user?.id);
+    } else if (typeof body.registrationOpen !== 'undefined') {
+      // Abrir/cerrar inscripción de la fecha en la landing: acción administrativa.
+      if (isGuard) {
+        return NextResponse.json({ message: 'No autorizado para cambiar la inscripción del horario' }, { status: 403 });
+      }
+      updated = await eventScheduleService.setRegistrationOpen(scheduleId, !!body.registrationOpen, req.user?.id);
+    } else if (typeof body.visibleInLanding !== 'undefined') {
+      // Mostrar/ocultar la fecha en la landing: acción administrativa.
+      if (isGuard) {
+        return NextResponse.json({ message: 'No autorizado para ocultar/mostrar el horario' }, { status: 403 });
+      }
+      updated = await eventScheduleService.setVisibleInLanding(scheduleId, !!body.visibleInLanding, req.user?.id);
     } else if (body.status) {
       if (isGuard && !GUARD_ALLOWED_STATUSES.includes(body.status)) {
         return NextResponse.json({ message: 'No autorizado para cambiar a ese estado' }, { status: 403 });

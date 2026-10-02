@@ -61,8 +61,12 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
   ff.documentNumber = { enabled: true, required: true }; // RUT siempre visible y obligatorio.
   const allSchedules: any[] = (Array.isArray((event as any).schedules) ? [...(event as any).schedules] : [])
     .sort((a: any, b: any) => new Date(a.startDateTime).getTime() - new Date(b.startDateTime).getTime());
-  const availableSchedules = allSchedules.filter((s: any) => !s.full);
-  const allFull = allSchedules.length > 0 && availableSchedules.length === 0;
+  // "Disponible" = con cupo y con la inscripción ABIERTA. Las fechas con inscripción
+  // cerrada se muestran (marcadas "Inscripción cerrada") pero no se pueden elegir.
+  const availableSchedules = allSchedules.filter((s: any) => !s.full && s.registrationOpen !== false);
+  const noneAvailable = allSchedules.length > 0 && availableSchedules.length === 0;
+  // Si NINGUNA está disponible, distinguir el motivo para el mensaje de pantalla completa.
+  const allClosed = noneAvailable && allSchedules.every((s: any) => s.registrationOpen === false);
   const variant: string = (event as any).publicTemplate || 'default';
   const multiple = !!(event as any).allowMultipleSchedules;
   // Con varias fechas, el modal se abre primero (elegir fecha antes del formulario).
@@ -411,14 +415,18 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
     }
   };
 
-  if (allFull) {
+  if (noneAvailable) {
     return (
       <div className="bg-white p-8 rounded-xl shadow-lg text-center max-w-md mx-auto">
         <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-amber-100 mb-6">
           <AlertCircle className="h-8 w-8 text-amber-600" />
         </div>
-        <h2 className="text-2xl font-bold text-gray-900 mb-2">Cupos agotados</h2>
-        <p className="text-gray-600">Todas las fechas de este evento alcanzaron su capacidad máxima. Ya no hay cupos disponibles para inscribirse.</p>
+        <h2 className="text-2xl font-bold text-gray-900 mb-2">{allClosed ? 'Inscripción cerrada' : 'Cupos agotados'}</h2>
+        <p className="text-gray-600">
+          {allClosed
+            ? 'La inscripción para las fechas de este evento está cerrada.'
+            : 'Todas las fechas de este evento alcanzaron su capacidad máxima. Ya no hay cupos disponibles para inscribirse.'}
+        </p>
       </div>
     );
   }

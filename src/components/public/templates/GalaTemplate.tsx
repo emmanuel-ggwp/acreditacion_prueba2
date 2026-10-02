@@ -118,7 +118,7 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
   const [registeredScheduleIds, setRegisteredScheduleIds] = useState<string[]>([]);
   // Fechas elegidas (varias si el evento lo permite). Si solo hay una fecha disponible,
   // queda preseleccionada. La UI usa casillas cuando `allowMultiple` está activo.
-  const [selectedScheduleIds, setSelectedScheduleIds] = useState<string[]>(schedules.length === 1 && !schedules[0].full ? [schedules[0].id] : []);
+  const [selectedScheduleIds, setSelectedScheduleIds] = useState<string[]>(schedules.length === 1 && !schedules[0].full && schedules[0].registrationOpen !== false ? [schedules[0].id] : []);
   const [form, setForm] = useState({ firstName: '', lastName: '', documentNumber: '', phone: '', email: '', company: '', position: '', numeroSap: '', dietaryPreference: 'NONE', dietaryComments: '' });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -657,7 +657,9 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
     const selected = selectedScheduleIds.includes(s.id);
     const already = registeredScheduleIds.includes(s.id);
     const full = !!s.full;
-    const blocked = already || full;
+    // Inscripción cerrada para esta fecha: se muestra pero no se puede elegir.
+    const closed = s.registrationOpen === false;
+    const blocked = already || full || closed;
     // Ancho FIJO por tarjeta (móvil: ancho completo). Todas quedan del mismo tamaño
     // sin importar cuántas fechas haya; el contenedor las reparte y centra la última
     // fila incompleta (5 fechas → 3 arriba y 2 centradas). Con 4 fechas, el contenedor
@@ -665,6 +667,8 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
     // Etiqueta de estado (reutilizada en ambos diseños).
     const badge = already ? (
       <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-green-500/30 text-green-100 whitespace-nowrap">Ya inscrito</span>
+    ) : closed ? (
+      <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-amber-500/40 text-amber-50 whitespace-nowrap">Inscripción cerrada</span>
     ) : full ? (
       <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-red-500/40 text-red-50 whitespace-nowrap">Capacidad máxima</span>
     ) : blockTypeLabel(s.blockType) ? (

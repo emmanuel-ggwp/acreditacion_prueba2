@@ -207,6 +207,10 @@ export const scheduleSchema = z.object({
   label: z.string().optional().nullable(),
   imageUrl: z.string().optional().nullable(),
   isActive: z.boolean().default(true),
+  // Controles de landing por fecha (ambos default true en el modelo). Inscripción abierta
+  // para esta fecha, y si la fecha se muestra en la landing pública.
+  registrationOpen: z.boolean().optional(),
+  visibleInLanding: z.boolean().optional(),
 }).refine(data => new Date(data.endDateTime) > new Date(data.startDateTime), {
   message: 'La fecha de término debe ser posterior a la fecha de inicio',
   path: ['endDateTime'],

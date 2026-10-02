@@ -18,6 +18,12 @@ class EventSchedule extends Model {
   declare public label: string | null;
   declare public imageUrl: string | null;
   declare public isActive: boolean;
+  // Inscripción abierta para ESTA fecha (landing). false = "Inscripción cerrada" en la
+  // landing y el registro público la rechaza. No afecta inscripciones ni acreditación.
+  declare public registrationOpen: boolean;
+  // Visible en la landing pública. false = no se muestra en la landing (pero sigue
+  // disponible para acreditar y en reportes). Reemplazo no destructivo de "eliminar".
+  declare public visibleInLanding: boolean;
   // Status:
   // - published: Visible/Upcoming (default)
   // - accrediting: Check-in is currently open
@@ -89,6 +95,18 @@ EventSchedule.init(
     isActive: {
       type: DataTypes.BOOLEAN,
       defaultValue: true,
+    },
+    registrationOpen: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: true,
+      comment: 'Inscripción abierta para esta fecha en la landing; false = "Inscripción cerrada"',
+    },
+    visibleInLanding: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: true,
+      comment: 'Visible en la landing pública; false = oculta (sigue acreditable y en reportes)',
     },
     status: {
       type: DataTypes.STRING,

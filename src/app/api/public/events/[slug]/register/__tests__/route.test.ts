@@ -190,6 +190,34 @@ describe('POST /api/public/events/[slug]/register', () => {
     expect(tx.rollback).toHaveBeenCalled();
   });
 
+  it('devuelve 409 SCHEDULE_CLOSED cuando la fecha tiene la inscripción cerrada', async () => {
+    EventMock.findOne.mockResolvedValue(openEvent());
+    EventScheduleMock.findAll.mockResolvedValue([{ id: SCH, maxCapacity: 0, scheduleName: 'S1', registrationOpen: false }]);
+    ParticipantMock.findOne.mockResolvedValue(null);
+    ParticipantMock.create.mockResolvedValue(makeParticipant());
+
+    const res = await call(validOpenBody());
+    const body = await res.json();
+
+    expect(res.status).toBe(409);
+    expect(body.code).toBe('SCHEDULE_CLOSED');
+    expect(tx.rollback).toHaveBeenCalled();
+  });
+
+  it('devuelve 409 SCHEDULE_CLOSED cuando la fecha está oculta de la landing', async () => {
+    EventMock.findOne.mockResolvedValue(openEvent());
+    EventScheduleMock.findAll.mockResolvedValue([{ id: SCH, maxCapacity: 0, scheduleName: 'S1', visibleInLanding: false }]);
+    ParticipantMock.findOne.mockResolvedValue(null);
+    ParticipantMock.create.mockResolvedValue(makeParticipant());
+
+    const res = await call(validOpenBody());
+    const body = await res.json();
+
+    expect(res.status).toBe(409);
+    expect(body.code).toBe('SCHEDULE_CLOSED');
+    expect(tx.rollback).toHaveBeenCalled();
+  });
+
   it('devuelve 409 ALREADY_REGISTERED si ya está inscrito y el evento no admite varias fechas', async () => {
     EventMock.findOne.mockResolvedValue(openEvent());
     EventScheduleMock.findAll.mockResolvedValue([{ id: SCH, maxCapacity: 0, scheduleName: 'S1' }]);
