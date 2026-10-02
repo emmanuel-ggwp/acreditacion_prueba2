@@ -343,7 +343,7 @@ describe('ReportService', () => {
       expect(AccreditationMock.count).toHaveBeenCalledTimes(1);
     });
 
-    it('con capacidad 0 la disponibilidad es Infinity', async () => {
+    it('con capacidad 0 la disponibilidad es null (sin cupo definido)', async () => {
       const s = { id: 'sch-3', scheduleName: 'Noche', maxCapacity: null, Event: { maxCapacity: null } };
       (AccreditationMock.count as jest.Mock)
         .mockResolvedValueOnce(0) // últimos 30 min
@@ -354,7 +354,7 @@ describe('ReportService', () => {
       const result = await service.getRealTimeStats(eventId);
 
       expect(result.currentCapacity).toEqual([
-        { scheduleName: 'Noche', capacity: 0, accredited: 0, available: Infinity },
+        { scheduleName: 'Noche', capacity: 0, accredited: 0, available: null },
       ]);
       expect(result.accreditationRatePerMinute).toBe(0);
     });

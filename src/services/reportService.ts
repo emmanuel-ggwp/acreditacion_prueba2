@@ -281,12 +281,19 @@ export class ReportService {
     }) as any;
 
     const totalAccreditedParticipants = parseInt(uniqueEventStats?.uniqueParticipants || '0', 10);
-    // Invitados acreditados = con nombre (distinct guest_id) + numéricos (suma guest_count).
+    // Invitados acreditados = con nombre (distinct guest_id) + numéricos.
+    // Numéricos: por PARTICIPANTE (su mayor llegada entre fechas), NO la suma por fecha, para
+    // que sea comparable con los registrados (contados una vez por participante) y que, en
+    // eventos numéricos multi-fecha, "acreditados" no pueda superar a "registrados".
     const numericAccEventRows = await sequelize.query<{ count: number }>(
-        `SELECT COALESCE(SUM(a.guest_count), 0)::int as count
-           FROM accreditations a
-           INNER JOIN event_schedules es ON es.id = a.event_schedule_id
-          WHERE es.event_id = :eventId`,
+        `SELECT COALESCE(SUM(perp.c), 0)::int as count
+           FROM (
+             SELECT a.participant_id, MAX(a.guest_count) AS c
+             FROM accreditations a
+             INNER JOIN event_schedules es ON es.id = a.event_schedule_id
+             WHERE es.event_id = :eventId AND a.participant_id IS NOT NULL
+             GROUP BY a.participant_id
+           ) perp`,
         { replacements: { eventId }, type: QueryTypes.SELECT }
     );
     const totalAccreditedGuests = parseInt(uniqueEventStats?.uniqueGuests || '0', 10) + (Number(numericAccEventRows[0]?.count) || 0);
@@ -407,7 +414,7 @@ export class ReportService {
    * ritmo de acreditación por minuto (acreditados totales / minutos desde la primera).
    *
    * @param eventId - Identificador del evento a monitorear.
-   * @returns Promesa que resuelve a `{ accreditationsLast30Min, currentCapacity, accreditationRatePerMinute }`, donde `currentCapacity` lista por horario `{ scheduleName, capacity, accredited, available }` (`available` es `Infinity` si no hay cupo definido).
+   * @returns Promesa que resuelve a `{ accreditationsLast30Min, currentCapacity, accreditationRatePerMinute }`, donde `currentCapacity` lista por horario `{ scheduleName, capacity, accredited, available }` (`available` es `null` si no hay cupo definido).
    */
   async getRealTimeStats(eventId: string) {
     const now = new Date();
@@ -431,7 +438,9 @@ export class ReportService {
             scheduleName: s.scheduleName,
             capacity,
             accredited,
-            available: capacity > 0 ? capacity - accredited : Infinity
+            // null = sin cupo definido (ilimitado). Antes era Infinity, que JSON.stringify
+            // convierte en null igual; se deja explícito para no serializar un no-valor.
+            available: capacity > 0 ? capacity - accredited : null
         }
     }));
 
