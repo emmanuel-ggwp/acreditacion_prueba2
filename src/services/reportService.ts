@@ -230,11 +230,25 @@ export class ReportService {
     // registrados" sea comparable con "Total acreditados": ambos son PERSONAS
     // (participantes + invitados). Sin esto, registrados excluía invitados y podía
     // verse "acreditados > registrados".
+    // Cuenta cada invitado UNA vez si está ligado a alguna fecha del evento vía
+    // guest_schedules (invitados por fecha), con fallback por la fecha heredada
+    // (guest.schedule_id) para datos previos a la feature. Antes se unía solo por
+    // guest.schedule_id, que es NULL en los invitados agregados por admin (los deja fuera)
+    // e inconsistente con el conteo por fecha → podía dar "acreditados > registrados".
     const guestEventRows = await sequelize.query<{ count: number }>(
-        `SELECT COUNT(g.id)::int as count
-           FROM guests g
-           INNER JOIN event_schedules es ON g.schedule_id = es.id
-          WHERE es.event_id = :eventId AND g.deleted_at IS NULL`,
+        `SELECT COUNT(DISTINCT sub.gid)::int as count
+           FROM (
+             SELECT gs.guest_id AS gid
+             FROM guest_schedules gs
+             INNER JOIN event_schedules es ON es.id = gs.schedule_id AND es.event_id = :eventId
+             INNER JOIN guests g ON g.id = gs.guest_id AND g.deleted_at IS NULL
+             UNION
+             SELECT g.id AS gid
+             FROM guests g
+             INNER JOIN event_schedules es ON es.id = g.schedule_id AND es.event_id = :eventId
+             WHERE g.deleted_at IS NULL
+               AND NOT EXISTS (SELECT 1 FROM guest_schedules gs2 WHERE gs2.guest_id = g.id)
+           ) sub`,
         { replacements: { eventId }, type: QueryTypes.SELECT }
     );
     // Invitados NUMÉRICOS registrados en el evento: guestCount de cada participante
@@ -464,7 +478,10 @@ export class ReportService {
             es.start_date_time as "eventDate",
             CASE WHEN acc.id IS NOT NULL THEN 'Sí' ELSE 'No' END as "Asistencia",
             acc.check_in_time as "checkInTime",
-            (SELECT COUNT(*) FROM guests g WHERE g.participant_id = p.id AND g.deleted_at IS NULL) as "Cant. Invitados",
+            (SELECT COUNT(*) FROM guests g
+             WHERE g.participant_id = p.id AND g.deleted_at IS NULL
+               AND (EXISTS (SELECT 1 FROM guest_schedules gs WHERE gs.guest_id = g.id AND gs.schedule_id = es.id)
+                    OR NOT EXISTS (SELECT 1 FROM guest_schedules gs3 WHERE gs3.guest_id = g.id))) as "Cant. Invitados",
             (SELECT COUNT(*) FROM accreditations acc_g
              INNER JOIN guests g ON acc_g.guest_id = g.id
              WHERE g.participant_id = p.id AND acc_g.event_schedule_id = es.id AND g.deleted_at IS NULL) as "Cant. Invitados Asistentes",
@@ -478,7 +495,9 @@ export class ReportService {
                   NULLIF(g2.document_number, ''),
                   CASE WHEN g2.age IS NOT NULL THEN g2.age || ' años' END
                 ), '; ' ORDER BY g2.first_name)
-             FROM guests g2 WHERE g2.participant_id = p.id AND g2.deleted_at IS NULL) as "guestsDetail"
+             FROM guests g2 WHERE g2.participant_id = p.id AND g2.deleted_at IS NULL
+               AND (EXISTS (SELECT 1 FROM guest_schedules gs4 WHERE gs4.guest_id = g2.id AND gs4.schedule_id = es.id)
+                    OR NOT EXISTS (SELECT 1 FROM guest_schedules gs5 WHERE gs5.guest_id = g2.id))) as "guestsDetail"
         FROM participants p
         INNER JOIN participant_schedules ps ON p.id = ps.participant_id
         INNER JOIN event_schedules es ON ps.schedule_id = es.id
