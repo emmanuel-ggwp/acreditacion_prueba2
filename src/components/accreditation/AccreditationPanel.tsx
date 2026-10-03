@@ -11,7 +11,7 @@ import Participant from '@/models/Participant';
 import Guest from '@/models/Guest';
 import { getAccreditationFields } from '@/utils/formFields';
 import { formatDateCL, formatTimeCL } from '@/utils/formatters';
-import { Clock, MapPin, Users, UserCheck, UsersRound, Award, DoorOpen, DoorClosed, Calendar, ChevronRight, Utensils } from 'lucide-react';
+import { Clock, MapPin, Users, UserCheck, UsersRound, Award, DoorOpen, DoorClosed, Calendar, Utensils, RefreshCw, X } from 'lucide-react';
 
 interface AccreditationPanelProps {
   eventId?: string;
@@ -37,7 +37,7 @@ const StatCard: React.FC<{ icon: React.ElementType; label: string; value: React.
     <>
       <Icon className={`h-5 w-5 mx-auto mb-1 ${color}`} />
       <p className={`text-2xl font-bold ${color}`}>{value}</p>
-      <p className="text-xs text-gray-500 flex items-center justify-center gap-0.5">{label}{onClick && <ChevronRight size={12} className="text-gray-400" />}</p>
+      <p className="text-xs text-gray-500 flex items-center justify-center gap-0.5">{label}</p>
     </>
   );
   return onClick
@@ -55,9 +55,10 @@ const AccreditationPanel = ({ eventId: eventIdProp, scheduleId: scheduleIdProp }
   const [eventStats, setEventStats] = useState<EventStats | null>(null);
   const [showAwarded, setShowAwarded] = useState(false);
   const [showDietary, setShowDietary] = useState(false);
-  // En celular, tras elegir la fecha se colapsan los pasos 1-2 (y el resumen) en una
-  // barra compacta, para que el buscador quede arriba sin scroll. En desktop no aplica.
-  const [setupCollapsed, setSetupCollapsed] = useState(false);
+  // Modal de trabajo: al elegir una fecha se abre aquí el buscador + la ficha, en vez de
+  // aparecer al final de la página (evita el scroll largo). Se queda abierto para seguir
+  // acreditando y se refresca con el botón "Actualizar" y tras cada acreditación.
+  const [workOpen, setWorkOpen] = useState(false);
   const personCardRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -71,12 +72,12 @@ const AccreditationPanel = ({ eventId: eventIdProp, scheduleId: scheduleIdProp }
     setScheduleId('');
     setSelectedPerson(null);
     setStats(null);
-    setSetupCollapsed(false);
+    setWorkOpen(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventId]);
 
-  // En celular, la ficha de la persona aparece bajo el buscador y queda fuera de
-  // pantalla (más aún con el teclado abierto): bajar hasta ella al seleccionarla.
+  // La ficha de la persona aparece bajo el buscador (dentro del modal); en celular queda
+  // fuera de vista al seleccionarla, así que se desplaza hasta ella.
   useEffect(() => {
     if (selectedPerson && personCardRef.current && window.matchMedia('(max-width: 639px)').matches) {
       personCardRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -95,10 +96,19 @@ const AccreditationPanel = ({ eventId: eventIdProp, scheduleId: scheduleIdProp }
   }, [eventId]);
   useEffect(() => { loadEventStats(); }, [loadEventStats]);
 
-  const onAccredited = () => {
+  // Refresca contadores por fecha, del evento y el estado de los horarios. Se usa tras
+  // cada acreditación (ParticipantCard) y desde el botón "Actualizar" del modal.
+  const refresh = useCallback(() => {
     loadStats();
     loadEventStats();
     if (eventId) fetchSchedulesForEvent(eventId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadStats, loadEventStats, eventId]);
+
+  const openWork = (sId: string) => {
+    setScheduleId(sId);
+    setSelectedPerson(null);
+    setWorkOpen(true);
   };
 
   const toggleStatus = async (s: any, status: string) => {
@@ -115,33 +125,6 @@ const AccreditationPanel = ({ eventId: eventIdProp, scheduleId: scheduleIdProp }
   return (
     <div className="p-4 sm:p-6 md:p-8 max-w-4xl mx-auto space-y-6">
       <h1 className="text-2xl sm:text-3xl font-bold">Acreditación</h1>
-
-      {/* Barra compacta (solo celular): evento y fecha elegidos + botón para cambiarlos. */}
-      {scheduleId && setupCollapsed && (
-        <div className="sm:hidden flex items-center justify-between gap-3 bg-white border border-gray-200 rounded-lg p-3">
-          <div className="min-w-0">
-            <p className="text-sm font-semibold text-gray-800 truncate">
-              {events.find((e) => e.id === eventId)?.name || 'Evento'}
-            </p>
-            <p className="text-xs text-gray-500 truncate">
-              {selectedScheduleLabel}
-              {selectedSchedule?.startDateTime ? (
-                <span className="capitalize"> · {fmtDate(selectedSchedule.startDateTime)} {fmtTime(selectedSchedule.startDateTime)}</span>
-              ) : null}
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => setSetupCollapsed(false)}
-            className="shrink-0 text-sm font-medium text-indigo-600 border border-indigo-200 rounded-lg px-3 py-2 hover:bg-indigo-50 active:bg-indigo-100"
-          >
-            Cambiar
-          </button>
-        </div>
-      )}
-
-      {/* Pasos 1-2 y resumen: en celular se ocultan tras elegir fecha (barra compacta arriba). */}
-      <div className={`space-y-6 ${scheduleId && setupCollapsed ? 'hidden sm:block' : ''}`}>
 
       {/* Paso 1: Evento */}
       <div>
@@ -171,8 +154,7 @@ const AccreditationPanel = ({ eventId: eventIdProp, scheduleId: scheduleIdProp }
                 // En el panel se muestran solo CANTIDADES (sin barras ni topes): el cupo es
                 // límite de inscripción y el aforo se controla al acreditar, no se topa aquí.
                 // Hasta que llegan las stats reales (event-stats) se muestra "—" en vez de
-                // un aproximado: accreditedCount cuenta filas (participantes + invitados con
-                // nombre) y mostrarlo como "Participantes" engañaba.
+                // un aproximado.
                 const est = eventStats?.perSchedule.find((ps) => ps.scheduleId === s.id);
                 const partN: number | string = est ? est.participants : '—';
                 const guestN: number | string = est ? est.guests : '—';
@@ -203,8 +185,8 @@ const AccreditationPanel = ({ eventId: eventIdProp, scheduleId: scheduleIdProp }
                       </div>
                     </div>
                     <div className="mt-3 flex items-center gap-2">
-                      <button onClick={() => { setScheduleId(s.id); setSelectedPerson(null); setSetupCollapsed(true); }} className={`flex-1 text-sm font-medium rounded-md py-2 ${sel ? 'bg-indigo-600 text-white' : 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200 active:bg-indigo-300'}`}>
-                        {sel ? 'Seleccionada' : 'Trabajar aquí'}
+                      <button onClick={() => openWork(s.id)} className={`flex-1 text-sm font-medium rounded-md py-2 ${sel ? 'bg-indigo-600 text-white hover:bg-indigo-700' : 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200 active:bg-indigo-300'}`}>
+                        {sel ? 'Continuar acreditando' : 'Acreditar aquí'}
                       </button>
                       {s.status === 'published' && <button onClick={() => toggleStatus(s, 'accrediting')} title="Abrir acreditación" className="text-green-600 hover:bg-green-50 rounded-md p-2 border border-green-200"><DoorOpen size={18} /></button>}
                       {s.status === 'accrediting' && <button onClick={() => toggleStatus(s, 'accredited')} title="Cerrar acreditación" className="text-gray-500 hover:bg-gray-100 rounded-md p-2 border border-gray-200"><DoorClosed size={18} /></button>}
@@ -249,36 +231,77 @@ const AccreditationPanel = ({ eventId: eventIdProp, scheduleId: scheduleIdProp }
         </div>
       )}
 
-      </div>{/* fin pasos 1-2 + resumen (colapsables en celular) */}
-
-      {/* Paso 3: Stats + Buscar participante */}
-      {scheduleId && (
-        <div className="space-y-4">
-          <div className={`grid grid-cols-2 gap-3 ${(stats?.awarded ?? 0) > 0 ? 'sm:grid-cols-4' : 'sm:grid-cols-3'}`}>
-            <StatCard icon={UserCheck} label="Participantes" value={stats?.participants ?? '—'} color="text-indigo-600" />
-            <StatCard icon={Users} label="Invitados" value={stats?.guests ?? '—'} color="text-teal-600" />
-            <StatCard icon={UsersRound} label="Total" value={stats?.total ?? '—'} color="text-gray-900" />
-            {(stats?.awarded ?? 0) > 0 && <StatCard icon={Award} label="Premiados" value={stats?.awarded ?? 0} color="text-amber-600" onClick={() => setShowAwarded(true)} />}
-          </div>
-
-          <button
-            type="button"
-            onClick={() => setShowDietary(true)}
-            className="w-full flex items-center justify-center gap-2 text-sm font-medium text-orange-700 bg-orange-50 border border-orange-200 rounded-lg py-2.5 hover:bg-orange-100 transition"
-          >
-            <Utensils size={16} /> Ver requerimientos alimentarios
-          </button>
-
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">3. Buscar participante</label>
-            <SearchParticipant eventId={eventId} onSelect={setSelectedPerson} scheduleId={scheduleId} />
-          </div>
-
-          {selectedPerson && (
-            <div ref={personCardRef} className="scroll-mt-4">
-              <ParticipantCard person={selectedPerson.data} type={selectedPerson.type} scheduleId={scheduleId} scheduleLabel={selectedScheduleLabel} accreditationFields={accreditationFields} onAccredited={onAccredited} />
+      {/* Modal de trabajo: Paso 3 (buscar + ficha + contadores). z-40 para quedar DEBAJO
+          de los modales de Premiados/Dietario (z-50), que se abren desde aquí.
+          Responsive: en celular es una hoja inferior a ancho completo (rounded-t), en
+          desktop un diálogo centrado (max-w-2xl). SIN overflow-hidden en la tarjeta: así
+          el desplegable del buscador (absolute) NO se recorta; las esquinas se redondean
+          en el encabezado (arriba) y en el cuerpo (abajo). El buscador va FUERA del área
+          con scroll, por el mismo motivo. */}
+      {workOpen && scheduleId && (
+        <div className="fixed inset-0 z-40 flex items-end sm:items-center justify-center bg-black/40 sm:p-4" onClick={() => setWorkOpen(false)}>
+          <div className="bg-gray-50 w-full sm:max-w-2xl rounded-t-2xl sm:rounded-2xl max-h-[92vh] flex flex-col shadow-xl" onClick={(e) => e.stopPropagation()}>
+            {/* Encabezado: fecha + Actualizar + cerrar */}
+            <div className="shrink-0 bg-white rounded-t-2xl border-b border-gray-200 px-4 py-3 flex items-center justify-between gap-2 sm:gap-3">
+              <div className="min-w-0">
+                <p className="text-xs text-gray-500">Acreditando</p>
+                <p className="font-semibold text-gray-900 truncate">
+                  {selectedScheduleLabel}
+                  {selectedSchedule?.startDateTime && (
+                    <span className="capitalize font-normal text-gray-500"> · {fmtDate(selectedSchedule.startDateTime)} {fmtTime(selectedSchedule.startDateTime)}</span>
+                  )}
+                </p>
+              </div>
+              <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={refresh}
+                  title="Actualizar contadores"
+                  className="inline-flex items-center gap-1.5 text-sm font-medium text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-lg px-2.5 sm:px-3 py-2 hover:bg-indigo-100 active:bg-indigo-200 whitespace-nowrap"
+                >
+                  <RefreshCw size={16} /> Actualizar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setWorkOpen(false)}
+                  title="Cerrar"
+                  className="text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg p-2"
+                >
+                  <X size={20} />
+                </button>
+              </div>
             </div>
-          )}
+
+            {/* Buscador: FUERA del área con scroll para que su desplegable no se recorte. */}
+            <div className="shrink-0 bg-white border-b border-gray-200 px-4 py-3">
+              <label className="block text-sm font-semibold text-gray-700 mb-2">Buscar participante</label>
+              <SearchParticipant eventId={eventId} onSelect={setSelectedPerson} scheduleId={scheduleId} />
+            </div>
+
+            {/* Cuerpo con scroll: ficha de la persona + contadores + dietario. */}
+            <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4 sm:rounded-b-2xl">
+              {selectedPerson && (
+                <div ref={personCardRef} className="scroll-mt-4">
+                  <ParticipantCard person={selectedPerson.data} type={selectedPerson.type} scheduleId={scheduleId} scheduleLabel={selectedScheduleLabel} accreditationFields={accreditationFields} onAccredited={refresh} />
+                </div>
+              )}
+
+              <div className={`grid grid-cols-2 gap-3 ${(stats?.awarded ?? 0) > 0 ? 'sm:grid-cols-4' : 'sm:grid-cols-3'}`}>
+                <StatCard icon={UserCheck} label="Participantes" value={stats?.participants ?? '—'} color="text-indigo-600" />
+                <StatCard icon={Users} label="Invitados" value={stats?.guests ?? '—'} color="text-teal-600" />
+                <StatCard icon={UsersRound} label="Total" value={stats?.total ?? '—'} color="text-gray-900" />
+                {(stats?.awarded ?? 0) > 0 && <StatCard icon={Award} label="Premiados" value={stats?.awarded ?? 0} color="text-amber-600" onClick={() => setShowAwarded(true)} />}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowDietary(true)}
+                className="w-full flex items-center justify-center gap-2 text-sm font-medium text-orange-700 bg-orange-50 border border-orange-200 rounded-lg py-2.5 hover:bg-orange-100 transition"
+              >
+                <Utensils size={16} /> Ver requerimientos alimentarios
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

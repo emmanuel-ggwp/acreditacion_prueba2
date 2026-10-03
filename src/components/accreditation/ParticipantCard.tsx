@@ -399,73 +399,68 @@ const ParticipantCard: React.FC<ParticipantCardProps> = ({ person, type, schedul
 
       {hasNumericGuests && (
         <div className="p-4 sm:p-6 border-t">
-          <div className="flex items-center gap-2 mb-2">
-            <Users size={18} className="text-gray-500" />
-            <h3 className="font-semibold text-lg">Invitados</h3>
-          </div>
-          <p className="text-sm text-gray-600">
-            Declarados: <b>{declaredGuestCount}</b>{companionSummary ? ` (${companionSummary})` : ''}
-          </p>
-          {accreditationStatus.isAccredited ? (
-            editingCount ? (
-              <div className="mt-2 flex items-end gap-2 flex-wrap">
-                <div>
-                  <label htmlFor="editCount" className="block text-sm text-gray-700 mb-1">¿Cuántos llegaron?</label>
-                  <input
-                    id="editCount"
-                    type="number"
-                    min={0}
-                    value={arrivedGuests}
-                    onChange={(e) => setArrivedGuests(Math.max(0, parseInt(e.target.value, 10) || 0))}
-                    className="w-32 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                  />
+          <div className="rounded-xl border border-teal-200 bg-teal-50/40 p-4">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="h-9 w-9 rounded-lg bg-teal-100 flex items-center justify-center shrink-0">
+                  <Users size={18} className="text-teal-700" />
                 </div>
-                <button onClick={handleSaveGuestCount} disabled={loading} className="px-3 py-2 rounded-md bg-indigo-600 text-white text-sm hover:bg-indigo-700 disabled:opacity-50">Guardar</button>
-                <button onClick={() => { setEditingCount(false); setArrivedGuests(Number(accreditationStatus.accreditation?.guestCount ?? 0)); }} className="px-3 py-2 rounded-md border border-gray-300 text-gray-700 text-sm hover:bg-gray-100">Cancelar</button>
+                <h3 className="font-semibold text-gray-900">Invitados</h3>
               </div>
-            ) : (
-              <div className="mt-1 flex items-center gap-3">
-                <p className="text-sm text-green-700">Llegaron: <b>{accreditationStatus.accreditation?.guestCount ?? 0}</b></p>
-                <button
-                  onClick={() => { setArrivedGuests(Number(accreditationStatus.accreditation?.guestCount ?? 0)); setEditingCount(true); }}
-                  className="text-xs font-medium text-indigo-600 hover:text-indigo-800 underline"
-                >
-                  Editar
-                </button>
-              </div>
-            )
-          ) : (
-            <div className="mt-2">
-              <label htmlFor="arrivedGuests" className="block text-sm text-gray-700 mb-1">¿Cuántos invitados llegaron?</label>
-              <input
-                id="arrivedGuests"
-                type="number"
-                min={0}
-                value={arrivedGuests}
-                onChange={(e) => setArrivedGuests(Math.max(0, parseInt(e.target.value, 10) || 0))}
-                className="w-full sm:w-40 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-              />
+              <span className="inline-flex items-center text-sm font-medium text-teal-800 bg-teal-100 rounded-full px-3 py-1 whitespace-nowrap shrink-0">
+                Declarados: {declaredGuestCount}
+              </span>
             </div>
-          )}
+            {companionSummary && <p className="mt-1.5 text-xs text-teal-700/80">{companionSummary}</p>}
+
+            {accreditationStatus.isAccredited ? (
+              editingCount ? (
+                <div className="mt-3">
+                  <label className="block text-sm text-gray-700 mb-1.5">¿Cuántos llegaron?</label>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <div className="inline-flex items-center rounded-lg border border-gray-300 bg-white overflow-hidden">
+                      <button type="button" onClick={() => setArrivedGuests(Math.max(0, arrivedGuests - 1))} aria-label="Menos" className="px-3.5 py-2 text-gray-600 hover:bg-gray-100 text-xl leading-none font-semibold">−</button>
+                      <input type="number" min={0} value={arrivedGuests} onChange={(e) => setArrivedGuests(Math.max(0, parseInt(e.target.value, 10) || 0))} className="w-14 text-center border-x border-gray-300 py-2 text-lg font-bold focus:outline-none" />
+                      <button type="button" onClick={() => setArrivedGuests(arrivedGuests + 1)} aria-label="Más" className="px-3.5 py-2 text-gray-600 hover:bg-gray-100 text-xl leading-none font-semibold">+</button>
+                    </div>
+                    <button onClick={handleSaveGuestCount} disabled={loading} className="px-3 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 disabled:opacity-50">Guardar</button>
+                    <button onClick={() => { setEditingCount(false); setArrivedGuests(Number(accreditationStatus.accreditation?.guestCount ?? 0)); }} className="px-3 py-2 rounded-lg border border-gray-300 text-gray-700 text-sm hover:bg-gray-100">Cancelar</button>
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-3 flex items-center justify-between gap-3">
+                  <p className="text-sm text-gray-700">Llegaron: <b className="text-base text-teal-700">{accreditationStatus.accreditation?.guestCount ?? 0}</b></p>
+                  <button
+                    onClick={() => { setArrivedGuests(Number(accreditationStatus.accreditation?.guestCount ?? 0)); setEditingCount(true); }}
+                    className="text-xs font-medium text-indigo-600 hover:text-indigo-800 underline"
+                  >
+                    Editar
+                  </button>
+                </div>
+              )
+            ) : (
+              <div className="mt-3">
+                <label className="block text-sm text-gray-700 mb-1.5">¿Cuántos invitados llegaron?</label>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <div className="inline-flex items-center rounded-lg border border-gray-300 bg-white overflow-hidden">
+                    <button type="button" onClick={() => setArrivedGuests(Math.max(0, arrivedGuests - 1))} aria-label="Menos" className="px-4 py-2.5 text-gray-600 hover:bg-gray-100 text-2xl leading-none font-semibold">−</button>
+                    <input type="number" min={0} value={arrivedGuests} onChange={(e) => setArrivedGuests(Math.max(0, parseInt(e.target.value, 10) || 0))} className="w-16 text-center border-x border-gray-300 py-2.5 text-xl font-bold focus:outline-none" />
+                    <button type="button" onClick={() => setArrivedGuests(arrivedGuests + 1)} aria-label="Más" className="px-4 py-2.5 text-gray-600 hover:bg-gray-100 text-2xl leading-none font-semibold">+</button>
+                  </div>
+                  {declaredGuestCount > 0 && (
+                    <button type="button" onClick={() => setArrivedGuests(declaredGuestCount)} className="px-3 py-2 rounded-lg bg-teal-100 text-teal-800 text-sm font-medium hover:bg-teal-200">
+                      Todos ({declaredGuestCount})
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
       {!accreditationStatus.isAccredited && (
-        <>
-          <div className="px-4 sm:px-6 pt-4">
-            <label htmlFor="notes" className="block text-sm font-medium text-gray-700 mb-1">
-              Notas (opcional)
-            </label>
-            <textarea
-              id="notes"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              rows={2}
-              className="w-full p-2 border border-gray-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
-              placeholder="Agrega aquí cualquier nota relevante..."
-            />
-          </div>
-          {/* Barra de acción: fija abajo en celular (siempre al alcance del pulgar). */}
+          /* Barra de acción: fija abajo en celular (siempre al alcance del pulgar). */
           <div className="p-3 sm:p-6 bg-white/95 backdrop-blur border-t sticky bottom-0 z-10 shadow-[0_-6px_16px_rgba(0,0,0,0.08)] sm:static sm:bg-gray-50 sm:shadow-none">
             <div className="sm:flex sm:justify-end">
               <button
@@ -479,7 +474,6 @@ const ParticipantCard: React.FC<ParticipantCardProps> = ({ person, type, schedul
               </button>
             </div>
           </div>
-        </>
       )}
     </div>
   );
