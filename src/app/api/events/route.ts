@@ -18,7 +18,7 @@ export const POST = withAuth(async (req: AuthenticatedRequest) => {
   } catch (error: any) {
     console.error('Error creating event:', error);
     if (error.name === 'ZodError') {
-      return NextResponse.json({ message: 'Validation failed', errors: error.errors }, { status: 400 });
+      return NextResponse.json({ message: 'Validation failed', errors: error.issues }, { status: 400 });
     }
     return NextResponse.json({ message: 'Error creating event', error: error.message }, { status: 500 });
   }
@@ -49,7 +49,7 @@ export const GET = withAuth(async (req: AuthenticatedRequest) => {
   } catch (error: any) {
     console.error('Error fetching events:', error);
     if (error.name === 'ZodError') {
-      return NextResponse.json({ message: 'Validation failed', errors: error.errors }, { status: 400 });
+      return NextResponse.json({ message: 'Validation failed', errors: error.issues }, { status: 400 });
     }
     return NextResponse.json({ message: 'Error fetching events', error: error.message }, { status: 500 });
   }

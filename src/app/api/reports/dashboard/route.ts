@@ -31,7 +31,7 @@ export const GET = withAuth(async (req: AuthenticatedRequest) => {
   } catch (error: any) {
     console.error('Error generating dashboard stats:', error);
     if (error.name === 'ZodError') {
-      return NextResponse.json({ message: 'Validation failed', errors: error.errors }, { status: 400 });
+      return NextResponse.json({ message: 'Validation failed', errors: error.issues }, { status: 400 });
     }
     return NextResponse.json({ message: 'Error generating dashboard stats', error: error.message }, { status: 500 });
   }

@@ -25,7 +25,7 @@ export const PUT = withAuth(async (req: AuthenticatedRequest, { params }: Params
   } catch (error: any) {
     console.error('Error updating schedule:', error);
     if (error.name === 'ZodError') {
-      return NextResponse.json({ message: 'Validation failed', errors: error.errors }, { status: 400 });
+      return NextResponse.json({ message: 'Validation failed', errors: error.issues }, { status: 400 });
     }
     // Errores de regla de negocio (capacidad, acreditaciones existentes, etc.) → 400 con el mensaje.
     return NextResponse.json({ message: error.message || 'Error updating schedule' }, { status: 400 });

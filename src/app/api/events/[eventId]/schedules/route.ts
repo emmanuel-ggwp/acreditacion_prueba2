@@ -24,7 +24,7 @@ export const POST = withAuth(async (req: AuthenticatedRequest, { params }: Param
   } catch (error: any) {
     console.error(`Error adding schedule to event:`, error);
     if (error.name === 'ZodError') {
-      return NextResponse.json({ message: 'Validation failed', errors: error.errors }, { status: 400 });
+      return NextResponse.json({ message: 'Validation failed', errors: error.issues }, { status: 400 });
     }
     return NextResponse.json({ message: error.message || 'Error adding schedule' }, { status: 400 });
   }

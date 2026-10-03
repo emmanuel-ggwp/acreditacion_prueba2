@@ -39,7 +39,7 @@ export const POST = withAuth(async (req: AuthenticatedRequest, { params }: Param
   } catch (error: any) {
     console.error('Error creating award for event:', error);
     if (error.name === 'ZodError') {
-      return NextResponse.json({ message: 'Validation failed', errors: error.errors }, { status: 400 });
+      return NextResponse.json({ message: 'Validation failed', errors: error.issues }, { status: 400 });
     }
     return NextResponse.json({ message: 'Error creating award', error: error.message }, { status: 500 });
   }
