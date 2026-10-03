@@ -50,18 +50,30 @@ const AuditLogView: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [entity, setEntity] = useState('');
   const [action, setAction] = useState('');
+  const [eventId, setEventId] = useState('');
+  const [events, setEvents] = useState<{ id: string; name: string }[]>([]);
+
+  // Lista de eventos para el filtro (ordenados por nombre).
+  useEffect(() => {
+    apiClient.get<any>('/api/events?limit=500&sortBy=name&sortOrder=ASC')
+      .then((d) => setEvents(Array.isArray(d?.events) ? d.events : (Array.isArray(d) ? d : [])))
+      .catch(() => setEvents([]));
+  }, []);
 
   useEffect(() => {
     setLoading(true);
     const params = new URLSearchParams();
     if (action) params.set('action', action);
-    if (entity) params.set('entity', entity);
+    // Al filtrar por evento, el backend acota a sus acreditaciones (único log con fecha):
+    // el filtro de entidad no aplica en ese caso.
+    if (entity && !eventId) params.set('entity', entity);
+    if (eventId) params.set('eventId', eventId);
     const qs = params.toString();
     apiClient.get<any[]>(`/api/audit-logs${qs ? `?${qs}` : ''}`)
       .then(setLogs)
       .catch(() => setLogs([]))
       .finally(() => setLoading(false));
-  }, [action, entity]);
+  }, [action, entity, eventId]);
 
   return (
     <div className="space-y-4">
@@ -69,7 +81,11 @@ const AuditLogView: React.FC = () => {
         <h1 className="text-2xl md:text-3xl font-bold flex items-center gap-2">
           <History className="text-indigo-500" /> Registro de actividad
         </h1>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <select value={eventId} onChange={(e) => setEventId(e.target.value)} className="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white max-w-[70vw]" title="Filtrar por evento (muestra sus acreditaciones)">
+            <option value="">Todos los eventos</option>
+            {events.map((ev) => (<option key={ev.id} value={ev.id}>{ev.name}</option>))}
+          </select>
           <select value={action} onChange={(e) => setAction(e.target.value)} className="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white">
             <option value="">Todas las acciones</option>
             <option value="CREATE">Creaciones</option>
@@ -77,18 +93,22 @@ const AuditLogView: React.FC = () => {
             <option value="DELETE">Eliminaciones</option>
             <option value="SYSTEM-BULK-UPDATE">Sistema (automático)</option>
           </select>
-          <select value={entity} onChange={(e) => setEntity(e.target.value)} className="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white">
+          <select value={entity} onChange={(e) => setEntity(e.target.value)} disabled={!!eventId} className="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white disabled:bg-gray-100 disabled:text-gray-400">
             <option value="">Todo</option>
             <option value="Event">Eventos</option>
             <option value="Participant">Participantes</option>
             <option value="Award">Premios</option>
             <option value="Guest">Invitados</option>
             <option value="EventSchedule">Horarios</option>
+            <option value="Accreditation">Acreditaciones</option>
           </select>
         </div>
       </div>
 
-      <p className="text-sm text-gray-500">Quién creó, editó o eliminó qué, cuándo y por qué. (Últimos 200 registros) · Los eventos automáticos del sistema se ocultan; elígelos en el filtro «Sistema (automático)» para verlos.</p>
+      <p className="text-sm text-gray-500">
+        Quién creó, editó o eliminó qué, cuándo y por qué. (Últimos 200 registros) · Los eventos automáticos del sistema se ocultan; elígelos en el filtro «Sistema (automático)» para verlos.
+        {eventId && ' · Filtrando por evento: se muestran sus acreditaciones (acreditó / des-acreditó).'}
+      </p>
 
       {loading ? (
         <div className="flex justify-center py-16"><LoadingSpinner size="lg" /></div>

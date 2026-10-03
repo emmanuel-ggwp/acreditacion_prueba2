@@ -35,7 +35,7 @@ describe('GET /api/audit-logs', () => {
 
     expect(res.status).toBe(200);
     expect(body).toEqual(logs);
-    expect(mockedService.list).toHaveBeenCalledWith({ action: undefined, entity: undefined, limit: 200 });
+    expect(mockedService.list).toHaveBeenCalledWith({ action: undefined, entity: undefined, eventId: undefined, limit: 200 });
   });
 
   it('pasa action, entity y limit desde el query', async () => {
@@ -47,7 +47,19 @@ describe('GET /api/audit-logs', () => {
     );
 
     expect(res.status).toBe(200);
-    expect(mockedService.list).toHaveBeenCalledWith({ action: 'DELETE', entity: 'User', limit: 50 });
+    expect(mockedService.list).toHaveBeenCalledWith({ action: 'DELETE', entity: 'User', eventId: undefined, limit: 50 });
+  });
+
+  it('pasa eventId desde el query (filtro por evento)', async () => {
+    mockedService.list.mockResolvedValue([]);
+
+    const res = await (GET as any)(
+      makeRequest('http://localhost/api/audit-logs?eventId=ev-1'),
+      { params: {} }
+    );
+
+    expect(res.status).toBe(200);
+    expect(mockedService.list).toHaveBeenCalledWith({ action: undefined, entity: undefined, eventId: 'ev-1', limit: 200 });
   });
 
   it('devuelve 500 con el mensaje del error si el servicio lanza', async () => {

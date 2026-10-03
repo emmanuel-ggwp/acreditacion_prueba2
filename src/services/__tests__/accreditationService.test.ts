@@ -1,3 +1,4 @@
+import { Op } from 'sequelize';
 import { AccreditationService } from '../accreditationService';
 import { sequelize } from '@/lib/sequelize';
 import Accreditation from '@/models/Accreditation';
@@ -328,6 +329,56 @@ describe('AccreditationService', () => {
       expect(log.details.changes.invitados).toEqual({ from: 2, to: 5 });
       expect(log.details.name).toBe('Juan Pérez');
       expect(log.details.fecha).toContain('Función 1');
+    });
+  });
+
+  describe('getEventAccreditationHistory', () => {
+    it('mapea el log a historial y enriquece "premiado"; distingue titular/invitado y acreditó/des-acreditó', async () => {
+      // auditLogService.list -> resuelve fechas (EventSchedule.findAll) + AuditLog.findAll.
+      (EventScheduleMock.findAll as jest.Mock).mockResolvedValue([{ id: 's1' }]);
+      (AuditLogMock.findAll as jest.Mock).mockResolvedValue([
+        {
+          id: 'l1', action: 'CREATE', createdAt: new Date('2026-01-01T10:00:00Z'),
+          details: { name: 'Ana Pérez', participantId: 'p1', eventScheduleId: 's1', fecha: 'Ceremonia (01 ene)', invitados: 2 },
+          User: { firstName: 'Admin', lastName: 'User', email: 'a@e.com' },
+        },
+        {
+          id: 'l2', action: 'DELETE', createdAt: new Date('2026-01-01T11:00:00Z'),
+          details: { name: 'Beto Soto', guestId: 'g1', eventScheduleId: 's1', fecha: 'Ceremonia (01 ene)' },
+          User: { firstName: 'Op', lastName: 'One', email: 'o@e.com' },
+        },
+      ]);
+      // Premiado actual del participante p1.
+      (ParticipantMock.findAll as jest.Mock).mockResolvedValue([{ id: 'p1', isAwarded: true }]);
+
+      const result = await accreditationService.getEventAccreditationHistory('ev-1');
+
+      expect(ParticipantMock.findAll).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: { [Op.in]: ['p1'] } } }),
+      );
+      expect(result).toHaveLength(2);
+      expect(result[0]).toMatchObject({
+        action: 'ACCREDITED', personName: 'Ana Pérez', personType: 'participant',
+        isAwarded: true, guests: 2, scheduleText: 'Ceremonia (01 ene)', by: 'Admin User',
+      });
+      expect(result[1]).toMatchObject({
+        action: 'UNACCREDITED', personName: 'Beto Soto', personType: 'guest',
+        isAwarded: false, guestId: 'g1', by: 'Op One',
+      });
+    });
+
+    it('filtra por scheduleId cuando se indica', async () => {
+      (EventScheduleMock.findAll as jest.Mock).mockResolvedValue([{ id: 's1' }, { id: 's2' }]);
+      (AuditLogMock.findAll as jest.Mock).mockResolvedValue([
+        { id: 'l1', action: 'CREATE', createdAt: new Date(), details: { name: 'A', participantId: 'p1', eventScheduleId: 's1' }, User: {} },
+        { id: 'l2', action: 'CREATE', createdAt: new Date(), details: { name: 'B', participantId: 'p2', eventScheduleId: 's2' }, User: {} },
+      ]);
+      (ParticipantMock.findAll as jest.Mock).mockResolvedValue([]);
+
+      const result = await accreditationService.getEventAccreditationHistory('ev-1', { scheduleId: 's2' });
+
+      expect(result).toHaveLength(1);
+      expect(result[0].scheduleId).toBe('s2');
     });
   });
 });

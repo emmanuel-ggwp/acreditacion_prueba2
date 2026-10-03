@@ -2,11 +2,12 @@
 
 import React, { useState, useEffect } from 'react';
 import useEventStore from '@/store/eventStore';
-import { Calendar, Clock, Users, Award, BarChart2, Edit2, X, UserCheck, FileText } from 'lucide-react';
+import { Calendar, Clock, Users, Award, BarChart2, Edit2, X, UserCheck, FileText, History } from 'lucide-react';
 import ScheduleList from '@/components/events/ScheduleList';
 import ParticipantList from '@/components/participants/ParticipantList';
 import AccreditationPanel from '@/components/accreditation/AccreditationPanel';
 import EventReport from '@/components/reports/EventReport';
+import EventAccreditationHistory from '@/components/events/EventAccreditationHistory';
 import toast from 'react-hot-toast';
 import { useRouter } from 'next/navigation';
 import { isToday, isYesterday, isTomorrow } from 'date-fns';
@@ -18,7 +19,7 @@ interface EventDetailsProps {
   eventId?: string;
 }
 
-type Tab = 'info' | 'schedules' | 'participants' | 'awards' | 'reports' | 'accreditation';
+type Tab = 'info' | 'schedules' | 'participants' | 'awards' | 'reports' | 'history' | 'accreditation';
 
 const EventDetails: React.FC<EventDetailsProps> = ({ eventId }) => {
   const router = useRouter();
@@ -80,6 +81,7 @@ const EventDetails: React.FC<EventDetailsProps> = ({ eventId }) => {
     { id: 'participants', label: 'Participantes', icon: Users },
     { id: 'awards', label: 'Premios', icon: Award },
     { id: 'reports', label: 'Reportes', icon: BarChart2 },
+    { id: 'history', label: 'Historial', icon: History },
   ];
 
   if (hasActiveSchedule) {
@@ -198,6 +200,8 @@ const EventDetails: React.FC<EventDetailsProps> = ({ eventId }) => {
         return eventId ? <EventAwardedList eventId={eventId} /> : <div className="p-6 text-center text-gray-500">Guarda el evento para gestionar los premios.</div>;
       case 'reports':
         return eventId ? <EventReport eventId={eventId} /> : <div className="p-6 text-center text-gray-500">Guarda el evento para ver los reportes.</div>;
+      case 'history':
+        return eventId ? <EventAccreditationHistory eventId={eventId} /> : <div className="p-6 text-center text-gray-500">Guarda el evento para ver el historial.</div>;
       case 'accreditation':
         return eventId ? <AccreditationPanel eventId={eventId} /> : null;
       default:

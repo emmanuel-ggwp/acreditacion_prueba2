@@ -7,8 +7,9 @@
  * para calcular el diff de campos que se guarda en `details.changes`.
  */
 import { Op } from 'sequelize';
-import { AuditLog, User } from '@/models/index';
+import { AuditLog, User, EventSchedule } from '@/models/index';
 import { AuditAction } from '@/models/AuditLog';
+import { sequelize } from '@/lib/sequelize';
 
 /**
  * Datos de una entrada de auditoría.
@@ -88,18 +89,35 @@ export class AuditLogService {
    * @param filters.action - Filtra por tipo de acción (`AuditAction`). Si se omite, se
    *   devuelven todas MENOS `SYSTEM-BULK-UPDATE`.
    * @param filters.entity - Filtra por nombre de entidad.
+   * @param filters.eventId - Filtra por EVENTO: como solo las acreditaciones guardan la
+   *   fecha (`eventScheduleId`) en `details`, un filtro por evento devuelve su actividad
+   *   de acreditación (acreditó/des-acreditó). Se resuelven las fechas del evento y se
+   *   filtra el JSON de `details`.
    * @param filters.limit - Máximo de resultados; si es ausente o ≤ 0 se usa el valor por defecto de 200.
    * @returns Promesa que resuelve al arreglo de entradas de auditoría (`AuditLog[]`) que cumplen los filtros.
    */
-  async list(filters: { action?: AuditAction; entity?: string; limit?: number } = {}) {
+  async list(filters: { action?: AuditAction; entity?: string; eventId?: string; limit?: number } = {}) {
     const where: any = {};
-    if (filters.action) {
-      where.action = filters.action;
+    if (filters.eventId) {
+      // Filtro por evento: resolver sus fechas y quedarse con las acreditaciones
+      // (CREATE/DELETE) cuyo details.eventScheduleId pertenezca al evento.
+      const schedules = await EventSchedule.findAll({ where: { eventId: filters.eventId }, attributes: ['id'] });
+      const scheduleIds = (schedules as any[]).map((s) => s.id);
+      if (!scheduleIds.length) return [];
+      where.entity = 'Accreditation';
+      where.action = (filters.action === 'CREATE' || filters.action === 'DELETE')
+        ? filters.action
+        : { [Op.in]: ['CREATE', 'DELETE'] };
+      where[Op.and] = [sequelize.where(sequelize.literal("details->>'eventScheduleId'"), { [Op.in]: scheduleIds })];
     } else {
-      // Sin filtro de acción: ocultar los barridos automáticos del sistema.
-      where.action = { [Op.ne]: 'SYSTEM-BULK-UPDATE' };
+      if (filters.action) {
+        where.action = filters.action;
+      } else {
+        // Sin filtro de acción: ocultar los barridos automáticos del sistema.
+        where.action = { [Op.ne]: 'SYSTEM-BULK-UPDATE' };
+      }
+      if (filters.entity) where.entity = filters.entity;
     }
-    if (filters.entity) where.entity = filters.entity;
     return AuditLog.findAll({
       where,
       include: [{ model: User, attributes: ['id', 'firstName', 'lastName', 'email'] }],

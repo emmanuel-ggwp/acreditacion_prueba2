@@ -464,6 +464,56 @@ export class AccreditationService {
     return { accreditations: rows, total: count, page, limit };
   }
 
+  /**
+   * Historial de acreditación de un evento (para auditoría por evento): quién acreditó o
+   * des-acreditó a quién y a qué hora, en qué fecha, y si la persona es premiada.
+   *
+   * Se construye desde el log de auditoría (entidad `Accreditation`, acciones CREATE/DELETE),
+   * que es el ÚNICO registro durable de las des-acreditaciones (la fila `Accreditation` se
+   * borra al des-acreditar). Reutiliza el filtro por evento de `auditLogService.list` y
+   * enriquece cada entrada con el estado "premiado" ACTUAL del participante (`isAwarded`).
+   *
+   * @param eventId - Identificador del evento.
+   * @param opts.scheduleId - Si se indica, limita a esa fecha del evento.
+   * @param opts.limit - Máximo de entradas (por defecto 500).
+   * @returns Arreglo (más recientes primero) de `{ id, action: 'ACCREDITED'|'UNACCREDITED', at,
+   *   personName, personType, participantId, guestId, scheduleId, scheduleText, guests,
+   *   isAwarded, by, byEmail }`.
+   */
+  async getEventAccreditationHistory(eventId: string, opts: { scheduleId?: string; limit?: number } = {}) {
+    const logs: any[] = await auditLogService.list({ eventId, limit: opts.limit && opts.limit > 0 ? opts.limit : 500 });
+    const filtered = opts.scheduleId ? logs.filter((l) => l.details?.eventScheduleId === opts.scheduleId) : logs;
+
+    // Premiado = estado ACTUAL del participante (no aplica a invitados).
+    const participantIds = Array.from(new Set(filtered.map((l) => l.details?.participantId).filter(Boolean))) as string[];
+    const awardedMap = new Map<string, boolean>();
+    if (participantIds.length) {
+      const ps = await Participant.findAll({ where: { id: { [Op.in]: participantIds } }, attributes: ['id', 'isAwarded'], paranoid: false });
+      (ps as any[]).forEach((p) => awardedMap.set(p.id, !!p.isAwarded));
+    }
+
+    return filtered.map((l) => {
+      const d = l.details || {};
+      const u = l.User || {};
+      const isGuest = !!d.guestId;
+      return {
+        id: l.id,
+        action: l.action === 'DELETE' ? 'UNACCREDITED' : 'ACCREDITED',
+        at: l.createdAt,
+        personName: d.name || '(sin nombre)',
+        personType: isGuest ? 'guest' : 'participant',
+        participantId: d.participantId || null,
+        guestId: d.guestId || null,
+        scheduleId: d.eventScheduleId || null,
+        scheduleText: d.fecha || '',
+        guests: typeof d.invitados === 'number' ? d.invitados : 0,
+        isAwarded: d.participantId ? (awardedMap.get(d.participantId) || false) : false,
+        by: u.firstName ? `${u.firstName} ${u.lastName || ''}`.trim() : null,
+        byEmail: u.email || null,
+      };
+    });
+  }
+
   // Estadísticas para el panel de acreditación de un horario:
   // acreditados (participantes), invitados acreditados, total, y premiados del evento.
   /**
