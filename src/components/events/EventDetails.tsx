@@ -90,11 +90,11 @@ const EventDetails: React.FC<EventDetailsProps> = ({ eventId }) => {
     switch (activeTab) {
       case 'info':
         return (
-          <div className="p-8">
-            <div className="flex justify-between items-center mb-8 pb-4 border-b border-gray-100">
+          <div className="p-4 sm:p-8">
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-8 pb-4 border-b border-gray-100">
               <h3 className="text-xl font-semibold text-gray-900">Información del Evento</h3>
               {eventId && (
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   <button
                     onClick={handleDownloadReport}
                     className="flex items-center px-4 py-2 rounded-md text-sm font-medium transition-colors bg-green-50 text-green-700 hover:bg-green-100"
@@ -104,7 +104,7 @@ const EventDetails: React.FC<EventDetailsProps> = ({ eventId }) => {
                   </button>
                   <button
                     onClick={() => setIsEditMode(true)}
-                    className="flex items-center px-4 py-2 rounded-md text-sm font-medium transition-colors bg-indigo-50 text-indigo-700 hover:bg-indigo-100"
+                    className="flex items-center px-4 py-2 rounded-md text-sm font-semibold transition-colors bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm"
                   >
                     <Edit2 size={16} className="mr-2"/> Editar Detalles
                   </button>
@@ -115,12 +115,12 @@ const EventDetails: React.FC<EventDetailsProps> = ({ eventId }) => {
             {currentEvent && (
               <div className="space-y-8 max-w-4xl">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  <div className="col-span-2">
+                  <div className="md:col-span-2">
                     <label className="block text-sm font-medium text-gray-700 mb-1">Nombre</label>
                     <p className="text-lg text-gray-900 font-medium">{currentEvent.name}</p>
                   </div>
 
-                  <div className="col-span-2">
+                  <div className="md:col-span-2">
                     <label className="block text-sm font-medium text-gray-700 mb-1">Descripción</label>
                     <p className="text-gray-700 whitespace-pre-wrap leading-relaxed">{currentEvent.description || <span className="text-gray-400 italic">Sin descripción</span>}</p>
                   </div>
@@ -135,7 +135,7 @@ const EventDetails: React.FC<EventDetailsProps> = ({ eventId }) => {
                     <p className="text-gray-900">{currentEvent.maxCapacity ? `${currentEvent.maxCapacity} asistentes` : 'Capacidad ilimitada'}</p>
                   </div>
 
-                  <div className="flex items-center h-full pt-6">
+                  <div className="flex items-center h-full md:pt-6">
                       <div className="flex items-center px-3 py-1 rounded-full bg-gray-100 w-fit">
                         <span className={`h-2.5 w-2.5 rounded-full mr-2 ${currentEvent.allowGuests ? 'bg-green-500' : 'bg-red-500'}`}></span>
                         <span className="text-sm font-medium text-gray-700">Invitados {currentEvent.allowGuests ? 'Permitidos' : 'No Permitidos'}</span>
@@ -150,7 +150,7 @@ const EventDetails: React.FC<EventDetailsProps> = ({ eventId }) => {
                   )}
 
                   {currentEvent.isPublic && (
-                    <div className="col-span-2 border-t border-gray-100 pt-6 mt-2">
+                    <div className="md:col-span-2 border-t border-gray-100 pt-6 mt-2">
                         <h4 className="text-md font-medium text-gray-900 mb-2">Registro Público</h4>
                         <div className="bg-gray-50 p-4 rounded-lg">
                             <p className="text-sm text-gray-600 mb-1">URL Pública:</p>

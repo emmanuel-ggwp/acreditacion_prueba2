@@ -29,7 +29,6 @@ export default function DashboardHero({ activeEvents }: { activeEvents: number |
               <h1 className="mt-1 text-2xl sm:text-3xl font-bold leading-tight">
                 {activeEvents} {activeEvents === 1 ? 'evento activo' : 'eventos activos'}
               </h1>
-              <p className="mt-1 text-sm sm:text-base text-indigo-100/90">Vamos con todo, equipo.</p>
             </>
           ) : (
             <>

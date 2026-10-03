@@ -99,6 +99,13 @@ const EventCard: React.FC<EventCardProps> = ({ event }) => {
           <RoleGuard allowedRoles={[ROLES.ADMIN]}>
             <div className="flex items-center space-x-1">
               <Link
+                href={`/events/${event.id}`}
+                title="Editar / ver detalles del evento"
+                className="p-1.5 text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 rounded-md transition-colors"
+              >
+                <Edit size={16} />
+              </Link>
+              <Link
                 href={`/events/${event.id}/reports`}
                 title="Ver reportes (panel por fecha)"
                 className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-md transition-colors"
