@@ -9,7 +9,7 @@ import { Check, X, User, Users, Award, Mail, FileText, Loader2, CalendarClock, U
 import { dietaryFull, dietaryLabel } from '@/utils/dietary';
 import { describeStoredAnswers } from '@/utils/customQuestions';
 import { showToast } from '@/components/ui/Toast';
-import { formatDateCL } from '@/utils/formatters';
+import { formatDateCL, formatDateTimeCL } from '@/utils/formatters';
 
 interface ParticipantCardProps {
   person: Participant | Guest;
@@ -233,11 +233,6 @@ const ParticipantCard: React.FC<ParticipantCardProps> = ({ person, type, schedul
           <div>
             <h2 className="text-xl sm:text-2xl font-bold break-words">{name}</h2>
             <p className="text-gray-500">{isParticipant ? 'Participante' : 'Invitado'}</p>
-            {isParticipant && (participant as any)?.isAwarded && (
-              <span className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">
-                <Award size={12} /> Premiado
-              </span>
-            )}
           </div>
           {accreditationStatus.isAccredited ? (
             <div className="flex flex-col items-start sm:items-end">
@@ -245,6 +240,11 @@ const ParticipantCard: React.FC<ParticipantCardProps> = ({ person, type, schedul
                 <Check size={20} />
                 <span className="font-semibold">Acreditado</span>
               </div>
+              {accreditationStatus.accreditation?.checkInTime && (
+                <p className="text-xs text-gray-600 mt-1 sm:text-right flex items-center gap-1">
+                  <CalendarClock size={12} /> {formatDateTimeCL(accreditationStatus.accreditation.checkInTime)}
+                </p>
+              )}
               {accreditationStatus.accreditation?.notes && (
                 <p className="text-xs text-gray-500 mt-1 italic max-w-xs sm:text-right">"{accreditationStatus.accreditation.notes}"</p>
               )}
@@ -285,6 +285,18 @@ const ParticipantCard: React.FC<ParticipantCardProps> = ({ person, type, schedul
           <div className="text-sm text-orange-800">
             <p className="font-semibold">Requerimiento alimentario</p>
             <p className="mt-0.5">{dietaryText}</p>
+          </div>
+        </div>
+      )}
+
+      {isParticipant && (participant as any)?.isAwarded && (
+        <div className="mx-4 sm:mx-6 mt-4 p-3 sm:p-4 bg-amber-50 border border-amber-200 rounded-lg flex items-start gap-3">
+          <Award className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
+          <div className="text-sm text-amber-800">
+            <p className="font-semibold">Premiado</p>
+            {(participant as any).awardReason
+              ? <p className="mt-0.5">{(participant as any).awardReason}</p>
+              : <p className="mt-0.5 text-amber-700/80">Sin motivo especificado.</p>}
           </div>
         </div>
       )}
@@ -354,8 +366,24 @@ const ParticipantCard: React.FC<ParticipantCardProps> = ({ person, type, schedul
           <div className="space-y-2">
             {participant.guests.map((g) => {
               const attended = !!guestStatuses[g.id];
+              const selected = guestsToAccredit.includes(g.id);
+              const isAcc = accreditationStatus.isAccredited;
+              const checked = isAcc ? attended : selected;
+              // Toda la cajita es un botón: al tocar cualquier parte se marca/desmarca.
+              const toggle = () => {
+                if (isAcc) { if (!loading) handleToggleGuestAttendance(g.id, attended); }
+                else handleGuestToggle(g.id);
+              };
               return (
-              <div key={g.id} className="flex items-center justify-between bg-gray-50 p-3 rounded-md gap-2">
+              <div
+                key={g.id}
+                role="button"
+                tabIndex={0}
+                aria-pressed={checked}
+                onClick={toggle}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } }}
+                className={`flex items-center justify-between p-3 rounded-md gap-2 border cursor-pointer select-none transition ${checked ? 'bg-indigo-50 border-indigo-300' : 'bg-gray-50 border-transparent hover:bg-gray-100 active:bg-indigo-50'} ${isAcc && loading ? 'opacity-60 pointer-events-none' : ''}`}
+              >
                 <div className="min-w-0">
                   <span className="block truncate">
                     {g.firstName} {g.lastName}
@@ -379,24 +407,13 @@ const ParticipantCard: React.FC<ParticipantCardProps> = ({ person, type, schedul
                     </span>
                   )}
                 </div>
-                {accreditationStatus.isAccredited ? (
-                  <label className="flex items-center gap-2 text-xs whitespace-nowrap cursor-pointer">
+                {isAcc ? (
+                  <div className="flex items-center gap-2 text-xs whitespace-nowrap shrink-0">
                     <span className={attended ? 'text-green-700 font-medium' : 'text-gray-400'}>{attended ? 'Asistió' : 'No asistió'}</span>
-                    <input
-                      type="checkbox"
-                      checked={attended}
-                      disabled={loading}
-                      onChange={() => handleToggleGuestAttendance(g.id, attended)}
-                      className="h-5 w-5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 disabled:opacity-50"
-                    />
-                  </label>
+                    <input type="checkbox" checked={attended} readOnly tabIndex={-1} className="h-5 w-5 rounded border-gray-300 text-indigo-600 pointer-events-none" />
+                  </div>
                 ) : (
-                  <input
-                    type="checkbox"
-                    checked={guestsToAccredit.includes(g.id)}
-                    onChange={() => handleGuestToggle(g.id)}
-                    className="h-5 w-5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                  />
+                  <input type="checkbox" checked={selected} readOnly tabIndex={-1} className="h-5 w-5 rounded border-gray-300 text-indigo-600 pointer-events-none shrink-0" />
                 )}
               </div>
               );
