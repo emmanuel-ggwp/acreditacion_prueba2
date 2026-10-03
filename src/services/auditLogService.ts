@@ -6,6 +6,7 @@
  * ni interrumpe la operación de negocio que la invoca. Además ofrece un ayudante
  * para calcular el diff de campos que se guarda en `details.changes`.
  */
+import { Op } from 'sequelize';
 import { AuditLog, User } from '@/models/index';
 import { AuditAction } from '@/models/AuditLog';
 
@@ -52,8 +53,10 @@ export class AuditLogService {
   /**
    * Calcula el diff `{ campo: { from, to } }` comparando dos snapshots planos.
    *
-   * Compara clave a clave usando `JSON.stringify` (comparación por valor
-   * serializado) e incluye solo las claves cuyo valor cambió.
+   * Compara clave a clave e incluye solo las claves cuyo valor cambió. `null`,
+   * `undefined` y `''` se consideran el MISMO valor "vacío": así no se registran
+   * cambios falsos tipo `(vacío) → (vacío)` cuando un campo pasa de `null` (BD) a `''`
+   * (formulario) o viceversa. Un `0` o `false` NO son vacíos y sí se comparan.
    *
    * @param before - Snapshot del estado anterior (objeto plano; puede ser nulo).
    * @param after - Snapshot del estado posterior (objeto plano; puede ser nulo).
@@ -61,9 +64,11 @@ export class AuditLogService {
    * @returns Objeto con una entrada `{ from, to }` por cada clave que cambió (valores ausentes se normalizan a `null`); vacío si no hubo cambios.
    */
   buildChanges(before: any, after: any, keys: string[]) {
+    // null / undefined / '' → mismo "vacío" (null) para la COMPARACIÓN.
+    const norm = (v: any) => (v === undefined || v === null || v === '' ? null : v);
     const changes: Record<string, { from: any; to: any }> = {};
     for (const k of keys) {
-      if (JSON.stringify(before?.[k]) !== JSON.stringify(after?.[k])) {
+      if (JSON.stringify(norm(before?.[k])) !== JSON.stringify(norm(after?.[k]))) {
         changes[k] = { from: before?.[k] ?? null, to: after?.[k] ?? null };
       }
     }
@@ -76,15 +81,24 @@ export class AuditLogService {
    * Incluye el `User` asociado (solo `id`, `firstName`, `lastName`, `email`) y
    * ordena por fecha de creación descendente (más recientes primero).
    *
+   * Por defecto OCULTA los barridos automáticos del sistema (`SYSTEM-BULK-UPDATE`),
+   * que son ruido operativo; se ven eligiendo esa acción explícitamente en el filtro.
+   *
    * @param filters - Filtros opcionales.
-   * @param filters.action - Filtra por tipo de acción (`AuditAction`).
+   * @param filters.action - Filtra por tipo de acción (`AuditAction`). Si se omite, se
+   *   devuelven todas MENOS `SYSTEM-BULK-UPDATE`.
    * @param filters.entity - Filtra por nombre de entidad.
    * @param filters.limit - Máximo de resultados; si es ausente o ≤ 0 se usa el valor por defecto de 200.
    * @returns Promesa que resuelve al arreglo de entradas de auditoría (`AuditLog[]`) que cumplen los filtros.
    */
   async list(filters: { action?: AuditAction; entity?: string; limit?: number } = {}) {
     const where: any = {};
-    if (filters.action) where.action = filters.action;
+    if (filters.action) {
+      where.action = filters.action;
+    } else {
+      // Sin filtro de acción: ocultar los barridos automáticos del sistema.
+      where.action = { [Op.ne]: 'SYSTEM-BULK-UPDATE' };
+    }
     if (filters.entity) where.entity = filters.entity;
     return AuditLog.findAll({
       where,

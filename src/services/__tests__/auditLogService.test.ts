@@ -1,3 +1,4 @@
+import { Op } from 'sequelize';
 import { AuditLogService } from '../auditLogService';
 import { AuditLog, User } from '@/models/index';
 
@@ -127,18 +128,39 @@ describe('AuditLogService', () => {
       const result = auditLogService.buildChanges({ a: 1 }, { a: 2 }, []);
       expect(result).toEqual({});
     });
+
+    it('trata null, undefined y "" como el mismo vacío (no registra (vacío)→(vacío))', () => {
+      const result = auditLogService.buildChanges(
+        { a: null, b: '', c: undefined, d: 'x' },
+        { a: '', b: null, c: '', d: 'x' },
+        ['a', 'b', 'c', 'd']
+      );
+      expect(result).toEqual({});
+    });
+
+    it('vacío → valor y valor → vacío SÍ se registran', () => {
+      const result = auditLogService.buildChanges(
+        { a: null, b: 'tenía' },
+        { a: 'ahora', b: '' },
+        ['a', 'b']
+      );
+      expect(result).toEqual({
+        a: { from: null, to: 'ahora' },
+        b: { from: 'tenía', to: '' },
+      });
+    });
   });
 
   describe('list', () => {
     const rows = [{ id: 'log-1' }, { id: 'log-2' }];
 
-    it('queries with an empty where and default limit of 200 when no filters', async () => {
+    it('oculta SYSTEM-BULK-UPDATE por defecto y usa límite 200 cuando no hay filtros', async () => {
       (AuditLogMock.findAll as jest.Mock).mockResolvedValue(rows);
 
       const result = await auditLogService.list();
 
       expect(AuditLogMock.findAll).toHaveBeenCalledWith({
-        where: {},
+        where: { action: { [Op.ne]: 'SYSTEM-BULK-UPDATE' } },
         include: [{ model: User, attributes: ['id', 'firstName', 'lastName', 'email'] }],
         order: [['createdAt', 'DESC']],
         limit: 200,
@@ -156,13 +178,23 @@ describe('AuditLogService', () => {
       );
     });
 
-    it('applies the entity filter to the where clause', async () => {
+    it('al elegir SYSTEM-BULK-UPDATE muestra solo esos (opt-in)', async () => {
+      (AuditLogMock.findAll as jest.Mock).mockResolvedValue(rows);
+
+      await auditLogService.list({ action: 'SYSTEM-BULK-UPDATE' as any });
+
+      expect(AuditLogMock.findAll).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { action: 'SYSTEM-BULK-UPDATE' } })
+      );
+    });
+
+    it('aplica el filtro de entidad y mantiene la exclusión de SYSTEM-BULK-UPDATE', async () => {
       (AuditLogMock.findAll as jest.Mock).mockResolvedValue(rows);
 
       await auditLogService.list({ entity: 'Event' });
 
       expect(AuditLogMock.findAll).toHaveBeenCalledWith(
-        expect.objectContaining({ where: { entity: 'Event' } })
+        expect.objectContaining({ where: { action: { [Op.ne]: 'SYSTEM-BULK-UPDATE' }, entity: 'Event' } })
       );
     });
 

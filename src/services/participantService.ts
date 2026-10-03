@@ -426,10 +426,9 @@ export class ParticipantService {
 
     if (userId) {
       const after: any = participant.get({ plain: true });
-      const changes: Record<string, { from: any; to: any }> = {};
-      for (const k of Object.keys(rest)) {
-        if (JSON.stringify(before[k]) !== JSON.stringify(after[k])) changes[k] = { from: before[k] ?? null, to: after[k] ?? null };
-      }
+      // buildChanges trata null/''/undefined como el mismo "vacío": evita registrar
+      // cambios falsos (vacío)→(vacío) al pasar un campo de null (BD) a '' (formulario).
+      const changes = auditLogService.buildChanges(before, after, Object.keys(rest));
       if (Object.keys(changes).length) {
         await auditLogService.log({
           userId,

@@ -17,6 +17,7 @@ const actionMeta: Record<string, { label: string; cls: string }> = {
   CREATE: { label: 'Creación', cls: 'bg-green-50 text-green-700' },
   UPDATE: { label: 'Edición', cls: 'bg-blue-50 text-blue-700' },
   DELETE: { label: 'Eliminación', cls: 'bg-red-50 text-red-600' },
+  'SYSTEM-BULK-UPDATE': { label: 'Sistema', cls: 'bg-gray-100 text-gray-600' },
 };
 
 const FIELD_LABELS: Record<string, string> = {
@@ -74,6 +75,7 @@ const AuditLogView: React.FC = () => {
             <option value="CREATE">Creaciones</option>
             <option value="UPDATE">Ediciones</option>
             <option value="DELETE">Eliminaciones</option>
+            <option value="SYSTEM-BULK-UPDATE">Sistema (automático)</option>
           </select>
           <select value={entity} onChange={(e) => setEntity(e.target.value)} className="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white">
             <option value="">Todo</option>
@@ -86,7 +88,7 @@ const AuditLogView: React.FC = () => {
         </div>
       </div>
 
-      <p className="text-sm text-gray-500">Quién creó, editó o eliminó qué, cuándo y por qué. (Últimos 200 registros)</p>
+      <p className="text-sm text-gray-500">Quién creó, editó o eliminó qué, cuándo y por qué. (Últimos 200 registros) · Los eventos automáticos del sistema se ocultan; elígelos en el filtro «Sistema (automático)» para verlos.</p>
 
       {loading ? (
         <div className="flex justify-center py-16"><LoadingSpinner size="lg" /></div>
@@ -146,6 +148,8 @@ const AuditLogView: React.FC = () => {
                           </ul>
                           {d.fecha && <span className="block text-xs text-gray-500 mt-0.5">{d.fecha}</span>}
                         </>
+                      ) : l.action === 'SYSTEM-BULK-UPDATE' ? (
+                        <span className="text-gray-500">Actualización automática de estados de horarios (published → accrediting → accredited)</span>
                       ) : (d.summary || '—')}
                     </td>
                     <td className="px-4 py-2 whitespace-nowrap">
