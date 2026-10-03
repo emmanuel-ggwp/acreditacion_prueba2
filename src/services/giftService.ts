@@ -18,6 +18,7 @@
 import { GiftCampaign, GiftType, GiftEmployee, GiftDelivery } from '@/models/index';
 import { sequelize } from '@/lib/sequelize';
 import { Op } from 'sequelize';
+import { normalizeRut, rutVariants } from '@/utils/validators/rut';
 
 /** Base de cálculo de un tipo de regalo: por familia, por hijo o por carga. */
 type Basis = 'FAMILY' | 'CHILD' | 'CARGA';
@@ -172,7 +173,17 @@ export class GiftService {
   async updateType(id: string, data: any) {
     const t = await GiftType.findByPk(id);
     if (!t) throw new Error('Tipo de regalo no encontrado');
-    await t.update({ name: data.name ?? t.name, basis: data.basis ?? t.basis, order: data.order ?? t.order });
+    // Validar `basis` igual que en createType: si viene uno no válido se IGNORA y se
+    // conserva el actual (no se puede guardar una base fuera de FAMILY/CHILD/CARGA,
+    // que rompería el cálculo de totales).
+    const nextBasis: Basis = data.basis === undefined
+      ? (t as any).basis
+      : (['FAMILY', 'CHILD', 'CARGA'].includes(data.basis) ? data.basis : (t as any).basis);
+    const basisChanged = nextBasis !== (t as any).basis;
+    await t.update({ name: data.name ?? t.name, basis: nextBasis, order: data.order ?? t.order });
+    // Si cambió la base, cambia el entitlement por empleado: re-topar las entregas
+    // que hayan quedado por encima del nuevo total.
+    if (basisChanged) await this.reclampTypeDeliveries(t);
     return t;
   }
   /**
@@ -252,7 +263,9 @@ export class GiftService {
     return GiftEmployee.create({
       campaignId,
       fullName: data.fullName,
-      rut: data.rut || null,
+      // RUT canónico (sin puntos, con guion) para que el dedup de importación lo
+      // reconozca sin importar el formato con que venga.
+      rut: data.rut ? normalizeRut(String(data.rut)) : null,
       empresa: data.empresa || null,
       cargas: Number(data.cargas) || 0,
       cargasHijos: Number(data.cargasHijos) || 0,
@@ -273,13 +286,20 @@ export class GiftService {
   async updateEmployee(id: string, data: any) {
     const e = await GiftEmployee.findByPk(id);
     if (!e) throw new Error('Empleado no encontrado');
+    const oldCargas = Number((e as any).cargas) || 0;
+    const oldHijos = Number((e as any).cargasHijos) || 0;
+    const newCargas = data.cargas !== undefined ? Number(data.cargas) || 0 : oldCargas;
+    const newHijos = data.cargasHijos !== undefined ? Number(data.cargasHijos) || 0 : oldHijos;
     await e.update({
       fullName: data.fullName ?? e.fullName,
       rut: data.rut ?? e.rut,
       empresa: data.empresa ?? e.empresa,
-      cargas: data.cargas !== undefined ? Number(data.cargas) || 0 : e.cargas,
-      cargasHijos: data.cargasHijos !== undefined ? Number(data.cargasHijos) || 0 : e.cargasHijos,
+      cargas: newCargas,
+      cargasHijos: newHijos,
     });
+    // Si bajaron las cargas/hijos, el entitlement baja: re-topar entregas por encima
+    // del nuevo total (evita "entregados 3 / 2" tras corregir las cargas a la baja).
+    if (newCargas < oldCargas || newHijos < oldHijos) await this.reclampEmployeeDeliveries(e);
     return e;
   }
   /**
@@ -313,9 +333,12 @@ export class GiftService {
    * Importa (crea o actualiza) empleados de una campaña a partir de filas de datos.
    *
    * Procesa fila a fila: si la fila trae `rut` y ya existe un empleado con ese RUT
-   * en la campaña, lo actualiza; en caso contrario crea uno nuevo con `source: 'IMPORT'`.
-   * Los errores por fila se acumulan (indexados en base 1) en lugar de abortar todo
-   * el proceso; no usa transacción global.
+   * (comparado en formato normalizado, tolerante a puntos/guion) en la campaña, lo
+   * actualiza; en caso contrario crea uno nuevo con `source: 'IMPORT'`. Al actualizar,
+   * conserva `empresa`/`cargas`/`cargasHijos` si la fila no los trae (no pisa con
+   * null/0 lo ya cargado) y re-topa las entregas si las cargas bajan. Los errores por
+   * fila se acumulan (indexados en base 1) en lugar de abortar todo el proceso; no usa
+   * transacción global.
    *
    * @param campaignId - Identificador de la campaña destino de la importación.
    * @param rows - Arreglo de filas; cada una con `fullName` (obligatorio), `rut`, `empresa`, `cargas`, `cargasHijos`.
@@ -327,13 +350,33 @@ export class GiftService {
       const r = rows[i] || {};
       try {
         if (!r.fullName) throw new Error('Falta el nombre del empleado');
+        const rawRut = r.rut != null ? String(r.rut).trim() : '';
+        const canonicalRut = rawRut ? normalizeRut(rawRut) : null;
+        // Dedup por RUT en cualquier formato común (12.345.678-5 == 123456785 ==
+        // 12345678-5): así re-importar la misma lista con otro formato NO duplica.
         let existing = null as any;
-        if (r.rut) existing = await GiftEmployee.findOne({ where: { campaignId, rut: r.rut } });
+        if (rawRut) existing = await GiftEmployee.findOne({ where: { campaignId, rut: { [Op.in]: rutVariants(rawRut) } } });
         if (existing) {
-          await existing.update({ fullName: r.fullName, empresa: r.empresa || null, cargas: Number(r.cargas) || 0, cargasHijos: Number(r.cargasHijos) || 0 });
+          // Conservar empresa/cargas/cargasHijos cuando la fila NO los trae: una
+          // re-importación sin esas columnas no debe borrar lo ya cargado.
+          const oldCargas = Number(existing.cargas) || 0;
+          const oldHijos = Number(existing.cargasHijos) || 0;
+          const hasEmpresa = r.empresa != null && String(r.empresa).trim() !== '';
+          const hasCargas = r.cargas != null && String(r.cargas).trim() !== '';
+          const hasHijos = r.cargasHijos != null && String(r.cargasHijos).trim() !== '';
+          const newCargas = hasCargas ? Number(r.cargas) || 0 : oldCargas;
+          const newHijos = hasHijos ? Number(r.cargasHijos) || 0 : oldHijos;
+          await existing.update({
+            fullName: r.fullName,
+            rut: canonicalRut ?? existing.rut,
+            empresa: hasEmpresa ? r.empresa : existing.empresa,
+            cargas: newCargas,
+            cargasHijos: newHijos,
+          });
+          if (newCargas < oldCargas || newHijos < oldHijos) await this.reclampEmployeeDeliveries(existing);
           results.updated++;
         } else {
-          await GiftEmployee.create({ campaignId, fullName: r.fullName, rut: r.rut || null, empresa: r.empresa || null, cargas: Number(r.cargas) || 0, cargasHijos: Number(r.cargasHijos) || 0, source: 'IMPORT' } as any);
+          await GiftEmployee.create({ campaignId, fullName: r.fullName, rut: canonicalRut, empresa: r.empresa || null, cargas: Number(r.cargas) || 0, cargasHijos: Number(r.cargasHijos) || 0, source: 'IMPORT' } as any);
           results.created++;
         }
       } catch (e: any) {
@@ -386,6 +429,57 @@ export class GiftService {
     });
     await d.update({ deliveredQty: qty, deliveredAt: qty > 0 ? new Date() : null, deliveredBy: qty > 0 ? (deliveredBy || null) : null });
     return d;
+  }
+
+  /**
+   * Re-topa (clamp) las entregas de un empleado a su entitlement actual por tipo.
+   *
+   * Se invoca tras BAJAR `cargas`/`cargasHijos`: una entrega registrada antes puede
+   * quedar por encima del nuevo total permitido (p. ej. "entregados 3 / 2"). Para
+   * cada entrega del empleado cuyo `deliveredQty` exceda el total que ahora le
+   * corresponde, la baja al nuevo total (y si el total pasa a 0, limpia
+   * `deliveredAt`/`deliveredBy`). No toca las entregas que siguen dentro del límite.
+   *
+   * @param employee - Empleado (con `id`, `campaignId`, `cargas`, `cargasHijos`).
+   */
+  private async reclampEmployeeDeliveries(employee: any) {
+    const [types, deliveries] = await Promise.all([
+      GiftType.findAll({ where: { campaignId: employee.campaignId } }),
+      GiftDelivery.findAll({ where: { employeeId: employee.id } }),
+    ]);
+    const typeMap = new Map<string, any>((types || []).map((t: any) => [t.id, t]));
+    for (const d of (deliveries || []) as any[]) {
+      const t = typeMap.get(d.giftTypeId);
+      if (!t) continue;
+      const total = totalFor(t.basis as Basis, employee);
+      if ((d.deliveredQty || 0) > total) {
+        await d.update({ deliveredQty: total, deliveredAt: total > 0 ? d.deliveredAt : null, deliveredBy: total > 0 ? d.deliveredBy : null });
+      }
+    }
+  }
+
+  /**
+   * Re-topa (clamp) las entregas de un tipo cuando cambia su `basis`.
+   *
+   * Cambiar la base (p. ej. de `CARGA` a `FAMILY`) cambia el entitlement de cada
+   * empleado para ese tipo. Recorre las entregas del tipo (con su empleado) y baja
+   * las que queden por encima del nuevo total (limpiando fecha/usuario si pasa a 0).
+   *
+   * @param giftType - Tipo de regalo ya actualizado (con `id` y el nuevo `basis`).
+   */
+  private async reclampTypeDeliveries(giftType: any) {
+    const deliveries = await GiftDelivery.findAll({
+      where: { giftTypeId: giftType.id },
+      include: [{ model: GiftEmployee, as: 'employee' }],
+    });
+    for (const d of (deliveries || []) as any[]) {
+      const emp = d.employee;
+      if (!emp) continue;
+      const total = totalFor(giftType.basis as Basis, emp);
+      if ((d.deliveredQty || 0) > total) {
+        await d.update({ deliveredQty: total, deliveredAt: total > 0 ? d.deliveredAt : null, deliveredBy: total > 0 ? d.deliveredBy : null });
+      }
+    }
   }
 
   // ---- Totales ----

@@ -221,6 +221,30 @@ describe('GiftService', () => {
       expect(t.update).toHaveBeenCalledWith({ name: 'Nuevo', basis: 'FAMILY', order: 2 });
       expect(result).toBe(t);
     });
+
+    it('ignora un basis inválido y conserva el actual', async () => {
+      const t: any = { id: 't1', name: 'N', basis: 'CARGA', order: 1, update: jest.fn().mockImplementation(async (v: any) => { Object.assign(t, v); }) };
+      (TypeMock.findByPk as jest.Mock).mockResolvedValue(t);
+
+      await service.updateType('t1', { basis: 'WEIRD' });
+
+      expect(t.update).toHaveBeenCalledWith(expect.objectContaining({ basis: 'CARGA' }));
+      // No cambió la base -> no re-topa (no consulta entregas).
+      expect(DeliveryMock.findAll).not.toHaveBeenCalled();
+    });
+
+    it('re-topa las entregas al cambiar el basis a uno con menor entitlement', async () => {
+      const t: any = { id: 't1', name: 'N', basis: 'CARGA', order: 1, update: jest.fn().mockImplementation(async (v: any) => { Object.assign(t, v); }) };
+      (TypeMock.findByPk as jest.Mock).mockResolvedValue(t);
+      const d: any = { giftTypeId: 't1', deliveredQty: 3, deliveredAt: new Date(), deliveredBy: 'u', employee: { cargas: 3, cargasHijos: 0 }, update: jest.fn().mockResolvedValue(undefined) };
+      (DeliveryMock.findAll as jest.Mock).mockResolvedValue([d]);
+
+      await service.updateType('t1', { basis: 'FAMILY' });
+
+      expect(DeliveryMock.findAll).toHaveBeenCalledWith(expect.objectContaining({ where: { giftTypeId: 't1' } }));
+      // CARGA(3) -> FAMILY(1): la entrega de 3 se baja a 1.
+      expect(d.update).toHaveBeenCalledWith(expect.objectContaining({ deliveredQty: 1 }));
+    });
   });
 
   describe('deleteType', () => {
@@ -316,6 +340,14 @@ describe('GiftService', () => {
         campaignId: 'c1', fullName: 'Ana', rut: '1-9', empresa: 'ACME', cargas: 3, cargasHijos: 2, source: 'IMPORT',
       });
     });
+
+    it('guarda el RUT en formato canónico (sin puntos, con guion)', async () => {
+      (EmployeeMock.create as jest.Mock).mockResolvedValue({ id: 'e1' });
+
+      await service.createEmployee('c1', { fullName: 'Ana', rut: '12.345.678-5' });
+
+      expect(EmployeeMock.create).toHaveBeenCalledWith(expect.objectContaining({ rut: '12345678-5' }));
+    });
   });
 
   describe('updateEmployee', () => {
@@ -334,6 +366,34 @@ describe('GiftService', () => {
         fullName: 'Ana M.', rut: '1', empresa: 'ACME', cargas: 5, cargasHijos: 1,
       });
       expect(result).toBe(e);
+    });
+
+    it('re-topa las entregas al bajar las cargas', async () => {
+      const e: any = {
+        id: 'e1', campaignId: 'c1', fullName: 'Ana', rut: '1', empresa: 'ACME', cargas: 5, cargasHijos: 0,
+        update: jest.fn().mockImplementation(async (v: any) => { Object.assign(e, v); }),
+      };
+      (EmployeeMock.findByPk as jest.Mock).mockResolvedValue(e);
+      (TypeMock.findAll as jest.Mock).mockResolvedValue([{ id: 't-carga', basis: 'CARGA' }]);
+      const d: any = { giftTypeId: 't-carga', deliveredQty: 5, deliveredAt: new Date(), deliveredBy: 'u', update: jest.fn().mockResolvedValue(undefined) };
+      (DeliveryMock.findAll as jest.Mock).mockResolvedValue([d]);
+
+      await service.updateEmployee('e1', { cargas: 2 });
+
+      // CARGA baja de 5 a 2: la entrega de 5 se re-topa a 2.
+      expect(d.update).toHaveBeenCalledWith(expect.objectContaining({ deliveredQty: 2 }));
+    });
+
+    it('NO re-topa (ni consulta entregas) si las cargas suben', async () => {
+      const e: any = {
+        id: 'e1', campaignId: 'c1', fullName: 'Ana', rut: '1', empresa: 'ACME', cargas: 2, cargasHijos: 0,
+        update: jest.fn().mockResolvedValue(undefined),
+      };
+      (EmployeeMock.findByPk as jest.Mock).mockResolvedValue(e);
+
+      await service.updateEmployee('e1', { cargas: 5 });
+
+      expect(DeliveryMock.findAll).not.toHaveBeenCalled();
     });
   });
 
@@ -368,7 +428,7 @@ describe('GiftService', () => {
 
   describe('importEmployees', () => {
     it('crea, actualiza y registra errores por fila', async () => {
-      const existing: any = { id: 'e1', update: jest.fn().mockResolvedValue(undefined) };
+      const existing: any = { id: 'e1', rut: '1', empresa: 'Vieja', cargas: 1, cargasHijos: 0, update: jest.fn().mockResolvedValue(undefined) };
       (EmployeeMock.findOne as jest.Mock)
         .mockResolvedValueOnce(existing) // rut '1' -> existe
         .mockResolvedValueOnce(null);    // rut '2' -> no existe
@@ -384,8 +444,9 @@ describe('GiftService', () => {
       const result = await service.importEmployees('c1', rows);
 
       expect(EmployeeMock.findOne).toHaveBeenCalledTimes(2);
+      // La fila trae cargas pero no empresa: se actualizan las cargas y se CONSERVA la empresa.
       expect(existing.update).toHaveBeenCalledWith(
-        expect.objectContaining({ fullName: 'A', empresa: null, cargas: 2, cargasHijos: 0 }),
+        expect.objectContaining({ fullName: 'A', empresa: 'Vieja', cargas: 2, cargasHijos: 0 }),
       );
       expect(EmployeeMock.create).toHaveBeenCalledTimes(2);
       expect(result).toEqual({
@@ -393,6 +454,46 @@ describe('GiftService', () => {
         updated: 1,
         errors: [{ row: 4, error: 'Falta el nombre del empleado' }],
       });
+    });
+
+    it('deduplica por RUT normalizado (tolera puntos y guion al re-importar)', async () => {
+      const existing: any = { id: 'e1', rut: '12345678-5', empresa: 'ACME', cargas: 1, cargasHijos: 0, update: jest.fn().mockResolvedValue(undefined) };
+      (EmployeeMock.findOne as jest.Mock).mockResolvedValue(existing);
+
+      await service.importEmployees('c1', [{ fullName: 'A', rut: '12.345.678-5' }]);
+
+      const whereArg = (EmployeeMock.findOne as jest.Mock).mock.calls[0][0].where;
+      expect(whereArg.campaignId).toBe('c1');
+      // Busca por todas las variantes comunes del RUT (con/sin puntos, con/sin guion).
+      expect(whereArg.rut[Op.in]).toEqual(expect.arrayContaining(['12345678-5', '123456785']));
+      expect(existing.update).toHaveBeenCalled();
+    });
+
+    it('conserva empresa y cargas al actualizar si la fila no las trae', async () => {
+      const existing: any = { id: 'e1', rut: '1-9', empresa: 'ACME', cargas: 4, cargasHijos: 2, update: jest.fn().mockResolvedValue(undefined) };
+      (EmployeeMock.findOne as jest.Mock).mockResolvedValue(existing);
+
+      await service.importEmployees('c1', [{ fullName: 'Ana', rut: '1-9' }]);
+
+      expect(existing.update).toHaveBeenCalledWith(
+        expect.objectContaining({ fullName: 'Ana', empresa: 'ACME', cargas: 4, cargasHijos: 2 }),
+      );
+    });
+
+    it('re-topa las entregas al actualizar si bajan las cargas', async () => {
+      const existing: any = {
+        id: 'e1', campaignId: 'c1', rut: '1-9', empresa: 'ACME', cargas: 5, cargasHijos: 0,
+        update: jest.fn().mockImplementation(async (v: any) => { Object.assign(existing, v); }),
+      };
+      (EmployeeMock.findOne as jest.Mock).mockResolvedValue(existing);
+      (TypeMock.findAll as jest.Mock).mockResolvedValue([{ id: 't-carga', basis: 'CARGA' }]);
+      const d: any = { giftTypeId: 't-carga', deliveredQty: 5, deliveredAt: new Date(), deliveredBy: 'u', update: jest.fn().mockResolvedValue(undefined) };
+      (DeliveryMock.findAll as jest.Mock).mockResolvedValue([d]);
+
+      await service.importEmployees('c1', [{ fullName: 'Ana', rut: '1-9', cargas: '2' }]);
+
+      // Nuevo total CARGA = 2 -> la entrega de 5 se baja a 2 (no queda "5 / 2").
+      expect(d.update).toHaveBeenCalledWith(expect.objectContaining({ deliveredQty: 2 }));
     });
 
     it('tolera filas nulas registrándolas como error', async () => {
