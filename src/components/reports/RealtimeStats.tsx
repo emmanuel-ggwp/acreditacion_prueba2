@@ -73,9 +73,9 @@ const RealtimeStats: React.FC = () => {
           </div>
 
           <div>
-            <h3 className="font-semibold text-lg mb-3">Horarios activos ahora</h3>
+            <h3 className="font-semibold text-lg mb-3">Horarios en acreditación ahora</h3>
             {(!data.currentCapacity || data.currentCapacity.length === 0) ? (
-              <p className="text-gray-500 text-sm">No hay horarios activos en este momento.</p>
+              <p className="text-gray-500 text-sm">No hay horarios abiertos a acreditación en este momento.</p>
             ) : (
               <div className="space-y-3">
                 {data.currentCapacity.map((c: any, i: number) => {

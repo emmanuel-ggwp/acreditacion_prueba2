@@ -358,15 +358,20 @@ export class ReportService {
       where: { checkInTime: { [Op.gte]: thirtyMinutesAgo } }
     });
 
+    // Horarios ABIERTOS a acreditación ahora (estado 'accrediting'), NO por hora: la
+    // acreditación en puerta suele abrirse ANTES del inicio del evento. Antes se filtraba
+    // por `inicio ≤ ahora ≤ fin`, que dejaba el panel vacío justo durante el check-in previo.
     const activeSchedules = await EventSchedule.findAll({
-        where: { eventId, startDateTime: { [Op.lte]: now }, endDateTime: { [Op.gte]: now } },
+        where: { eventId, status: 'accrediting' },
         include: [Event]
     });
 
     const currentCapacity = await Promise.all(activeSchedules.map(async (s: any) => {
         const event = s.Event;
         const capacity = s.maxCapacity ?? event.maxCapacity ?? 0;
-        const accredited = await Accreditation.count({ where: { eventScheduleId: s.id } });
+        // Acreditados = PARTICIPANTES (participant_id no nulo), coherente con `capacity`
+        // (cupo de participantes). Contar también invitados daba "disponibles" negativos.
+        const accredited = await Accreditation.count({ where: { eventScheduleId: s.id, participantId: { [Op.ne]: null } } });
         return {
             scheduleName: s.scheduleName,
             capacity,
@@ -377,18 +382,15 @@ export class ReportService {
         }
     }));
 
-    const firstAccreditation = await Accreditation.findOne({ include: [{ model: EventSchedule, where: { eventId } }], order: [['checkInTime', 'ASC']] });
-    let rate = 0;
-    if(firstAccreditation) {
-        const minutesElapsed = (now.getTime() - firstAccreditation.checkInTime.getTime()) / 60000;
-        const totalAccredited = await Accreditation.count({ include: [{ model: EventSchedule, where: { eventId } }] });
-        if(minutesElapsed > 0) rate = totalAccredited / minutesElapsed;
-    }
+    // Ritmo RECIENTE (en vivo): acreditaciones de los últimos 30 min / 30. Refleja el pulso
+    // actual y baja a 0 en inactividad. Antes era el promedio histórico (total / minutos
+    // desde la primera acreditación), que se diluía tras un pico y no reflejaba el ritmo real.
+    const accreditationRatePerMinute = accreditationsLast30Min / 30;
 
     return {
       accreditationsLast30Min,
       currentCapacity,
-      accreditationRatePerMinute: rate,
+      accreditationRatePerMinute,
     };
   }
 

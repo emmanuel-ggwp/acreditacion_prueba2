@@ -303,13 +303,9 @@ describe('ReportService', () => {
 
         (AccreditationMock.count as jest.Mock)
           .mockResolvedValueOnce(5) // últimos 30 min
-          .mockResolvedValueOnce(20) // acreditados sch-1
-          .mockResolvedValueOnce(10) // acreditados sch-2
-          .mockResolvedValueOnce(30); // total acreditados (para el ritmo)
+          .mockResolvedValueOnce(20) // acreditados (participantes) sch-1
+          .mockResolvedValueOnce(10); // acreditados (participantes) sch-2
         (EventScheduleMock.findAll as jest.Mock).mockResolvedValue([s1, s2]);
-        (AccreditationMock.findOne as jest.Mock).mockResolvedValue({
-          checkInTime: new Date('2026-09-23T11:00:00.000Z'), // 60 min antes
-        });
 
         const result = await service.getRealTimeStats(eventId);
 
@@ -318,26 +314,25 @@ describe('ReportService', () => {
           { scheduleName: 'Mañana', capacity: 50, accredited: 20, available: 30 },
           { scheduleName: 'Tarde', capacity: 100, accredited: 10, available: 90 },
         ]);
-        // 30 acreditados / 60 min = 0.5 por minuto.
-        expect(result.accreditationRatePerMinute).toBeCloseTo(0.5, 5);
+        // Ritmo reciente = acreditaciones de los últimos 30 min / 30 = 5/30.
+        expect(result.accreditationRatePerMinute).toBeCloseTo(5 / 30, 5);
       } finally {
         jest.useRealTimers();
       }
     });
 
-    it('sin fechas activas ni primera acreditación devuelve ritmo 0 y capacidad vacía', async () => {
+    it('sin horarios en acreditación: capacidad vacía y ritmo = últimos 30 min / 30', async () => {
       (AccreditationMock.count as jest.Mock).mockResolvedValue(3);
       (EventScheduleMock.findAll as jest.Mock).mockResolvedValue([]);
-      (AccreditationMock.findOne as jest.Mock).mockResolvedValue(null);
 
       const result = await service.getRealTimeStats(eventId);
 
       expect(result).toEqual({
         accreditationsLast30Min: 3,
         currentCapacity: [],
-        accreditationRatePerMinute: 0,
+        accreditationRatePerMinute: 3 / 30,
       });
-      // Solo se contó una vez (últimos 30 min); sin fechas ni primera acreditación no hay más counts.
+      // Solo se cuenta una vez (últimos 30 min); sin horarios en acreditación no hay más counts.
       expect(AccreditationMock.count).toHaveBeenCalledTimes(1);
     });
 
@@ -347,7 +342,6 @@ describe('ReportService', () => {
         .mockResolvedValueOnce(0) // últimos 30 min
         .mockResolvedValueOnce(0); // acreditados sch-3
       (EventScheduleMock.findAll as jest.Mock).mockResolvedValue([s]);
-      (AccreditationMock.findOne as jest.Mock).mockResolvedValue(null);
 
       const result = await service.getRealTimeStats(eventId);
 
@@ -357,26 +351,6 @@ describe('ReportService', () => {
       expect(result.accreditationRatePerMinute).toBe(0);
     });
 
-    it('si el tiempo transcurrido es 0 el ritmo permanece en 0', async () => {
-      const fixedNow = new Date('2026-09-23T12:00:00.000Z');
-      jest.useFakeTimers();
-      jest.setSystemTime(fixedNow);
-      try {
-        (AccreditationMock.count as jest.Mock)
-          .mockResolvedValueOnce(2) // últimos 30 min
-          .mockResolvedValueOnce(5); // total acreditados
-        (EventScheduleMock.findAll as jest.Mock).mockResolvedValue([]);
-        (AccreditationMock.findOne as jest.Mock).mockResolvedValue({ checkInTime: fixedNow });
-
-        const result = await service.getRealTimeStats(eventId);
-
-        expect(result.accreditationRatePerMinute).toBe(0);
-        // El total sí se consulta aunque el ritmo no se calcule.
-        expect(AccreditationMock.count).toHaveBeenCalledTimes(2);
-      } finally {
-        jest.useRealTimers();
-      }
-    });
   });
 
   describe('getGeneralReport', () => {
