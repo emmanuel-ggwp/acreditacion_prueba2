@@ -408,10 +408,10 @@ export class EventService {
       distinct: true, // Important for correct count with includes
     });
 
-    // 2. Fetch participant counts for these events
+    // 2. Fetch participant & accredited counts for these events
     if (rows.length > 0) {
       const eventIds = rows.map(e => e.id);
-      
+
       // Total de INSCRIPCIONES por evento (SUMA por fecha): un participante inscrito en
       // varias fechas cuenta en CADA una, para que el TOTAL del card cuadre con la suma
       // de los cards por fecha y con el Reporte General (una fila por fecha). Antes era
@@ -431,15 +431,38 @@ export class EventService {
         raw: true,
       });
 
+      // Acreditados (check-in) por evento = SUMA por fecha de las acreditaciones de
+      // PARTICIPANTES (participant_id no nulo; los invitados tienen participant_id nulo).
+      // Coherente con el TOTAL (inscripciones de participantes) y con "Cap" (cupo de
+      // participantes). Antes el card no poblaba accreditedCount → "Check-in" salía 0.
+      const accreditedCounts = await EventSchedule.findAll({
+        attributes: ['eventId', [fn('COUNT', col('Accreditations.id')), 'count']],
+        include: [{
+          model: Accreditation,
+          attributes: [],
+          required: false,
+          where: { participantId: { [Op.ne]: null } },
+        }],
+        where: {
+          eventId: eventIds,
+        },
+        group: ['eventId'],
+        raw: true,
+      });
+
       // 3. Map counts to events
       const countMap = new Map<string, number>();
       (participantCounts as any[]).forEach((p: any) => {
         countMap.set(p.eventId, parseInt(p.count, 10));
       });
+      const accMap = new Map<string, number>();
+      (accreditedCounts as any[]).forEach((a: any) => {
+        accMap.set(a.eventId, parseInt(a.count, 10));
+      });
 
       rows.forEach(event => {
-        const count = countMap.get(event.id) || 0;
-        event.setDataValue('participantCount' as any, count);
+        event.setDataValue('participantCount' as any, countMap.get(event.id) || 0);
+        event.setDataValue('accreditedCount' as any, accMap.get(event.id) || 0);
       });
     }
 
