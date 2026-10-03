@@ -18,7 +18,7 @@ interface AccreditationPanelProps {
   scheduleId?: string;
 }
 
-interface Stats { participants: number; guests: number; total: number; awarded: number }
+interface Stats { participants: number; guests: number; total: number; awarded: number; awardedTotal?: number }
 interface ScheduleStat { scheduleId: string; label: string; startDateTime: string; location?: string; participants: number; guests: number; total: number }
 interface EventStats { perSchedule: ScheduleStat[]; totals: { participants: number; guests: number; total: number } }
 
@@ -296,11 +296,11 @@ const AccreditationPanel = ({ eventId: eventIdProp, scheduleId: scheduleIdProp }
                 </div>
               )}
 
-              <div className={`grid grid-cols-2 gap-3 ${(stats?.awarded ?? 0) > 0 ? 'sm:grid-cols-4' : 'sm:grid-cols-3'}`}>
+              <div className={`grid grid-cols-2 gap-3 ${(stats?.awardedTotal ?? 0) > 0 ? 'sm:grid-cols-4' : 'sm:grid-cols-3'}`}>
                 <StatCard icon={UserCheck} label="Participantes" value={stats?.participants ?? '—'} color="text-indigo-600" />
                 <StatCard icon={Users} label="Invitados" value={stats?.guests ?? '—'} color="text-teal-600" />
                 <StatCard icon={UsersRound} label="Total" value={stats?.total ?? '—'} color="text-gray-900" />
-                {(stats?.awarded ?? 0) > 0 && <StatCard icon={Award} label="Premiados" value={stats?.awarded ?? 0} color="text-amber-600" onClick={() => setShowAwarded(true)} />}
+                {(stats?.awardedTotal ?? 0) > 0 && <StatCard icon={Award} label="Premiados" value={stats?.awarded ?? 0} color="text-amber-600" onClick={() => setShowAwarded(true)} />}
               </div>
 
               <button

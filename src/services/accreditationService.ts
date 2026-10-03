@@ -491,9 +491,20 @@ export class AccreditationService {
     const participants = Number(rows[0]?.participants || 0);
     // Invitados = filas con nombre (guest_id) + invitados numéricos (suma de guest_count).
     const guests = Number(rows[0]?.guests || 0) + Number(rows[0]?.guestCountSum || 0);
-    const awarded = await Participant.count({ where: { eventId: (schedule as any).eventId, isAwarded: true } });
+    // Premiados ACREDITADOS en esta fecha (no el total de premiados del evento): así el
+    // contador no marca a un premiado que todavía no llegó. La lista completa (incluidos
+    // los que faltan y su estado) está en el modal de Premiados.
+    const awarded = await Participant.count({
+      where: { isAwarded: true },
+      include: [{ model: Accreditation, where: { eventScheduleId: scheduleId }, required: true, attributes: [] }],
+      distinct: true,
+      col: 'id',
+    });
+    // Total de premiados del evento: sirve para seguir mostrando la tarjeta/lista de
+    // premiados aunque todavía no haya ninguno acreditado (el número de arriba es 0).
+    const awardedTotal = await Participant.count({ where: { eventId: (schedule as any).eventId, isAwarded: true } });
 
-    return { participants, guests, total: participants + guests, awarded };
+    return { participants, guests, total: participants + guests, awarded, awardedTotal };
   }
 
   // Resumen de asistencia por fecha del evento: participantes e invitados acreditados
