@@ -92,7 +92,7 @@ const EventCard: React.FC<EventCardProps> = ({ event }) => {
                 {stateBadge.text}
               </span>
             </div>
-            <h3 className="text-lg font-bold text-gray-900 line-clamp-1 group-hover:text-indigo-600 transition-colors">
+            <h3 title={event.name} className="text-lg font-bold text-gray-900 line-clamp-2 break-words group-hover:text-indigo-600 transition-colors">
               {event.name}
             </h3>
           </div>
