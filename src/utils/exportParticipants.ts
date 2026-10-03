@@ -116,5 +116,17 @@ export async function exportParticipantsToExcel(eventId: string, eventName: stri
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(guestRows.length ? guestRows : [{ 'Sin invitados': '' }]), 'Invitados');
 
   const safe = (eventName || 'evento').replace(/[^a-z0-9áéíóúñ ]/gi, '').trim().replace(/\s+/g, '_') || 'evento';
-  XLSX.writeFile(wb, `participantes_${safe}.xlsx`);
+  // Descarga con Blob + enlace (método confiable en todos los navegadores). Antes se usaba
+  // XLSX.writeFile, que en algunos navegadores NO dispara la descarga (el toast decía
+  // "éxito" pero el archivo no bajaba). XLSX.write(type:'array') genera el .xlsx en memoria.
+  const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+  const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `participantes_${safe}.xlsx`;
+  document.body.appendChild(a);
+  a.click();
+  window.URL.revokeObjectURL(url);
+  document.body.removeChild(a);
 }

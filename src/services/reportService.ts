@@ -19,6 +19,7 @@
 import { Op, fn, col, literal, Sequelize, QueryTypes } from 'sequelize';
 import { startOfHour, endOfHour, eachHourOfInterval, format, startOfDay, endOfDay, subMinutes } from 'date-fns';
 import { stringify } from 'csv-stringify/sync';
+import * as XLSX from 'xlsx';
 import { sequelize } from '@/lib/sequelize';
 
 import { 
@@ -214,89 +215,20 @@ export class ReportService {
         };
     });
 
-    // 6. Event Level Stats
-    const totalParticipants = await Participant.count({
-        include: [{
-            model: EventSchedule,
-            as: 'schedules',
-            where: { eventId },
-            required: true
-        }],
-        distinct: true,
-        col: 'id'
-    });
-
-    // Invitados inscritos en el evento (contados por su fecha), para que "Total
-    // registrados" sea comparable con "Total acreditados": ambos son PERSONAS
-    // (participantes + invitados). Sin esto, registrados excluía invitados y podía
-    // verse "acreditados > registrados".
-    // Cuenta cada invitado UNA vez si está ligado a alguna fecha del evento vía
-    // guest_schedules (invitados por fecha), con fallback por la fecha heredada
-    // (guest.schedule_id) para datos previos a la feature. Antes se unía solo por
-    // guest.schedule_id, que es NULL en los invitados agregados por admin (los deja fuera)
-    // e inconsistente con el conteo por fecha → podía dar "acreditados > registrados".
-    const guestEventRows = await sequelize.query<{ count: number }>(
-        `SELECT COUNT(DISTINCT sub.gid)::int as count
-           FROM (
-             SELECT gs.guest_id AS gid
-             FROM guest_schedules gs
-             INNER JOIN event_schedules es ON es.id = gs.schedule_id AND es.event_id = :eventId
-             INNER JOIN guests g ON g.id = gs.guest_id AND g.deleted_at IS NULL
-             UNION
-             SELECT g.id AS gid
-             FROM guests g
-             INNER JOIN event_schedules es ON es.id = g.schedule_id AND es.event_id = :eventId
-             WHERE g.deleted_at IS NULL
-               AND NOT EXISTS (SELECT 1 FROM guest_schedules gs2 WHERE gs2.guest_id = g.id)
-           ) sub`,
-        { replacements: { eventId }, type: QueryTypes.SELECT }
-    );
-    // Invitados NUMÉRICOS registrados en el evento: guestCount de cada participante
-    // inscrito, contado UNA vez por participante (no por fecha) para no inflar el total.
-    const numericRegEventRows = await sequelize.query<{ count: number }>(
-        `SELECT COALESCE(SUM(p.guest_count), 0)::int as count
-           FROM participants p
-          WHERE p.deleted_at IS NULL
-            AND EXISTS (
-              SELECT 1 FROM participant_schedules ps
-              INNER JOIN event_schedules es ON es.id = ps.schedule_id
-              WHERE ps.participant_id = p.id AND es.event_id = :eventId
-            )`,
-        { replacements: { eventId }, type: QueryTypes.SELECT }
-    );
-    const totalRegisteredGuests = (Number(guestEventRows[0]?.count) || 0) + (Number(numericRegEventRows[0]?.count) || 0);
-
-    // Efficiently get unique accredited participants and guests across the entire event
-    const uniqueEventStats = await Accreditation.findOne({
-        attributes: [
-            [fn('COUNT', fn('DISTINCT', col('participant_id'))), 'uniqueParticipants'],
-            [fn('COUNT', fn('DISTINCT', col('guest_id'))), 'uniqueGuests']
-        ],
-        include: [{
-            model: EventSchedule,
-            where: { eventId },
-            attributes: []
-        }],
-        raw: true
-    }) as any;
-
-    const totalAccreditedParticipants = parseInt(uniqueEventStats?.uniqueParticipants || '0', 10);
-    // Invitados acreditados = con nombre (distinct guest_id) + numéricos.
-    // Numéricos: por PARTICIPANTE (su mayor llegada entre fechas), NO la suma por fecha, para
-    // que sea comparable con los registrados (contados una vez por participante) y que, en
-    // eventos numéricos multi-fecha, "acreditados" no pueda superar a "registrados".
-    const numericAccEventRows = await sequelize.query<{ count: number }>(
-        `SELECT COALESCE(SUM(perp.c), 0)::int as count
-           FROM (
-             SELECT a.participant_id, MAX(a.guest_count) AS c
-             FROM accreditations a
-             INNER JOIN event_schedules es ON es.id = a.event_schedule_id
-             WHERE es.event_id = :eventId AND a.participant_id IS NOT NULL
-             GROUP BY a.participant_id
-           ) perp`,
-        { replacements: { eventId }, type: QueryTypes.SELECT }
-    );
-    const totalAccreditedGuests = parseInt(uniqueEventStats?.uniqueGuests || '0', 10) + (Number(numericAccEventRows[0]?.count) || 0);
+    // 6. Totales del evento = SUMA de las fechas (coherente con los cards por fecha).
+    // El total del evento es la suma de cada fecha: si una persona (participante o
+    // invitado) está inscrita/acreditada en varias fechas, cuenta en CADA una, para que
+    // "total del evento" cuadre exactamente con la suma de los cards por fecha.
+    // (Antes se contaba por PERSONA única con consultas DISTINCT; se cambió a suma por
+    // fecha a pedido del negocio: el total refleja asistencias/cupos por fecha, no
+    // personas únicas. El invariante "acreditados ≤ registrados" se mantiene porque en
+    // cada fecha los acreditados ≤ registrados, y la suma conserva esa relación.)
+    const sumSchedules = (pick: (d: (typeof scheduleDetails)[number]) => number) =>
+        scheduleDetails.reduce((acc, d) => acc + (Number(pick(d)) || 0), 0);
+    const totalParticipants = sumSchedules(d => d.registeredParticipants);
+    const totalRegisteredGuests = sumSchedules(d => d.registeredGuests);
+    const totalAccreditedParticipants = sumSchedules(d => d.accreditedParticipants);
+    const totalAccreditedGuests = sumSchedules(d => d.accreditedGuests);
 
     const awardsAssigned = await ParticipantAward.count({ include: [{ model: Award, where: { eventId }, attributes: [] }] });
     const awardsDeliveredTotal = await ParticipantAward.count({
@@ -379,6 +311,9 @@ export class ReportService {
       });
       return {
         eventName: event.name,
+        // Inscripciones (SUMA por fecha): un participante en varias fechas cuenta en cada
+        // una, coherente con totalAccredited (que ya cuenta por fecha) y con el resto de
+        // totales del evento. Sin `distinct` → COUNT(*) de las inscripciones del evento.
         totalParticipants: await Participant.count({
           include: [{
             model: EventSchedule,
@@ -386,8 +321,6 @@ export class ReportService {
             where: { eventId },
             required: true
           }],
-          distinct: true,
-          col: 'id'
         }),
         totalAccredited: accreditedCount,
         awardsPending,
@@ -619,6 +552,32 @@ export class ReportService {
         string: (value: string) => (/^[=+\-@\t\r]/.test(value) ? `'${value}` : value),
       },
     });
+  }
+
+  /**
+   * Serializa un arreglo de objetos a un libro Excel (.xlsx) en memoria.
+   *
+   * Toma las columnas de las claves del primer objeto. A diferencia del CSV, Excel abre
+   * el .xlsx en UTF-8 sin BOM (acentos/ñ correctos) y `json_to_sheet` escribe cada celda
+   * como texto (tipo string), de modo que un valor que empiece por `= + - @` se muestra
+   * como texto y NO se ejecuta como fórmula al abrir (sin necesidad del apóstrofo del CSV).
+   *
+   * @param data - Arreglo de filas (objetos); las columnas se toman de las claves del primer elemento.
+   * @param sheetName - Nombre de la hoja (máx. 31 caracteres, límite de Excel).
+   * @returns Promesa que resuelve a un `ArrayBuffer` con el archivo .xlsx listo para
+   *   descargar (ArrayBuffer es un body válido para `NextResponse`).
+   */
+  async generateXlsx(data: any[], sheetName = 'Reporte'): Promise<ArrayBuffer> {
+    const rows = data && data.length ? data : [{ 'Sin datos': '' }];
+    const worksheet = XLSX.utils.json_to_sheet(rows);
+    const workbook = XLSX.utils.book_new();
+    // Excel limita el nombre de hoja a 31 caracteres.
+    XLSX.utils.book_append_sheet(workbook, worksheet, sheetName.slice(0, 31));
+    // type:'buffer' → Node Buffer (en la ruta API, runtime Node). Se devuelve como
+    // ArrayBuffer (body válido para NextResponse), recortado a su rango exacto de bytes
+    // (un Buffer puede ser una vista sobre un ArrayBuffer agrupado más grande).
+    const out = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
+    return out.buffer.slice(out.byteOffset, out.byteOffset + out.byteLength) as ArrayBuffer;
   }
 }
 

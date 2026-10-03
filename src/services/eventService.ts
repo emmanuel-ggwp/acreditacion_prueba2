@@ -412,9 +412,12 @@ export class EventService {
     if (rows.length > 0) {
       const eventIds = rows.map(e => e.id);
       
-      // Count distinct participants per event via EventSchedule
+      // Total de INSCRIPCIONES por evento (SUMA por fecha): un participante inscrito en
+      // varias fechas cuenta en CADA una, para que el TOTAL del card cuadre con la suma
+      // de los cards por fecha y con el Reporte General (una fila por fecha). Antes era
+      // COUNT(DISTINCT) = personas únicas, que no cuadraba con el Excel en multi-fecha.
       const participantCounts = await EventSchedule.findAll({
-        attributes: ['eventId', [fn('COUNT', fn('DISTINCT', col('participants.id'))), 'count']],
+        attributes: ['eventId', [fn('COUNT', col('participants.id')), 'count']],
         include: [{
           model: Participant,
           as: 'participants',

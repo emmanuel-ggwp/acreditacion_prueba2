@@ -5,7 +5,7 @@ jest.mock('@/services/reportService', () => ({
     getEventReport: jest.fn(),
     getGeneralReport: jest.fn(),
     getGuestsReport: jest.fn(),
-    generateCsv: jest.fn(),
+    generateXlsx: jest.fn(),
   },
 }));
 jest.mock('@/lib/jwt', () => ({ verifyAccessToken: jest.fn() }));
@@ -19,7 +19,7 @@ const mockedReportService = reportService as unknown as {
   getEventReport: jest.Mock;
   getGeneralReport: jest.Mock;
   getGuestsReport: jest.Mock;
-  generateCsv: jest.Mock;
+  generateXlsx: jest.Mock;
 };
 const mockedVerify = verifyAccessToken as jest.Mock;
 const UserMock = User as unknown as { findByPk: jest.Mock };
@@ -50,31 +50,30 @@ describe('GET /api/reports/events/[eventId]', () => {
     expect(mockedReportService.getEventReport).toHaveBeenCalledWith('e1');
   });
 
-  it('type=general devuelve un CSV descargable', async () => {
+  it('type=general devuelve un Excel (.xlsx) descargable', async () => {
     mockedReportService.getGeneralReport.mockResolvedValue([{ a: 1 }]);
-    mockedReportService.generateCsv.mockResolvedValue('col\n1');
+    mockedReportService.generateXlsx.mockResolvedValue(Buffer.from('xlsx-bytes'));
 
     const res = await (GET as any)(makeRequest('http://localhost/api/reports/events/e1?type=general'), ctx('e1'));
-    const text = await res.text();
 
     expect(res.status).toBe(200);
-    expect(res.headers.get('content-type')).toContain('text/csv');
-    expect(res.headers.get('content-disposition')).toContain('event_report_e1.csv');
-    expect(text).toBe('col\n1');
+    expect(res.headers.get('content-type')).toContain('spreadsheetml.sheet');
+    expect(res.headers.get('content-disposition')).toContain('event_report_e1.xlsx');
     expect(mockedReportService.getGeneralReport).toHaveBeenCalledWith('e1');
+    expect(mockedReportService.generateXlsx).toHaveBeenCalledWith([{ a: 1 }], 'Reporte General');
   });
 
-  it('type=guests devuelve un CSV de invitados', async () => {
+  it('type=guests devuelve un Excel (.xlsx) de invitados', async () => {
     mockedReportService.getGuestsReport.mockResolvedValue([{ a: 1 }]);
-    mockedReportService.generateCsv.mockResolvedValue('col\n1');
+    mockedReportService.generateXlsx.mockResolvedValue(Buffer.from('xlsx-bytes'));
 
     const res = await (GET as any)(makeRequest('http://localhost/api/reports/events/e1?type=guests'), ctx('e1'));
-    const text = await res.text();
 
     expect(res.status).toBe(200);
-    expect(res.headers.get('content-disposition')).toContain('event_guests_e1.csv');
-    expect(text).toBe('col\n1');
+    expect(res.headers.get('content-type')).toContain('spreadsheetml.sheet');
+    expect(res.headers.get('content-disposition')).toContain('event_guests_e1.xlsx');
     expect(mockedReportService.getGuestsReport).toHaveBeenCalledWith('e1');
+    expect(mockedReportService.generateXlsx).toHaveBeenCalledWith([{ a: 1 }], 'Invitados');
   });
 
   it('devuelve 400 si el eventId viene vacío', async () => {

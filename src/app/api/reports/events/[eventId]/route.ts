@@ -21,28 +21,31 @@ export const GET = withAuth(async (req: AuthenticatedRequest, { params }: Params
     const { searchParams } = new URL(req.url);
     const type = searchParams.get('type');
 
+    // Tipo MIME del .xlsx (Office Open XML). Se descarga como Excel, no CSV.
+    const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+
     if (type === 'general') {
         const reportData = await reportService.getGeneralReport(eventId);
-        const csv = await reportService.generateCsv(reportData);
+        const xlsx = await reportService.generateXlsx(reportData, 'Reporte General');
 
-        return new NextResponse(csv, {
+        return new NextResponse(xlsx, {
             status: 200,
             headers: {
-                'Content-Type': 'text/csv; charset=utf-8',
-                'Content-Disposition': `attachment; filename="event_report_${eventId}.csv"`,
+                'Content-Type': XLSX_MIME,
+                'Content-Disposition': `attachment; filename="event_report_${eventId}.xlsx"`,
             },
         });
     }
 
     if (type === 'guests') {
         const reportData = await reportService.getGuestsReport(eventId);
-        const csv = await reportService.generateCsv(reportData);
+        const xlsx = await reportService.generateXlsx(reportData, 'Invitados');
 
-        return new NextResponse(csv, {
+        return new NextResponse(xlsx, {
             status: 200,
             headers: {
-                'Content-Type': 'text/csv; charset=utf-8',
-                'Content-Disposition': `attachment; filename="event_guests_${eventId}.csv"`,
+                'Content-Type': XLSX_MIME,
+                'Content-Disposition': `attachment; filename="event_guests_${eventId}.xlsx"`,
             },
         });
     }

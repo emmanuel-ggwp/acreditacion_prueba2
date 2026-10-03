@@ -1,5 +1,6 @@
 // reportService importa `sequelize` desde `@/lib/sequelize`, que jest.setup.js mockea
 // globalmente. Importamos la MISMA instancia mockeada para configurar `sequelize.query`.
+import * as XLSX from 'xlsx';
 import { ReportService, reportService } from '../reportService';
 import { sequelize } from '@/lib/sequelize';
 import {
@@ -99,20 +100,15 @@ describe('ReportService', () => {
         { scheduleId: 'sch-2', count: 6 },
       ]);
 
-      // 6 llamadas a sequelize.query en orden:
+      // 3 llamadas a sequelize.query en orden:
       // 1) invitados con nombre reg. por fecha  2) invitados numéricos reg. por fecha
-      // 3) premios entregados por fecha         4) invitados con nombre del evento
-      // 5) invitados numéricos del evento       6) invitados numéricos acreditados del evento
+      // 3) premios entregados por fecha
+      // Los totales del evento YA NO consultan la BD: se suman de los cards por fecha.
       queryMock
         .mockResolvedValueOnce([{ scheduleId: 'sch-1', count: 4 }])
         .mockResolvedValueOnce([{ scheduleId: 'sch-1', count: 5 }])
-        .mockResolvedValueOnce([{ scheduleId: 'sch-1', count: 2 }])
-        .mockResolvedValueOnce([{ count: 6 }])
-        .mockResolvedValueOnce([{ count: 10 }])
-        .mockResolvedValueOnce([{ count: 3 }]);
+        .mockResolvedValueOnce([{ scheduleId: 'sch-1', count: 2 }]);
 
-      (ParticipantMock.count as jest.Mock).mockResolvedValue(15);
-      (AccreditationMock.findOne as jest.Mock).mockResolvedValue({ uniqueParticipants: '13', uniqueGuests: '2' });
       (ParticipantAwardMock.count as jest.Mock)
         .mockResolvedValueOnce(10) // asignados
         .mockResolvedValueOnce(4); // entregados
@@ -120,7 +116,7 @@ describe('ReportService', () => {
       const result = await service.getEventReport(eventId);
 
       expect(EventMock.findByPk).toHaveBeenCalledWith(eventId);
-      expect(queryMock).toHaveBeenCalledTimes(6);
+      expect(queryMock).toHaveBeenCalledTimes(3);
 
       expect(result.eventInfo).toBe(event);
 
@@ -159,14 +155,16 @@ describe('ReportService', () => {
         },
       ]);
 
+      // Totales del evento = SUMA de las fechas (los cards por fecha):
+      // participantes 12+6=18, invitados 9+0=9, acred. part. 8+5=13, acred. inv. 5+0=5.
       expect(result.participantStats).toEqual({
-        registered: 15,
-        registeredGuests: 16, // 6 con nombre + 10 numéricos
-        totalRegistered: 31,
-        totalAccredited: 18, // 13 participantes + (2 con nombre + 3 numéricos)
+        registered: 18,
+        registeredGuests: 9,
+        totalRegistered: 27,
+        totalAccredited: 18,
         accredited: 13,
         accreditedGuests: 5,
-        attendanceRate: expect.closeTo(58.0645, 3),
+        attendanceRate: expect.closeTo(66.6667, 3),
       });
 
       expect(result.awardStats).toEqual({
@@ -194,7 +192,7 @@ describe('ReportService', () => {
       (EventScheduleMock.findAll as jest.Mock).mockResolvedValue([s1, s2]);
       (AccreditationMock.findAll as jest.Mock).mockResolvedValue([]); // conteos y timeline vacíos
       (ParticipantScheduleMock.findAll as jest.Mock).mockResolvedValue([]);
-      queryMock.mockResolvedValue([]); // las 6 consultas vacías
+      queryMock.mockResolvedValue([]); // las 3 consultas vacías
       (ParticipantMock.count as jest.Mock).mockResolvedValue(0);
       (AccreditationMock.findOne as jest.Mock).mockResolvedValue(null);
       (ParticipantAwardMock.count as jest.Mock).mockResolvedValue(0);
@@ -597,6 +595,41 @@ describe('ReportService', () => {
       expect(result).toContain("'-3");
       expect(result).toContain("'@evil");
       expect(result).toContain('seguro');
+    });
+  });
+
+  describe('generateXlsx', () => {
+    it('genera un .xlsx legible con las filas (una hoja con el nombre dado)', async () => {
+      const buf = await service.generateXlsx(
+        [
+          { Nombre: 'Juan', Empresa: 'ACME' },
+          { Nombre: 'Ana', Empresa: 'Globex' },
+        ],
+        'Reporte General',
+      );
+
+      expect(buf).toBeInstanceOf(ArrayBuffer);
+      const wb = XLSX.read(Buffer.from(buf), { type: 'buffer' });
+      expect(wb.SheetNames).toEqual(['Reporte General']);
+      const rows = XLSX.utils.sheet_to_json(wb.Sheets['Reporte General']);
+      expect(rows).toEqual([
+        { Nombre: 'Juan', Empresa: 'ACME' },
+        { Nombre: 'Ana', Empresa: 'Globex' },
+      ]);
+    });
+
+    it('con data vacía genera un .xlsx con una hoja de encabezado "Sin datos" (no falla)', async () => {
+      const buf = await service.generateXlsx([], 'Invitados');
+      const wb = XLSX.read(Buffer.from(buf), { type: 'buffer' });
+      expect(wb.SheetNames).toEqual(['Invitados']);
+      // La hoja existe y su cabecera (celda A1) es "Sin datos".
+      expect(wb.Sheets['Invitados']['A1'].v).toBe('Sin datos');
+    });
+
+    it('recorta el nombre de hoja a 31 caracteres (límite de Excel)', async () => {
+      const buf = await service.generateXlsx([{ a: 1 }], 'Nombre de hoja demasiado largo para Excel');
+      const wb = XLSX.read(Buffer.from(buf), { type: 'buffer' });
+      expect(wb.SheetNames[0]).toHaveLength(31);
     });
   });
 
