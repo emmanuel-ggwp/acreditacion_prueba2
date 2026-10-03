@@ -29,17 +29,18 @@ export const GET = withAuth(async (
     const registered = searchParams.get('registered') === 'true' ? true : searchParams.get('registered') === 'false' ? false : undefined;
     const mailParam = searchParams.get('mail');
     const mail = (mailParam === 'sent' || mailParam === 'failed' || mailParam === 'unsent') ? mailParam : undefined;
+    // scheduleId (opcional): en la búsqueda acota los invitados a los ligados a esa fecha;
+    // en el listado filtra por FECHA (participantes inscritos en ese horario).
+    const scheduleId = searchParams.get('scheduleId') || undefined;
 
     if (search) {
-      // scheduleId (opcional): filtra los invitados a los ligados a esa fecha (check-in por fecha).
-      const scheduleId = searchParams.get('scheduleId') || undefined;
       const results = await participantService.searchParticipants(eventId, search, scheduleId);
       return NextResponse.json({ participants: results, total: results.length, page: 1, limit: results.length });
     }
 
     const result = await participantService.listParticipants(
       eventId,
-      { name, email, accredited, withAward, awarded, registered, mail },
+      { name, email, accredited, withAward, awarded, registered, mail, scheduleId },
       { page, limit }
     );
 

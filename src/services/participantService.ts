@@ -821,7 +821,7 @@ export class ParticipantService {
    * @param pagination - `{ page, limit }`; con `limit <= 0` no se pagina.
    * @returns Objeto `{ participants, total, page, limit }` con las filas de la página.
    */
-  async listParticipants(eventId: string, filters: { name?: string, email?: string, accredited?: boolean, withAward?: boolean, awarded?: boolean, registered?: boolean, mail?: 'sent' | 'failed' | 'unsent' }, pagination: { page: number, limit: number }) {
+  async listParticipants(eventId: string, filters: { name?: string, email?: string, accredited?: boolean, withAward?: boolean, awarded?: boolean, registered?: boolean, mail?: 'sent' | 'failed' | 'unsent', scheduleId?: string }, pagination: { page: number, limit: number }) {
     const { page = 1, limit = 10 } = pagination;
     
     // Participantes del evento (incluye precargados sin horario) vía eventId.
@@ -881,6 +881,11 @@ export class ParticipantService {
     if (filters.registered !== undefined) {
         const subQuery = `(SELECT 1 FROM "participant_schedules" ps WHERE ps."participant_id" = "Participant"."id" LIMIT 1)`;
         andConds.push(sequelize.literal(`${filters.registered ? 'EXISTS' : 'NOT EXISTS'} ${subQuery}`));
+    }
+    // Filtro por FECHA: solo los inscritos en ese horario. scheduleId se ESCAPA (sequelize.escape)
+    // para evitar inyección SQL al interpolarlo en la subconsulta.
+    if (filters.scheduleId) {
+        andConds.push(sequelize.literal(`EXISTS (SELECT 1 FROM "participant_schedules" ps WHERE ps."participant_id" = "Participant"."id" AND ps."schedule_id" = ${sequelize.escape(filters.scheduleId)})`));
     }
     // Estado del correo de confirmación: enviado / fallido / no enviado (null o skipped).
     if (filters.mail === 'sent') where.emailStatus = 'sent';

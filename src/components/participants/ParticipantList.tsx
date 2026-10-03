@@ -80,6 +80,8 @@ const ParticipantList = ({ eventId }: { eventId: string }) => {
   const [statusFilter, setStatusFilter] = useState<'all' | 'registered' | 'preloaded'>('all');
   // Filtro por estado del correo de confirmación: todos / enviado / fallido / no enviado.
   const [mailFilter, setMailFilter] = useState<'all' | 'sent' | 'failed' | 'unsent'>('all');
+  // Filtro por FECHA del evento (horario): '' = todas las fechas.
+  const [scheduleFilter, setScheduleFilter] = useState('');
   const [isFormOpen, setIsFormOpen] = useState(false);
   // Modo "Inscribir" del form: convierte un precargado en inscrito (exige obligatorios + fecha).
   const [formInscribir, setFormInscribir] = useState(false);
@@ -123,12 +125,19 @@ const ParticipantList = ({ eventId }: { eventId: string }) => {
     if (statusFilter === 'registered') f.registered = 'true';
     else if (statusFilter === 'preloaded') f.registered = 'false';
     if (mailFilter !== 'all') f.mail = mailFilter;
+    if (scheduleFilter) f.scheduleId = scheduleFilter;
     return f;
-  }, [filter, showOnlyAwarded, statusFilter, mailFilter]);
+  }, [filter, showOnlyAwarded, statusFilter, mailFilter, scheduleFilter]);
 
   const reload = useCallback(() => {
     fetchParticipantsByEvent(eventId, page, PAGE_SIZE, currentFilters);
   }, [eventId, page, currentFilters, fetchParticipantsByEvent]);
+
+  // Cargar las fechas del evento para el filtro por fecha.
+  useEffect(() => {
+    if (eventId) fetchSchedulesForEvent(eventId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [eventId]);
 
   // ---- Reenvío del correo de confirmación (best-effort, desde el navegador con EmailJS) ----
   const [resending, setResending] = useState(false);
@@ -221,7 +230,7 @@ const ParticipantList = ({ eventId }: { eventId: string }) => {
   }, [participants, selectedIds, resendTo]);
 
   // Cambiar la búsqueda o el filtro vuelve a la página 1.
-  useEffect(() => { setPage(1); }, [filter, showOnlyAwarded, statusFilter, mailFilter]);
+  useEffect(() => { setPage(1); }, [filter, showOnlyAwarded, statusFilter, mailFilter, scheduleFilter]);
 
   // Carga de la tabla (con debounce mientras se escribe en el buscador).
   useEffect(() => {
@@ -373,14 +382,14 @@ const ParticipantList = ({ eventId }: { eventId: string }) => {
   }
   
   return (
-    <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+    <div className="bg-white p-4 sm:p-6 rounded-lg shadow-sm border border-gray-200">
       {error && !isFormOpen && (
         <div className="mb-4 p-4 bg-red-50 border border-red-200 text-red-700 rounded-md">
           {error}
         </div>
       )}
-      <div className="flex justify-between items-center mb-6">
-        <div className="flex items-center gap-3">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-6">
+        <div className="flex items-center gap-3 flex-wrap">
           <h2 className="text-xl font-bold text-gray-900">
             Participantes
           </h2>
@@ -393,8 +402,8 @@ const ParticipantList = ({ eventId }: { eventId: string }) => {
             <HelpCircle size={16} /> ¿Qué hace cada botón?
           </button>
         </div>
-        <div className="flex items-center gap-2">
-          <button 
+        <div className="flex flex-wrap items-center gap-2">
+          <button
             onClick={() => { setSelectedParticipant(undefined); setFormInscribir(false); setIsFormOpen(true); }}
             disabled={isEventFull}
             className={`px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-medium transition-colors ${
@@ -496,16 +505,16 @@ const ParticipantList = ({ eventId }: { eventId: string }) => {
         </div>
       )}
 
-      <div className="mb-6 flex flex-col sm:flex-row sm:items-center gap-3">
+      <div className="mb-6 space-y-3">
         {/* Filtra la TABLA en el servidor (todos los participantes del evento, no solo
             la página visible). Acepta nombre, correo o RUT en cualquier formato. */}
-        <div className="flex-1 relative">
+        <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
           <input
             type="text"
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
-            placeholder="Buscar en la tabla por nombre, correo o RUT…"
+            placeholder="Buscar por nombre, correo o RUT…"
             className="w-full pl-10 pr-9 py-2 border border-gray-300 rounded-lg text-sm focus:ring-indigo-500 focus:border-indigo-500"
           />
           {filter && (
@@ -519,42 +528,61 @@ const ParticipantList = ({ eventId }: { eventId: string }) => {
             </button>
           )}
         </div>
-        {/* Filtro por estado de inscripción. Corre en el servidor (todos los del evento). */}
-        <div className="inline-flex rounded-lg border border-gray-300 bg-white p-0.5 self-start">
-          {([
-            { key: 'all', label: 'Todos' },
-            { key: 'registered', label: 'Inscritos' },
-            { key: 'preloaded', label: 'Precargados' },
-          ] as const).map((opt) => (
-            <button
-              key={opt.key}
-              type="button"
-              onClick={() => setStatusFilter(opt.key)}
-              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors whitespace-nowrap ${statusFilter === opt.key ? 'bg-indigo-600 text-white' : 'text-gray-600 hover:bg-gray-100'}`}
+        {/* Filtros (corren en el servidor, sobre todos los del evento). En celular se
+            envuelven para no amontonarse. */}
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="inline-flex rounded-lg border border-gray-300 bg-white p-0.5">
+            {([
+              { key: 'all', label: 'Todos' },
+              { key: 'registered', label: 'Inscritos' },
+              { key: 'preloaded', label: 'Precargados' },
+            ] as const).map((opt) => (
+              <button
+                key={opt.key}
+                type="button"
+                onClick={() => setStatusFilter(opt.key)}
+                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors whitespace-nowrap ${statusFilter === opt.key ? 'bg-indigo-600 text-white' : 'text-gray-600 hover:bg-gray-100'}`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+          {/* Filtro por FECHA del evento. */}
+          {EventSchedules.length > 0 && (
+            <select
+              value={scheduleFilter}
+              onChange={(e) => setScheduleFilter(e.target.value)}
+              className="px-3 py-2 rounded-lg text-sm font-medium border border-gray-300 bg-white text-gray-700 max-w-[65vw] sm:max-w-none"
+              title="Filtrar por fecha del evento"
             >
-              {opt.label}
-            </button>
-          ))}
+              <option value="">Fecha: todas</option>
+              {(EventSchedules as any[]).map((s) => (
+                <option key={s.id} value={s.id}>
+                  {(s.label || s.scheduleName)}{s.startDateTime ? ` · ${formatDateCL(s.startDateTime)}` : ''}
+                </option>
+              ))}
+            </select>
+          )}
+          {/* Filtro por estado del correo. */}
+          <select
+            value={mailFilter}
+            onChange={(e) => setMailFilter(e.target.value as 'all' | 'sent' | 'failed' | 'unsent')}
+            className="px-3 py-2 rounded-lg text-sm font-medium border border-gray-300 bg-white text-gray-700"
+            title="Filtrar por estado del correo de confirmación"
+          >
+            <option value="all">Correo: todos</option>
+            <option value="sent">Correo: enviado</option>
+            <option value="failed">Correo: fallido</option>
+            <option value="unsent">Correo: no enviado</option>
+          </select>
+          <button
+            type="button"
+            onClick={() => setShowOnlyAwarded((v) => !v)}
+            className={`px-4 py-2 rounded-lg text-sm font-medium border flex items-center gap-2 whitespace-nowrap ${showOnlyAwarded ? 'bg-amber-100 border-amber-300 text-amber-800' : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'}`}
+          >
+            <Award size={16} /> {showOnlyAwarded ? 'Mostrando premiados' : 'Solo premiados'}
+          </button>
         </div>
-        <button
-          type="button"
-          onClick={() => setShowOnlyAwarded((v) => !v)}
-          className={`px-4 py-2 rounded-lg text-sm font-medium border flex items-center gap-2 whitespace-nowrap ${showOnlyAwarded ? 'bg-amber-100 border-amber-300 text-amber-800' : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'}`}
-        >
-          <Award size={16} /> {showOnlyAwarded ? 'Mostrando premiados' : 'Solo premiados'}
-        </button>
-        {/* Filtro por estado del correo. Corre en el servidor (todos los del evento). */}
-        <select
-          value={mailFilter}
-          onChange={(e) => setMailFilter(e.target.value as 'all' | 'sent' | 'failed' | 'unsent')}
-          className="px-3 py-2 rounded-lg text-sm font-medium border border-gray-300 bg-white text-gray-700 self-start"
-          title="Filtrar por estado del correo de confirmación"
-        >
-          <option value="all">Correo: todos</option>
-          <option value="sent">Correo: enviado</option>
-          <option value="failed">Correo: fallido</option>
-          <option value="unsent">Correo: no enviado</option>
-        </select>
       </div>
 
       <div className="overflow-x-auto">
@@ -695,7 +723,7 @@ const ParticipantList = ({ eventId }: { eventId: string }) => {
             ) : (
               <tr>
                 <td colSpan={10} className="px-6 py-10 text-center text-gray-500">
-                  {filter.trim() || showOnlyAwarded || statusFilter !== 'all'
+                  {filter.trim() || showOnlyAwarded || statusFilter !== 'all' || mailFilter !== 'all' || scheduleFilter
                     ? <>No se encontraron participantes{statusFilter === 'preloaded' ? ' precargados' : statusFilter === 'registered' ? ' inscritos' : ''} para este filtro{filter.trim() ? <>: <b>&quot;{filter.trim()}&quot;</b></> : ''}.</>
                     : 'No se encontraron participantes. Agrega uno para comenzar.'}
                 </td>
