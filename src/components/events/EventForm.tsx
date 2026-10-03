@@ -118,20 +118,26 @@ const ImageUploadField: React.FC<{
 // Se cargan al elegir la plantilla; luego el usuario puede ajustarlas.
 const TEMPLATE_PALETTES: Record<string, Record<string, string | number>> = {
   // Predeterminada: índigo clásico y neutro.
+  // Nota: titleColor/dateSelectedColor se incluyen en TODAS las paletas (aunque sean
+  // "solo Gala") para que, al cambiar DESDE Gala a otra, se restablezcan y no quede el
+  // título en blanco (o el borde de fecha teal) heredado de Gala.
   default: {
     primaryColor: '#1e293b', secondaryColor: '#334155', buttonColor: '#1e293b',
+    titleColor: '#111827', dateSelectedColor: '#1e293b',
     textColor: '#111827', inputColor: '#f8fafc', borderColor: '#e2e8f0',
     formBackgroundColor: '#ffffff', overlayColor: '#0f172a', overlayOpacity: 0.55, titleFont: 'montserrat',
   },
   // Moderno: azul/violeta vibrante sobre panel oscuro.
   modern: {
     primaryColor: '#7c93b3', secondaryColor: '#475569', buttonColor: '#334155',
+    titleColor: '#0f172a', dateSelectedColor: '#334155',
     textColor: '#0f172a', inputColor: '#f1f5f9', borderColor: '#cbd5e1',
     formBackgroundColor: '#ffffff', overlayColor: '#0f172a', overlayOpacity: 0.6, titleFont: 'poppins',
   },
   // Minimalista: monocromático, neutro, limpio.
   minimal: {
     primaryColor: '#111827', secondaryColor: '#6b7280', buttonColor: '#111827',
+    titleColor: '#111827', dateSelectedColor: '#111827',
     textColor: '#111827', inputColor: '#ffffff', borderColor: '#e5e7eb',
     formBackgroundColor: '#ffffff', overlayColor: '#ffffff', overlayOpacity: 0.8, titleFont: 'inter',
   },
@@ -343,22 +349,22 @@ const EventForm: React.FC<EventFormProps> = ({ event, onClose, onSuccess }) => {
   };
 
   return (
-    <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm z-50 flex justify-center items-center p-4 animate-in fade-in duration-200">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl flex flex-col max-h-[90vh] transform transition-all animate-in zoom-in-95 duration-200">
-        
+    <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm z-50 flex justify-center items-center p-3 sm:p-4 animate-in fade-in duration-200">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl flex flex-col max-h-[95vh] sm:max-h-[90vh] transform transition-all animate-in zoom-in-95 duration-200">
+
         {/* Header */}
-        <div className="bg-white px-8 py-6 border-b border-gray-100 flex justify-between items-center flex-shrink-0">
-          <div>
-            <h2 className="text-2xl font-bold text-gray-900">
+        <div className="bg-white px-5 py-4 sm:px-8 sm:py-6 border-b border-gray-100 flex justify-between items-center gap-3 flex-shrink-0">
+          <div className="min-w-0">
+            <h2 className="text-xl sm:text-2xl font-bold text-gray-900 truncate">
               {isEditMode ? 'Editar Evento' : 'Crear Nuevo Evento'}
             </h2>
-            <p className="text-sm text-gray-500 mt-1">
+            <p className="text-sm text-gray-500 mt-1 hidden sm:block">
               {isEditMode ? 'Actualiza la información del evento.' : 'Completa los detalles para registrar un nuevo evento.'}
             </p>
           </div>
-          <button 
+          <button
             onClick={handleClose}
-            className="text-gray-400 hover:text-gray-600 transition-colors p-2 rounded-full hover:bg-gray-100"
+            className="text-gray-400 hover:text-gray-600 transition-colors p-2 rounded-full hover:bg-gray-100 flex-shrink-0"
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -368,19 +374,19 @@ const EventForm: React.FC<EventFormProps> = ({ event, onClose, onSuccess }) => {
 
         <form onSubmit={handleSubmit(onSubmit as any, onInvalid)} className="flex flex-col flex-1 overflow-hidden">
           {/* Pestañas: dividen el formulario para que no sea un scroll enorme. */}
-          <div className="px-8 pt-4 flex gap-1 flex-shrink-0 border-b border-gray-100 overflow-x-auto">
+          <div className="px-4 sm:px-8 pt-4 flex gap-1 flex-shrink-0 border-b border-gray-100 overflow-x-auto">
             {([['general', 'General'], ['diseno', 'Diseño'], ['registro', 'Registro'], ['formulario', 'Formulario']] as const).map(([id, lbl]) => (
               <button
                 key={id}
                 type="button"
                 onClick={() => setActiveTab(id)}
-                className={`px-4 py-2.5 text-sm font-semibold whitespace-nowrap rounded-t-lg -mb-px border-b-2 transition ${activeTab === id ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+                className={`px-3 sm:px-4 py-2.5 text-sm font-semibold whitespace-nowrap rounded-t-lg -mb-px border-b-2 transition ${activeTab === id ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
               >
                 {lbl}
               </button>
             ))}
           </div>
-          <div className="p-8 space-y-6 overflow-y-auto flex-1">
+          <div className="p-5 sm:p-8 space-y-6 overflow-y-auto flex-1">
             <div className={activeTab === 'general' ? 'grid grid-cols-1 gap-y-6 sm:grid-cols-2 sm:gap-x-8' : 'hidden'}>
 
               {/* Name */}
@@ -451,13 +457,15 @@ const EventForm: React.FC<EventFormProps> = ({ event, onClose, onSuccess }) => {
                   <input
                     type="number"
                     id="maxCapacity"
-                    placeholder="0"
+                    min={0}
+                    placeholder="Ilimitada"
                     {...register('maxCapacity', {
                       setValueAs: (v) => (v === '' || v === null ? null : parseInt(v, 10)),
                     })}
                     className="block w-full rounded-xl border-gray-200 bg-gray-50 pl-10 pr-4 py-3 text-gray-900 focus:border-indigo-500 focus:bg-white focus:ring-2 focus:ring-indigo-500/20 transition-all duration-200 sm:text-sm"
                   />
                 </div>
+                <p className="mt-1 text-xs text-gray-500">Déjalo vacío (o en 0) para <b>capacidad ilimitada</b>.</p>
                 {errors.maxCapacity && <p className="mt-2 text-sm text-red-500">{errors.maxCapacity.message}</p>}
               </div>
 
@@ -562,7 +570,7 @@ const EventForm: React.FC<EventFormProps> = ({ event, onClose, onSuccess }) => {
                     ¿Cómo llamarlos en la página pública?
                     <InfoTooltip text="Solo cambia la palabra que ven los asistentes (títulos y botón 'Agregar…'), por ejemplo 'Carga/Cargas' en lugar de 'Invitado/Invitados'. No cambia cómo funciona." />
                   </label>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <input {...register('registrationConfig.guests.termSingular' as any)} placeholder="Singular (ej. Carga)" maxLength={30} className="block w-full rounded-xl border-gray-200 bg-gray-50 px-4 py-3 text-gray-900 focus:border-indigo-500 focus:bg-white focus:ring-2 focus:ring-indigo-500/20 sm:text-sm" />
                     <input {...register('registrationConfig.guests.termPlural' as any)} placeholder="Plural (ej. Cargas)" maxLength={30} className="block w-full rounded-xl border-gray-200 bg-gray-50 px-4 py-3 text-gray-900 focus:border-indigo-500 focus:bg-white focus:ring-2 focus:ring-indigo-500/20 sm:text-sm" />
                   </div>
@@ -1219,7 +1227,7 @@ const EventForm: React.FC<EventFormProps> = ({ event, onClose, onSuccess }) => {
           </div>
 
           {/* Footer */}
-          <div className="bg-gray-50 px-8 py-5 border-t border-gray-100 flex justify-end space-x-3 flex-shrink-0">
+          <div className="bg-gray-50 px-5 py-4 sm:px-8 sm:py-5 border-t border-gray-100 flex justify-end space-x-3 flex-shrink-0">
             <button
               type="button"
               onClick={handleClose}

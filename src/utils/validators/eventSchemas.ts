@@ -157,7 +157,12 @@ export const eventSchema = z.object({
   name: z.string().min(3, 'El nombre del evento debe tener al menos 3 caracteres'),
   description: z.string().optional(),
   location: z.string().optional(),
-  maxCapacity: z.number().int().positive(),
+  // Capacidad del evento. El modelo la permite NULL = «capacidad ilimitada», igual que
+  // 0 (ver EventDetails, que muestra «Capacidad ilimitada» cuando es 0/null). Por eso NO
+  // puede ser obligatoria y > 0: con `.positive()` no se podía crear un evento sin cupo
+  // (el formulario envía null al dejarla en blanco y la validación lo rechazaba). Se
+  // aceptan null, 0 o un entero positivo; se rechazan negativos.
+  maxCapacity: z.number().int().min(0, 'La capacidad no puede ser negativa').nullable().optional(),
   allowGuests: z.boolean().default(true),
   // El defecto es 2, no 0, y es el mismo que declara el modelo (`Event.ts:99-102`).
   // Con `.default(0)` todo evento creado desde la aplicación nacía con cupo 0 y el
