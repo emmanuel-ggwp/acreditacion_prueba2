@@ -35,6 +35,16 @@ import { auditLogService } from './auditLogService';
 const normalizedRutCol = (column = 'document_number') =>
   fn('UPPER', fn('REPLACE', fn('REPLACE', fn('REPLACE', col(column), '.', ''), '-', ''), ' ', ''));
 
+// Búsqueda tolerante a ACENTOS: no hay extensión `unaccent` instalada, así que se baja a
+// minúsculas y se reemplazan los acentos por su letra base con TRANSLATE (mapa fijo). Así
+// "perez" encuentra "Pérez" y viceversa. Para la query se hace lo mismo en JS (NFD) y debe
+// pasarse ya normalizada con `normalizeForSearch`.
+const ACCENTS_FROM = 'áàäâãéèëêíìïîóòöôõúùüûñç';
+const ACCENTS_TO = 'aaaaaeeeeiiiiooooouuuunc';
+const unaccentLowerExpr = (expr: any) => fn('TRANSLATE', fn('LOWER', expr), ACCENTS_FROM, ACCENTS_TO);
+const normalizeForSearch = (s: string) =>
+  (s || '').trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+
 /**
  * Lógica de negocio para crear, importar, editar, inscribir, eliminar y consultar los participantes
  * de un evento y sus invitados asociados, con deduplicación por RUT/correo y registro de auditoría.
@@ -926,9 +936,15 @@ export class ParticipantService {
     if (!query || query.trim().length < 3) {
         return [];
     }
+    // Búsqueda tolerante a ACENTOS y por NOMBRE COMPLETO: "perez" encuentra "Pérez" y
+    // "juan perez" encuentra "Juan Pérez". Nombre/apellido/nombre completo se comparan sin
+    // acentos (TRANSLATE + query normalizada en JS); email y RUT mantienen su comparación.
+    const qNorm = normalizeForSearch(query);
+    const likeNorm = { [Op.like]: `%${qNorm}%` };
     const orConds: any[] = [
-      { firstName: { [Op.iLike]: `%${query}%` } },
-      { lastName: { [Op.iLike]: `%${query}%` } },
+      sqlWhere(unaccentLowerExpr(col('Participant.first_name')), likeNorm),
+      sqlWhere(unaccentLowerExpr(col('Participant.last_name')), likeNorm),
+      sqlWhere(unaccentLowerExpr(fn('CONCAT_WS', ' ', col('Participant.first_name'), col('Participant.last_name'))), likeNorm),
       { email: { [Op.iLike]: `%${query}%` } },
       { documentNumber: { [Op.iLike]: `%${query}%` } },
     ];
