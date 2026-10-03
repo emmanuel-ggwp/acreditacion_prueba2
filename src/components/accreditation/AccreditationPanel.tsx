@@ -59,6 +59,9 @@ const AccreditationPanel = ({ eventId: eventIdProp, scheduleId: scheduleIdProp }
   // aparecer al final de la página (evita el scroll largo). Se queda abierto para seguir
   // acreditando y se refresca con el botón "Actualizar" y tras cada acreditación.
   const [workOpen, setWorkOpen] = useState(false);
+  // Se incrementa al tocar "Actualizar": se pasa a la ficha (refreshKey) para que recargue
+  // su estado de acreditación (badge), no solo los contadores del panel.
+  const [cardRefreshTick, setCardRefreshTick] = useState(0);
   const personCardRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -104,6 +107,13 @@ const AccreditationPanel = ({ eventId: eventIdProp, scheduleId: scheduleIdProp }
     if (eventId) fetchSchedulesForEvent(eventId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadStats, loadEventStats, eventId]);
+
+  // "Actualizar" del modal: refresca los contadores del panel Y le pide a la ficha abierta
+  // que recargue su estado (badge Acreditado/No), por si cambió desde otro lado.
+  const handleManualRefresh = () => {
+    refresh();
+    setCardRefreshTick((t) => t + 1);
+  };
 
   const openWork = (sId: string) => {
     setScheduleId(sId);
@@ -255,7 +265,7 @@ const AccreditationPanel = ({ eventId: eventIdProp, scheduleId: scheduleIdProp }
               <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
                 <button
                   type="button"
-                  onClick={refresh}
+                  onClick={handleManualRefresh}
                   title="Actualizar contadores"
                   className="inline-flex items-center gap-1.5 text-sm font-medium text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-lg px-2.5 sm:px-3 py-2 hover:bg-indigo-100 active:bg-indigo-200 whitespace-nowrap"
                 >
@@ -282,7 +292,7 @@ const AccreditationPanel = ({ eventId: eventIdProp, scheduleId: scheduleIdProp }
             <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4 sm:rounded-b-2xl">
               {selectedPerson && (
                 <div ref={personCardRef} className="scroll-mt-4">
-                  <ParticipantCard person={selectedPerson.data} type={selectedPerson.type} scheduleId={scheduleId} scheduleLabel={selectedScheduleLabel} accreditationFields={accreditationFields} onAccredited={refresh} />
+                  <ParticipantCard person={selectedPerson.data} type={selectedPerson.type} scheduleId={scheduleId} scheduleLabel={selectedScheduleLabel} accreditationFields={accreditationFields} onAccredited={refresh} refreshKey={cardRefreshTick} />
                 </div>
               )}
 

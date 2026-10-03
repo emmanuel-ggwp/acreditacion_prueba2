@@ -20,6 +20,9 @@ interface ParticipantCardProps {
   // según lo que el organizador eligió en el evento. Ver getAccreditationFields.
   accreditationFields?: Record<string, boolean>;
   onAccredited?: () => void;
+  // Cambia (incrementa) cuando el panel pide recargar el estado de la ficha, p. ej. al
+  // tocar "Actualizar" en el modal, sin cambiar de persona.
+  refreshKey?: number;
 }
 
 const fmtScheduleDate = (d?: string) => (d ? formatDateCL(d, { weekday: 'long', day: '2-digit', month: 'long' }) : '');
@@ -35,10 +38,9 @@ const traducirError = (msg?: string): string => {
   return m || 'Ocurrió un error.';
 };
 
-const ParticipantCard: React.FC<ParticipantCardProps> = ({ person, type, scheduleId, scheduleLabel, accreditationFields = {}, onAccredited }) => {
+const ParticipantCard: React.FC<ParticipantCardProps> = ({ person, type, scheduleId, scheduleLabel, accreditationFields = {}, onAccredited, refreshKey }) => {
   const [guestsToAccredit, setGuestsToAccredit] = useState<string[]>([]);
   const [accreditationStatus, setAccreditationStatus] = useState<{isAccredited: boolean, accreditation?: any}>({ isAccredited: false });
-  const [notes, setNotes] = useState('');
   // Invitados que llegaron (modos numéricos count/companion).
   const [arrivedGuests, setArrivedGuests] = useState(0);
   const [editingCount, setEditingCount] = useState(false);
@@ -78,9 +80,16 @@ const ParticipantCard: React.FC<ParticipantCardProps> = ({ person, type, schedul
     setGuestsToAccredit([]);
     setArrivedGuests(Number((person as any)?.guestCount) || 0);
     setEditingCount(false);
-    // Limpiar la nota al cambiar de persona: no debe arrastrarse al siguiente.
-    setNotes('');
   }, [reloadStatus]);
+
+  // Recarga el estado cuando el panel lo pide (botón "Actualizar"), sin cambiar de
+  // persona. Se omite el primer render (el efecto de arriba ya cargó al montar).
+  const didMountRef = useRef(false);
+  useEffect(() => {
+    if (!didMountRef.current) { didMountRef.current = true; return; }
+    reloadStatus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshKey]);
 
   const handleGuestToggle = (guestId: string) => {
     setGuestsToAccredit(prev => 
@@ -131,24 +140,23 @@ const ParticipantCard: React.FC<ParticipantCardProps> = ({ person, type, schedul
     const failedGuests: string[] = [];
     try {
       if (type === 'participant') {
-        await accreditParticipant(person.id, scheduleId, user.id, notes, hasNumericGuests ? arrivedGuests : undefined);
+        await accreditParticipant(person.id, scheduleId, user.id, undefined, hasNumericGuests ? arrivedGuests : undefined);
         // Acreditar los invitados seleccionados. Si uno falla (cupo/ya acreditado),
         // seguimos con el resto: el participante YA quedó acreditado.
         for (const guestId of guestsToAccredit) {
           try {
-            await accreditGuest(guestId, scheduleId, user.id, notes);
+            await accreditGuest(guestId, scheduleId, user.id);
           } catch {
             const g = namedGuests.find((x: any) => x.id === guestId);
             failedGuests.push(g ? `${g.firstName} ${g.lastName}`.trim() : 'invitado');
           }
         }
       } else {
-        await accreditGuest(person.id, scheduleId, user.id, notes);
+        await accreditGuest(person.id, scheduleId, user.id);
       }
 
       // Refrescar SIEMPRE, aunque algún invitado haya fallado (la persona ya entró).
       await reloadStatus();
-      setNotes('');
       setGuestsToAccredit([]);
       onAccredited?.();
 
