@@ -93,15 +93,17 @@ describe('GuestService', () => {
       expect(GuestMock.create).not.toHaveBeenCalled();
     });
 
-    it('lanza error al alcanzar el máximo de invitados', async () => {
+    it('desde el ADMIN NO topa: agrega aunque ya supere allowedGuests (el tope es solo de la landing)', async () => {
       (ParticipantMock.findByPk as jest.Mock).mockResolvedValue(
-        makeParticipant({ allowedGuests: 2, guests: [{ id: 'g1' }, { id: 'g2' }] }),
+        makeParticipant({ allowedGuests: 2, guests: [{ id: 'g1' }, { id: 'g2' }], schedules: [] }),
       );
+      const createdGuest: any = { id: 'guest-1', firstName: 'Juan', addSchedules: jest.fn() };
+      (GuestMock.create as jest.Mock).mockResolvedValue(createdGuest);
 
-      await expect(service.addGuest(PARTICIPANT_ID, validGuestData as any)).rejects.toThrow(
-        'Participant has reached the maximum number of guests.',
-      );
-      expect(GuestMock.create).not.toHaveBeenCalled();
+      const result = await service.addGuest(PARTICIPANT_ID, validGuestData as any);
+
+      expect(GuestMock.create).toHaveBeenCalled();
+      expect(result).toBe(createdGuest);
     });
 
     it('rechaza datos de invitado inválidos (validación Zod)', async () => {

@@ -21,9 +21,11 @@ const guestName = (g: any) => `${g.firstName} ${g.lastName || ''}`.trim();
  */
 export class GuestService {
   /**
-   * Agrega un invitado a un participante, validando que el evento permita invitados y que no se
-   * supere `allowedGuests`. El invitado nuevo se liga a TODAS las fechas en que el participante
-   * está inscrito (luego se afina por fecha en el modal admin).
+   * Agrega un invitado a un participante (desde el ADMIN), validando solo que el evento
+   * permita invitados. NO aplica tope de cantidad: el límite por participante
+   * (`allowedGuests`) es exclusivo de la inscripción pública (landing). El invitado nuevo
+   * se liga a TODAS las fechas en que el participante está inscrito (luego se afina por
+   * fecha en el modal admin).
    *
    * @param participantId - ID del participante titular del invitado.
    * @param guestData - Datos del invitado; se validan con `guestSchema`.
@@ -32,7 +34,6 @@ export class GuestService {
    * @throws {z.ZodError} Si `guestData` no cumple `guestSchema`.
    * @throws {Error} `'Participant not found'` si el participante no existe.
    * @throws {Error} `'This event does not allow guests.'` si el evento no permite invitados.
-   * @throws {Error} `'Participant has reached the maximum number of guests.'` si ya alcanzó `allowedGuests`.
    */
   async addGuest(participantId: string, guestData: z.infer<typeof guestSchema>, userId?: string) {
     const validatedData = guestSchema.parse(guestData);
@@ -57,10 +58,9 @@ export class GuestService {
         throw new Error('This event does not allow guests.');
     }
 
-    const currentGuestCount = (participant as any).guests?.length || 0;
-    if (currentGuestCount >= participant.allowedGuests) {
-      throw new Error('Participant has reached the maximum number of guests.');
-    }
+    // Desde el ADMIN no hay tope de cantidad de invitados: el límite por participante
+    // (`allowedGuests` / `maxGuestsPerParticipant`) solo aplica en la inscripción pública
+    // (landing), que lo valida en su propia ruta. Aquí el organizador agrega los que necesite.
 
     const guest = await Guest.create({ ...validatedData, participantId });
     const scheds = (participant as any).schedules || [];
