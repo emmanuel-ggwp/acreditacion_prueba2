@@ -14,6 +14,9 @@ import { isToday, isYesterday, isTomorrow } from 'date-fns';
 import apiClient from '@/utils/apiClient';
 import EventForm from './EventForm';
 import EventAwardedList from './EventAwardedList';
+import useAuthStore from '@/store/authStore';
+import { ROLES } from '@/utils/constants';
+import { canAccess } from '@/utils/permissions';
 
 interface EventDetailsProps {
   eventId?: string;
@@ -24,6 +27,10 @@ type Tab = 'info' | 'schedules' | 'participants' | 'awards' | 'reports' | 'histo
 const EventDetails: React.FC<EventDetailsProps> = ({ eventId }) => {
   const router = useRouter();
   const { currentEvent, fetchEventById, loading, EventSchedules, fetchSchedulesForEvent } = useEventStore();
+  const userRole = useAuthStore((s) => s.user?.role);
+  // El historial de acreditación es auditoría: lo ven los mismos roles que Reportes
+  // (no los acreditadores/GUARDIA). Se oculta la pestaña y además la ruta los rechaza.
+  const canSeeHistory = canAccess(userRole, [ROLES.ADMIN, ROLES.MANAGER, ROLES.OPERATOR]);
   const [activeTab, setActiveTab] = useState<Tab>('info');
   const [isEditMode, setIsEditMode] = useState(!eventId);
 
@@ -81,8 +88,12 @@ const EventDetails: React.FC<EventDetailsProps> = ({ eventId }) => {
     { id: 'participants', label: 'Participantes', icon: Users },
     { id: 'awards', label: 'Premios', icon: Award },
     { id: 'reports', label: 'Reportes', icon: BarChart2 },
-    { id: 'history', label: 'Historial', icon: History },
   ];
+
+  // Historial de acreditación: solo para roles de gestión (no GUARDIA).
+  if (canSeeHistory) {
+    tabs.push({ id: 'history', label: 'Historial', icon: History });
+  }
 
   if (hasActiveSchedule) {
     tabs.push({ id: 'accreditation', label: 'Acreditación', icon: UserCheck });

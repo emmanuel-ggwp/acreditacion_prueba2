@@ -1,10 +1,9 @@
 import { Op } from 'sequelize';
 import { AuditLogService } from '../auditLogService';
-import { AuditLog, User, EventSchedule } from '@/models/index';
+import { AuditLog, User } from '@/models/index';
 
 // Los modelos ya están mockeados por jest.setup.js; aquí solo los tipamos como mocks.
 const AuditLogMock = AuditLog as jest.Mocked<typeof AuditLog>;
-const EventScheduleMock = EventSchedule as jest.Mocked<typeof EventSchedule>;
 
 describe('AuditLogService', () => {
   let auditLogService: AuditLogService;
@@ -237,37 +236,26 @@ describe('AuditLogService', () => {
   describe('list (filtro por evento)', () => {
     const rows = [{ id: 'log-1' }];
 
-    it('resuelve las fechas del evento y filtra acreditaciones CREATE/DELETE', async () => {
-      (EventScheduleMock.findAll as jest.Mock).mockResolvedValue([{ id: 's1' }, { id: 's2' }]);
+    it('filtra por la columna indexada event_id, acotado a acreditaciones CREATE/DELETE', async () => {
       (AuditLogMock.findAll as jest.Mock).mockResolvedValue(rows);
 
       const result = await auditLogService.list({ eventId: 'ev-1' });
 
-      expect(EventScheduleMock.findAll).toHaveBeenCalledWith({ where: { eventId: 'ev-1' }, attributes: ['id'] });
       const arg = (AuditLogMock.findAll as jest.Mock).mock.calls[0][0];
+      expect(arg.where.eventId).toBe('ev-1');
       expect(arg.where.entity).toBe('Accreditation');
       expect(arg.where.action).toEqual({ [Op.in]: ['CREATE', 'DELETE'] });
-      expect(arg.where[Op.and]).toBeDefined();
       expect(result).toBe(rows);
     });
 
     it('con eventId + action concreta (DELETE) respeta esa acción', async () => {
-      (EventScheduleMock.findAll as jest.Mock).mockResolvedValue([{ id: 's1' }]);
       (AuditLogMock.findAll as jest.Mock).mockResolvedValue([]);
 
       await auditLogService.list({ eventId: 'ev-1', action: 'DELETE' });
 
       const arg = (AuditLogMock.findAll as jest.Mock).mock.calls[0][0];
+      expect(arg.where.eventId).toBe('ev-1');
       expect(arg.where.action).toBe('DELETE');
-    });
-
-    it('evento sin fechas → devuelve [] sin consultar AuditLog', async () => {
-      (EventScheduleMock.findAll as jest.Mock).mockResolvedValue([]);
-
-      const result = await auditLogService.list({ eventId: 'ev-x' });
-
-      expect(result).toEqual([]);
-      expect(AuditLogMock.findAll).not.toHaveBeenCalled();
     });
   });
 });

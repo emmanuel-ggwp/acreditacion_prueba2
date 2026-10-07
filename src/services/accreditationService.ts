@@ -163,16 +163,20 @@ export class AccreditationService {
       }, { transaction });
 
       // Auditoría legible: quién se acreditó, en qué fecha y con cuántos invitados/cargas.
+      // `isAwarded` se CONGELA al momento de acreditar (el historial muestra ese valor,
+      // no el estado actual). `eventId` alimenta el filtro por evento (columna indexada).
       await auditLogService.log({
         userId: accreditedBy,
         action: 'CREATE',
         entity: 'Accreditation',
         entityId: accreditation.id,
+        eventId: (schedule as any).eventId,
         details: {
           name: personName(person),
           summary: `${scheduleText(schedule)}${invitados ? ` · ${invitados} invitado(s)/carga(s)` : ''}`,
           fecha: scheduleText(schedule),
           invitados,
+          isAwarded: !!(person as any)?.isAwarded,
           participantId,
           eventScheduleId,
         },
@@ -218,6 +222,7 @@ export class AccreditationService {
         action: 'CREATE',
         entity: 'Accreditation',
         entityId: accreditation.id,
+        eventId: (schedule as any).eventId,
         details: {
           name: personName(person),
           summary: `Invitado · ${scheduleText(schedule)}${guestParticipant ? ` · de ${personName(guestParticipant)}` : ''}`,
@@ -260,10 +265,12 @@ export class AccreditationService {
       const schedule = await EventSchedule.findByPk(eventScheduleId, { transaction });
       await auditLogService.log({
         userId: accreditedBy, action: 'DELETE', entity: 'Accreditation', entityId: participantId,
+        eventId: (schedule as any)?.eventId,
         details: {
           name: personName(participant),
           fecha: scheduleText(schedule),
           summary: `Des-acreditado · ${scheduleText(schedule)}${removed > 1 ? ` · ${removed} registro(s)` : ''}`,
+          isAwarded: !!(participant as any)?.isAwarded,
           participantId, eventScheduleId, removed,
         },
       });
@@ -293,6 +300,7 @@ export class AccreditationService {
     const guestParticipant = (guest as any)?.participant;
     await auditLogService.log({
       userId: accreditedBy, action: 'DELETE', entity: 'Accreditation', entityId: guestId,
+      eventId: (schedule as any)?.eventId,
       details: {
         name: personName(guest),
         fecha: scheduleText(schedule),
@@ -327,6 +335,7 @@ export class AccreditationService {
     const schedule = await EventSchedule.findByPk(eventScheduleId);
     await auditLogService.log({
       userId: accreditedBy, action: 'UPDATE', entity: 'Accreditation', entityId: (acc as any).id,
+      eventId: (schedule as any)?.eventId,
       details: {
         name: personName(participant),
         fecha: scheduleText(schedule),
@@ -484,11 +493,15 @@ export class AccreditationService {
     const logs: any[] = await auditLogService.list({ eventId, limit: opts.limit && opts.limit > 0 ? opts.limit : 500 });
     const filtered = opts.scheduleId ? logs.filter((l) => l.details?.eventScheduleId === opts.scheduleId) : logs;
 
-    // Premiado = estado ACTUAL del participante (no aplica a invitados).
-    const participantIds = Array.from(new Set(filtered.map((l) => l.details?.participantId).filter(Boolean))) as string[];
+    // "Premiado" CONGELADO: se usa el valor guardado en el log al acreditar
+    // (`details.isAwarded`). Para logs antiguos que no lo tienen, se recurre al estado
+    // ACTUAL del participante como respaldo.
+    const legacyIds = Array.from(new Set(
+      filtered.filter((l) => typeof l.details?.isAwarded !== 'boolean' && l.details?.participantId).map((l) => l.details.participantId),
+    )) as string[];
     const awardedMap = new Map<string, boolean>();
-    if (participantIds.length) {
-      const ps = await Participant.findAll({ where: { id: { [Op.in]: participantIds } }, attributes: ['id', 'isAwarded'], paranoid: false });
+    if (legacyIds.length) {
+      const ps = await Participant.findAll({ where: { id: { [Op.in]: legacyIds } }, attributes: ['id', 'isAwarded'], paranoid: false });
       (ps as any[]).forEach((p) => awardedMap.set(p.id, !!p.isAwarded));
     }
 
@@ -496,6 +509,9 @@ export class AccreditationService {
       const d = l.details || {};
       const u = l.User || {};
       const isGuest = !!d.guestId;
+      const isAwarded = typeof d.isAwarded === 'boolean'
+        ? d.isAwarded
+        : (d.participantId ? (awardedMap.get(d.participantId) || false) : false);
       return {
         id: l.id,
         action: l.action === 'DELETE' ? 'UNACCREDITED' : 'ACCREDITED',
@@ -507,7 +523,7 @@ export class AccreditationService {
         scheduleId: d.eventScheduleId || null,
         scheduleText: d.fecha || '',
         guests: typeof d.invitados === 'number' ? d.invitados : 0,
-        isAwarded: d.participantId ? (awardedMap.get(d.participantId) || false) : false,
+        isAwarded,
         by: u.firstName ? `${u.firstName} ${u.lastName || ''}`.trim() : null,
         byEmail: u.email || null,
       };

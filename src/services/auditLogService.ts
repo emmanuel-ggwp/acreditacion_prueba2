@@ -7,9 +7,8 @@
  * para calcular el diff de campos que se guarda en `details.changes`.
  */
 import { Op } from 'sequelize';
-import { AuditLog, User, EventSchedule } from '@/models/index';
+import { AuditLog, User } from '@/models/index';
 import { AuditAction } from '@/models/AuditLog';
-import { sequelize } from '@/lib/sequelize';
 
 /**
  * Datos de una entrada de auditoría.
@@ -25,6 +24,8 @@ interface LogData {
   action: AuditAction;
   entity: string;
   entityId?: string;
+  // Evento al que pertenece el log (lo pasan las acreditaciones), para el filtro por evento.
+  eventId?: string;
   details?: object;
 }
 
@@ -99,16 +100,13 @@ export class AuditLogService {
   async list(filters: { action?: AuditAction; entity?: string; eventId?: string; limit?: number } = {}) {
     const where: any = {};
     if (filters.eventId) {
-      // Filtro por evento: resolver sus fechas y quedarse con las acreditaciones
-      // (CREATE/DELETE) cuyo details.eventScheduleId pertenezca al evento.
-      const schedules = await EventSchedule.findAll({ where: { eventId: filters.eventId }, attributes: ['id'] });
-      const scheduleIds = (schedules as any[]).map((s) => s.id);
-      if (!scheduleIds.length) return [];
+      // Filtro por evento: por la columna indexada `event_id` (la rellenan las
+      // acreditaciones), acotado a sus acciones CREATE/DELETE.
+      where.eventId = filters.eventId;
       where.entity = 'Accreditation';
       where.action = (filters.action === 'CREATE' || filters.action === 'DELETE')
         ? filters.action
         : { [Op.in]: ['CREATE', 'DELETE'] };
-      where[Op.and] = [sequelize.where(sequelize.literal("details->>'eventScheduleId'"), { [Op.in]: scheduleIds })];
     } else {
       if (filters.action) {
         where.action = filters.action;

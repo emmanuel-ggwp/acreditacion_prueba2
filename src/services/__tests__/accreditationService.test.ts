@@ -380,5 +380,17 @@ describe('AccreditationService', () => {
       expect(result).toHaveLength(1);
       expect(result[0].scheduleId).toBe('s2');
     });
+
+    it('usa el "premiado" CONGELADO del log (details.isAwarded) sin consultar el estado actual', async () => {
+      (AuditLogMock.findAll as jest.Mock).mockResolvedValue([
+        { id: 'l1', action: 'CREATE', createdAt: new Date(), details: { name: 'Ana', participantId: 'p1', eventScheduleId: 's1', isAwarded: true }, User: {} },
+      ]);
+
+      const result = await accreditationService.getEventAccreditationHistory('ev-1');
+
+      expect(result[0].isAwarded).toBe(true);
+      // No consulta Participant: el log ya trae el estado congelado al acreditar.
+      expect(ParticipantMock.findAll).not.toHaveBeenCalled();
+    });
   });
 });

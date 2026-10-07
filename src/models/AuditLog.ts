@@ -10,6 +10,9 @@ class AuditLog extends Model {
   declare public action: AuditAction;
   declare public entity: string;
   declare public entityId: string | null;
+  // Evento al que pertenece el log (solo acreditaciones lo llevan; el resto NULL).
+  // Indexado para el filtro "actividad por evento".
+  declare public eventId: string | null;
   declare public details: object | null;
   declare public readonly createdAt: Date;
 }
@@ -39,6 +42,10 @@ AuditLog.init(
     },
     entityId: {
       type: DataTypes.STRING,
+      allowNull: true,
+    },
+    eventId: {
+      type: DataTypes.UUID,
       allowNull: true,
     },
     details: {
