@@ -542,6 +542,20 @@ describe('GiftService', () => {
       expect(result).toBe(d);
     });
 
+    it('corre en transacción y bloquea la fila del empleado (serializa entregas)', async () => {
+      (EmployeeMock.findByPk as jest.Mock).mockResolvedValue({ id: 'e1', campaignId: 'c1', cargas: 3, cargasHijos: 2 });
+      (TypeMock.findByPk as jest.Mock).mockResolvedValue({ id: 't1', campaignId: 'c1', basis: 'CARGA' });
+      const d: any = { id: 'd1', update: jest.fn().mockResolvedValue(undefined) };
+      (DeliveryMock as any).findOrCreate.mockResolvedValue([d, true]);
+
+      await service.setDelivery('e1', 't1', 2, 'user-x');
+
+      expect(sequelize.transaction).toHaveBeenCalled();
+      // El empleado se lee con bloqueo de fila dentro de la transacción.
+      expect(EmployeeMock.findByPk).toHaveBeenCalledWith('e1', expect.objectContaining({ lock: 'UPDATE', transaction: currentTx }));
+      expect((DeliveryMock as any).findOrCreate).toHaveBeenCalledWith(expect.objectContaining({ transaction: currentTx }));
+    });
+
     it('con cantidad 0 limpia fecha y usuario', async () => {
       (EmployeeMock.findByPk as jest.Mock).mockResolvedValue({ id: 'e1', campaignId: 'c1', cargas: 3, cargasHijos: 2 });
       (TypeMock.findByPk as jest.Mock).mockResolvedValue({ id: 't1', campaignId: 'c1', basis: 'FAMILY' });
@@ -550,7 +564,7 @@ describe('GiftService', () => {
 
       await service.setDelivery('e1', 't1', -5, 'user-x'); // negativo -> 0
 
-      expect(d.update).toHaveBeenCalledWith({ deliveredQty: 0, deliveredAt: null, deliveredBy: null });
+      expect(d.update.mock.calls[0][0]).toEqual({ deliveredQty: 0, deliveredAt: null, deliveredBy: null });
     });
   });
 

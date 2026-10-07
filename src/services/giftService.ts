@@ -406,29 +406,38 @@ export class GiftService {
    * @throws {Error} `'El empleado y el tipo de regalo no pertenecen a la misma campaña.'` si sus `campaignId` difieren.
    */
   async setDelivery(employeeId: string, giftTypeId: string, deliveredQty: number, deliveredBy?: string) {
-    // Validar pertenencia: empleado y tipo deben existir y ser de la MISMA campaña
-    // (sin esto, una llamada directa podía cruzar entidades de campañas distintas).
-    const [employee, giftType] = await Promise.all([
-      GiftEmployee.findByPk(employeeId),
-      GiftType.findByPk(giftTypeId),
-    ]);
-    if (!employee) throw new Error('Empleado no encontrado');
-    if (!giftType) throw new Error('Tipo de regalo no encontrado');
-    if ((employee as any).campaignId !== (giftType as any).campaignId) {
-      throw new Error('El empleado y el tipo de regalo no pertenecen a la misma campaña.');
-    }
+    // Transacción + bloqueo de la fila del empleado para SERIALIZAR las entregas de ese
+    // empleado: así dos registros concurrentes (o un cambio de cargas a mitad) no se
+    // pisan ni calculan el tope sobre un estado inconsistente.
+    return sequelize.transaction(async (t) => {
+      // Validar pertenencia: empleado y tipo deben existir y ser de la MISMA campaña
+      // (sin esto, una llamada directa podía cruzar entidades de campañas distintas).
+      const [employee, giftType] = await Promise.all([
+        GiftEmployee.findByPk(employeeId, { lock: t.LOCK.UPDATE, transaction: t }),
+        GiftType.findByPk(giftTypeId, { transaction: t }),
+      ]);
+      if (!employee) throw new Error('Empleado no encontrado');
+      if (!giftType) throw new Error('Tipo de regalo no encontrado');
+      if ((employee as any).campaignId !== (giftType as any).campaignId) {
+        throw new Error('El empleado y el tipo de regalo no pertenecen a la misma campaña.');
+      }
 
-    // Topar al total que le corresponde (entitlement por basis/cargas): la API no debe
-    // permitir registrar más entregas de las debidas (la UI ya lo limitaba, la API no).
-    const total = totalFor((giftType as any).basis as Basis, employee as any);
-    const qty = Math.min(Math.max(0, Number(deliveredQty) || 0), total);
+      // Topar al total que le corresponde (entitlement por basis/cargas): la API no debe
+      // permitir registrar más entregas de las debidas (la UI ya lo limitaba, la API no).
+      const total = totalFor((giftType as any).basis as Basis, employee as any);
+      const qty = Math.min(Math.max(0, Number(deliveredQty) || 0), total);
 
-    const [d] = await GiftDelivery.findOrCreate({
-      where: { employeeId, giftTypeId },
-      defaults: { employeeId, giftTypeId, deliveredQty: 0 } as any,
+      const [d] = await GiftDelivery.findOrCreate({
+        where: { employeeId, giftTypeId },
+        defaults: { employeeId, giftTypeId, deliveredQty: 0 } as any,
+        transaction: t,
+      });
+      await d.update(
+        { deliveredQty: qty, deliveredAt: qty > 0 ? new Date() : null, deliveredBy: qty > 0 ? (deliveredBy || null) : null },
+        { transaction: t },
+      );
+      return d;
     });
-    await d.update({ deliveredQty: qty, deliveredAt: qty > 0 ? new Date() : null, deliveredBy: qty > 0 ? (deliveredBy || null) : null });
-    return d;
   }
 
   /**
