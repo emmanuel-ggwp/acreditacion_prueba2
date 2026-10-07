@@ -21,8 +21,6 @@ import { normalizeEmail } from '../utils/email';
 import type Event from './Event';
 import type Accreditation from './Accreditation';
 
-console.log('Initializing User model...');
-
 class User extends Model {
   declare public id: string;
   declare public username: string;

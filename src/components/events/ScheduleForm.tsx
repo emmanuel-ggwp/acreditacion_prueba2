@@ -69,16 +69,13 @@ const ScheduleForm: React.FC<ScheduleFormProps> = ({ eventId, schedule, onClose 
   };
 
   const onSubmit = async (data: ScheduleFormOutput) => {
-    console.log('Submitting schedule data:', data);
     try {
       if (isEditMode) {
         // Call update schedule API
-        console.log('Updating schedule with ID:', schedule?.id);
         await updateSchedule(schedule?.id!, data.eventId, data);
 
       } else {
         // Call create schedule API
-        console.log('Creating new schedule for event ID:', data.eventId);
         await createSchedule(data);
       }
 

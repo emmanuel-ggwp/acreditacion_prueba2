@@ -10,7 +10,6 @@ interface EventDetailsPageProps {
 
 const EventDetailsPage = async ({ params }: EventDetailsPageProps) => {
   const { eventId } = await params;
-  console.log('Rendering EventDetailsPage for eventId:', eventId);
   return (
     <main>
       <ProtectedRoute>

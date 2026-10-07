@@ -4,8 +4,6 @@ import fs from 'fs';
 // Sin dotenv aquí (F6-06): Next carga .env* por sí mismo y en producción el entorno
 // lo inyecta el gestor de procesos. Los scripts tsx cargan dotenv/config ellos mismos.
 
-console.log('Initializing Sequelize instance...');
-
 // DB_SSL es la ÚNICA fuente de decisión (F6-04): NODE_ENV no debe forzarlo.
 //
 // CAMBIO DEL 2026-08-06: la reconstrucción usa la base ADMINISTRADA de DigitalOcean,
