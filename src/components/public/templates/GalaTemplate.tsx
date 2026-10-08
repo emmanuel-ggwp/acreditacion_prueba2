@@ -236,7 +236,9 @@ export default function GalaTemplate({ event, slug, preview = false }: TemplateP
 
   // ---- Lookup por RUT ----
   const doLookup = async () => {
-    if (preview) return; // Vista previa: sin red.
+    // Vista previa (editor): sin red. Avanza igual (a fecha/formulario) para poder
+    // diseñar el resto de la landing aunque el evento sea de preinscripción (RUT).
+    if (preview) { setStep(schedules.length ? 'fecha' : 'form'); return; }
     setLookupError('');
     // No exigimos validez matemática del RUT: la reja solo debe ENCONTRAR al precargado.
     if (rutInput.replace(/[.\-\s]/g, '').trim().length < 2) { setLookupError('Ingresa tu RUT.'); return; }

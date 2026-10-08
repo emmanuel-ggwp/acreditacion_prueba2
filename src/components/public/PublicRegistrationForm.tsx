@@ -180,7 +180,9 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
 
   // Reja de RUT (modo 'rut'): busca al participante precargado y precarga sus datos.
   const doLookup = async () => {
-    if (preview) return; // Vista previa: sin red.
+    // Vista previa (editor): sin red. Avanza igual al formulario (campos vacíos) para
+    // poder diseñar el resto de la landing aunque el evento sea de preinscripción (RUT).
+    if (preview) { setRutPassed(true); return; }
     setLookupError('');
     // No exigimos validez matemática del RUT: la reja solo debe ENCONTRAR al precargado.
     // (Así funcionan RUT de personas mayores, documentos extranjeros o listas de empresas.)
