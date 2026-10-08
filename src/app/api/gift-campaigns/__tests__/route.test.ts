@@ -97,16 +97,14 @@ describe('/api/gift-campaigns', () => {
       expect(body).toEqual({ message: 'DB caída' });
     });
 
-    it('403 si el rol (BD) no está autorizado para POST', async () => {
-      // POST admite [ADMIN, OPERATOR, GUARDIA]; MANAGER queda fuera.
+    it('permite a MANAGER (ahora autorizado en el módulo de regalos)', async () => {
       (UserMock.findByPk as jest.Mock).mockResolvedValue({ id: 'u1', isActive: true, role: 'MANAGER' });
+      mockedService.createCampaign.mockResolvedValue({ id: 'c1', name: 'X' });
 
       const res = await (POST as any)(makeRequest({ name: 'X' }), { params: {} });
-      const body = await res.json();
 
-      expect(res.status).toBe(403);
-      expect(body).toEqual({ message: 'Forbidden: Insufficient permissions' });
-      expect(mockedService.createCampaign).not.toHaveBeenCalled();
+      expect(res.status).not.toBe(403);
+      expect(mockedService.createCampaign).toHaveBeenCalled();
     });
   });
 });

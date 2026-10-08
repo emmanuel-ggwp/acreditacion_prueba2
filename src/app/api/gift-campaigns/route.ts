@@ -20,4 +20,4 @@ export const POST = withAuth(async (req: AuthenticatedRequest) => {
   } catch (e: any) {
     return NextResponse.json({ message: e.message }, { status: 500 });
   }
-}, [ADMIN, OPERATOR, GUARD]);
+}, [ADMIN, OPERATOR, MANAGER, GUARD]);

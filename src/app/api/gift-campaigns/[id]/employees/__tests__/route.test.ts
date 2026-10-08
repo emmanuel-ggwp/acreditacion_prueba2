@@ -86,15 +86,14 @@ describe('/api/gift-campaigns/[id]/employees', () => {
       expect(body).toEqual({ message: 'datos inválidos' });
     });
 
-    it('403 si el rol (BD) no está autorizado para POST', async () => {
+    it('permite a MANAGER (ahora autorizado en el módulo de regalos)', async () => {
       (UserMock.findByPk as jest.Mock).mockResolvedValue({ id: 'u1', isActive: true, role: 'MANAGER' });
+      mockedService.createEmployee.mockResolvedValue({ id: 'e1' });
 
-      const res = await (POST as any)(makeRequest('POST', { name: 'X' }), ctx);
-      const body = await res.json();
+      const res = await (POST as any)(makeRequest('POST', { fullName: 'X' }), ctx);
 
-      expect(res.status).toBe(403);
-      expect(body).toEqual({ message: 'Forbidden: Insufficient permissions' });
-      expect(mockedService.createEmployee).not.toHaveBeenCalled();
+      expect(res.status).not.toBe(403);
+      expect(mockedService.createEmployee).toHaveBeenCalled();
     });
   });
 });

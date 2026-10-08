@@ -4,7 +4,7 @@ import { AuthenticatedRequest } from '@/types/auth';
 import { ROLES } from '@/utils/constants';
 import { giftService } from '@/services/giftService';
 
-const { ADMIN, OPERATOR, GUARD } = ROLES;
+const { ADMIN, OPERATOR, MANAGER, GUARD } = ROLES;
 
 export const PUT = withAuth(async (req: AuthenticatedRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
@@ -15,7 +15,7 @@ export const PUT = withAuth(async (req: AuthenticatedRequest, { params }: { para
   } catch (e: any) {
     return NextResponse.json({ message: e.message }, { status: 400 });
   }
-}, [ADMIN, OPERATOR, GUARD]);
+}, [ADMIN, OPERATOR, MANAGER, GUARD]);
 
 export const DELETE = withAuth(async (_req: AuthenticatedRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
@@ -25,4 +25,4 @@ export const DELETE = withAuth(async (_req: AuthenticatedRequest, { params }: { 
   } catch (e: any) {
     return NextResponse.json({ message: e.message }, { status: 400 });
   }
-}, [ADMIN, OPERATOR, GUARD]);
+}, [ADMIN, OPERATOR, MANAGER, GUARD]);

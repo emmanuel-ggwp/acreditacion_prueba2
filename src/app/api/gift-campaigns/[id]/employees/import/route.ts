@@ -4,7 +4,7 @@ import { AuthenticatedRequest } from '@/types/auth';
 import { ROLES } from '@/utils/constants';
 import { giftService } from '@/services/giftService';
 
-const { ADMIN, OPERATOR, GUARD } = ROLES;
+const { ADMIN, OPERATOR, MANAGER, GUARD } = ROLES;
 
 export const POST = withAuth(async (req: AuthenticatedRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
@@ -16,4 +16,4 @@ export const POST = withAuth(async (req: AuthenticatedRequest, { params }: { par
   } catch (e: any) {
     return NextResponse.json({ message: e.message }, { status: 400 });
   }
-}, [ADMIN, OPERATOR, GUARD]);
+}, [ADMIN, OPERATOR, MANAGER, GUARD]);
