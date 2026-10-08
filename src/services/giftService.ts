@@ -292,7 +292,9 @@ export class GiftService {
     const newHijos = data.cargasHijos !== undefined ? Number(data.cargasHijos) || 0 : oldHijos;
     await e.update({
       fullName: data.fullName ?? e.fullName,
-      rut: data.rut ?? e.rut,
+      // RUT canónico (sin puntos, con guion), igual que create/import, para que el dedup
+      // lo reconozca sin importar el formato. undefined = no se toca; vacío = se limpia.
+      rut: data.rut !== undefined ? (data.rut ? normalizeRut(String(data.rut)) : null) : e.rut,
       empresa: data.empresa ?? e.empresa,
       cargas: newCargas,
       cargasHijos: newHijos,
