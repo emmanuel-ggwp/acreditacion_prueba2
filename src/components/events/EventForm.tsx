@@ -684,8 +684,10 @@ const EventForm: React.FC<EventFormProps> = ({ event, onClose, onSuccess }) => {
                       id="publicTemplate"
                       {...register('publicTemplate', {
                         onChange: (e) => {
-                          const pal = TEMPLATE_PALETTES[e.target.value];
-                          if (pal) Object.entries(pal).forEach(([k, v]) => setValue(`registrationConfig.theme.${k}` as any, v, { shouldDirty: true }));
+                          // Reset COMPLETO a los defaults de la plantilla elegida (igual que el
+                          // botón "Restaurar por defecto"), para no arrastrar claves de la
+                          // plantilla anterior (p. ej. ajustes solo-Gala) que no trae la paleta.
+                          setValue('registrationConfig.theme' as any, { ...THEME_DEFAULTS, ...(TEMPLATE_PALETTES[e.target.value] || {}) }, { shouldDirty: true });
                         },
                       })}
                       className="block w-full rounded-xl border-gray-200 bg-gray-50 px-4 py-3 text-gray-900 focus:border-indigo-500 focus:bg-white focus:ring-2 focus:ring-indigo-500/20 transition-all duration-200 sm:text-sm"
