@@ -35,9 +35,11 @@ interface PublicRegistrationFormProps {
   slug: string;
   // La plantilla recibe la(s) fecha(s) elegida(s) para mostrarlas en su encabezado.
   onSelectedSchedulesChange?: (schedules: any[]) => void;
+  // Modo vista previa (editor de diseño): NO envía nada (sin registro, lookup ni correo).
+  preview?: boolean;
 }
 
-export default function PublicRegistrationForm({ event, slug, onSelectedSchedulesChange }: PublicRegistrationFormProps) {
+export default function PublicRegistrationForm({ event, slug, onSelectedSchedulesChange, preview = false }: PublicRegistrationFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   // Invitados que el servidor no pudo guardar por falta de cupo: se enseñan en pantalla
@@ -178,6 +180,7 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
 
   // Reja de RUT (modo 'rut'): busca al participante precargado y precarga sus datos.
   const doLookup = async () => {
+    if (preview) return; // Vista previa: sin red.
     setLookupError('');
     // No exigimos validez matemática del RUT: la reja solo debe ENCONTRAR al precargado.
     // (Así funcionan RUT de personas mayores, documentos extranjeros o listas de empresas.)
@@ -247,6 +250,8 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
   }, [Array.isArray(watchedScheduleIds) ? watchedScheduleIds.join(',') : String(watchedScheduleIds)]);
 
   const onSubmit = async (data: PublicRegistrationFormData) => {
+    // Vista previa (editor): no se registra nada. Se avisa y no se envía.
+    if (preview) { setError('Vista previa: la inscripción no se envía en el editor.'); return; }
     setIsSubmitting(true);
     setError(null);
 

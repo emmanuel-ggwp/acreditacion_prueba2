@@ -19,6 +19,8 @@ const GALA_LABELS: Record<string, string> = { email: 'Correo electrónico', phon
 interface TemplateProps {
   event: any;
   slug: string;
+  // Modo vista previa (editor de diseño): NO envía nada (sin registro, lookup ni correo).
+  preview?: boolean;
 }
 
 // Fecha/hora deterministas (es-CL + America/Santiago) para que SSR y cliente coincidan.
@@ -37,7 +39,7 @@ const blockTypeLabel = (t?: string) => {
 
 interface Carga { id: string; firstName: string; lastName?: string; guestType?: string; dietaryPreference?: string | null; selected: boolean; }
 
-export default function GalaTemplate({ event, slug }: TemplateProps) {
+export default function GalaTemplate({ event, slug, preview = false }: TemplateProps) {
   const theme = (event.registrationConfig && event.registrationConfig.theme) || {};
   const primary = theme.primaryColor || '#008a98';
   const buttonColor = theme.buttonColor || primary;
@@ -234,6 +236,7 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
 
   // ---- Lookup por RUT ----
   const doLookup = async () => {
+    if (preview) return; // Vista previa: sin red.
     setLookupError('');
     // No exigimos validez matemática del RUT: la reja solo debe ENCONTRAR al precargado.
     if (rutInput.replace(/[.\-\s]/g, '').trim().length < 2) { setLookupError('Ingresa tu RUT.'); return; }
@@ -274,6 +277,8 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    // Vista previa (editor): no se registra nada. Se avisa y no se envía.
+    if (preview) { setError('Vista previa: la inscripción no se envía en el editor.'); return; }
     if (!selectedScheduleIds.length) { setError('Selecciona al menos una fecha de asistencia.'); return; }
     // Dieta de invitados OBLIGATORIA (modo 'named'): cada invitado NUEVO con nombre debe
     // haber elegido una opción (puede ser "Ninguna"); no se guarda vacío en silencio. Se

@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import useEventStore from '@/store/eventStore';
-import { Calendar, Clock, Users, Award, BarChart2, Edit2, X, UserCheck, FileText, History } from 'lucide-react';
+import Link from 'next/link';
+import { Calendar, Clock, Users, Award, BarChart2, Edit2, X, UserCheck, FileText, History, Palette } from 'lucide-react';
 import ScheduleList from '@/components/events/ScheduleList';
 import ParticipantList from '@/components/participants/ParticipantList';
 import AccreditationPanel from '@/components/accreditation/AccreditationPanel';
@@ -31,6 +32,8 @@ const EventDetails: React.FC<EventDetailsProps> = ({ eventId }) => {
   // El historial de acreditación es auditoría: lo ven los mismos roles que Reportes
   // (no los acreditadores/GUARDIA). Se oculta la pestaña y además la ruta los rechaza.
   const canSeeHistory = canAccess(userRole, [ROLES.ADMIN, ROLES.MANAGER, ROLES.OPERATOR]);
+  // El editor de diseño en vivo lo pueden usar los mismos roles que editan el evento.
+  const canEditDesign = canAccess(userRole, [ROLES.ADMIN, ROLES.OPERATOR]);
   const [activeTab, setActiveTab] = useState<Tab>('info');
   const [isEditMode, setIsEditMode] = useState(!eventId);
 
@@ -115,6 +118,15 @@ const EventDetails: React.FC<EventDetailsProps> = ({ eventId }) => {
                   >
                     <FileText size={16} className="mr-2"/> Reporte
                   </button>
+                  {canEditDesign && (
+                    <Link
+                      href={`/events/${eventId}/design`}
+                      className="flex items-center px-4 py-2 rounded-md text-sm font-medium transition-colors bg-violet-50 text-violet-700 hover:bg-violet-100"
+                      title="Editor de diseño en vivo de la landing pública"
+                    >
+                      <Palette size={16} className="mr-2"/> Editor de diseño
+                    </Link>
+                  )}
                   <button
                     onClick={() => setIsEditMode(true)}
                     className="flex items-center px-4 py-2 rounded-md text-sm font-semibold transition-colors bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm"

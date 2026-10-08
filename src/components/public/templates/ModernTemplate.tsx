@@ -11,9 +11,10 @@ import { formatDateCL, formatTimeCL } from '@/utils/formatters';
 interface TemplateProps {
   event: any;
   slug: string;
+  preview?: boolean; // vista previa del editor: no envía nada
 }
 
-export default function ModernTemplate({ event, slug }: TemplateProps) {
+export default function ModernTemplate({ event, slug, preview = false }: TemplateProps) {
   const theme = (event.registrationConfig && event.registrationConfig.theme) || {};
   const primary: string = theme.primaryColor || '#7c93b3';
   const secondary: string = theme.secondaryColor || '#475569';
@@ -99,7 +100,7 @@ export default function ModernTemplate({ event, slug }: TemplateProps) {
             <h2 className="text-2xl font-bold text-slate-800">Asegura tu lugar</h2>
             <p className="text-slate-500">Completa el formulario a continuación para registrarte.</p>
           </div>
-          <PublicRegistrationForm event={event} slug={slug} onSelectedSchedulesChange={setSelectedSchedules} />
+          <PublicRegistrationForm event={event} slug={slug} preview={preview} onSelectedSchedulesChange={setSelectedSchedules} />
           <p className="mt-8 text-center text-xs text-slate-500">
             ¿Dudas o cambios en tu inscripción? Escríbenos a{' '}
             <a href={`mailto:${CONTACT_EMAIL}`} className="underline font-medium" style={{ color: primary }}>{CONTACT_EMAIL}</a>

@@ -10,9 +10,10 @@ import { formatDateCL } from '@/utils/formatters';
 interface TemplateProps {
   event: any;
   slug: string;
+  preview?: boolean; // vista previa del editor: no envía nada
 }
 
-export default function DefaultTemplate({ event, slug }: TemplateProps) {
+export default function DefaultTemplate({ event, slug, preview = false }: TemplateProps) {
   const theme = (event.registrationConfig && event.registrationConfig.theme) || {};
   const primary = theme.primaryColor || '#1e293b';
   const formBg = theme.formBackgroundColor || '#ffffff';
@@ -84,7 +85,7 @@ export default function DefaultTemplate({ event, slug }: TemplateProps) {
 
             <div className="border-t border-gray-100 pt-8">
               <h2 className="text-xl font-semibold mb-6" style={{ color: textColor }}>Regístrate en este evento</h2>
-              <PublicRegistrationForm event={event} slug={slug} onSelectedSchedulesChange={setSelectedSchedules} />
+              <PublicRegistrationForm event={event} slug={slug} preview={preview} onSelectedSchedulesChange={setSelectedSchedules} />
             </div>
           </div>
         </div>

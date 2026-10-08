@@ -11,13 +11,14 @@ import { formatDateCL, formatTimeCL } from '@/utils/formatters';
 interface TemplateProps {
   event: any;
   slug: string;
+  preview?: boolean; // vista previa del editor: no envía nada
 }
 
 // Fecha/hora deterministas (es-CL + America/Santiago) para que SSR y cliente coincidan.
 const fmtDate = (d: string) => formatDateCL(d, { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
 const fmtTime = (d: string) => formatTimeCL(d);
 
-export default function MinimalTemplate({ event, slug }: TemplateProps) {
+export default function MinimalTemplate({ event, slug, preview = false }: TemplateProps) {
   const theme = (event.registrationConfig && event.registrationConfig.theme) || {};
   const primary: string = theme.primaryColor || '#111827';
   const formBg: string = theme.formBackgroundColor || '#ffffff';
@@ -83,7 +84,7 @@ export default function MinimalTemplate({ event, slug }: TemplateProps) {
               <h2 className="text-lg font-semibold text-slate-800">Inscripción</h2>
               <p className="text-sm text-slate-500 mt-0.5">Completa tus datos para registrarte en el evento.</p>
             </div>
-            <PublicRegistrationForm event={event} slug={slug} onSelectedSchedulesChange={setSelectedSchedules} />
+            <PublicRegistrationForm event={event} slug={slug} preview={preview} onSelectedSchedulesChange={setSelectedSchedules} />
           </div>
 
           <p className="mt-10 text-center text-sm text-slate-600">
