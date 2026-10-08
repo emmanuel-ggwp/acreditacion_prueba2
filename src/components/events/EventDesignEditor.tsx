@@ -110,7 +110,9 @@ export default function EventDesignEditor({ eventId }: { eventId: string }) {
   }, [currentEvent, eventId, loaded]);
 
   const setT = (k: string, v: any) => setTheme((p) => ({ ...p, [k]: v }));
-  const onPickTemplate = (t: string) => { setTemplate(t); const pal = TEMPLATE_PALETTES[t]; if (pal) setTheme((p) => ({ ...p, ...pal })); };
+  // Reset COMPLETO a los defaults de la plantilla elegida (igual que "Restaurar por
+  // defecto" y que EventForm), para no arrastrar claves solo-Gala de una plantilla previa.
+  const onPickTemplate = (t: string) => { setTemplate(t); setTheme({ ...THEME_DEFAULTS, ...(TEMPLATE_PALETTES[t] || {}) }); };
   const isGala = template === 'gala';
   // En Gala, los colores del FORMULARIO (fondo de inputs, bordes, fondo del formulario y
   // letras de inputs) solo se aplican si está activada "Personalizar colores del formulario".
