@@ -697,12 +697,18 @@ export class AccreditationService {
       Participant.findAll({
         where: { eventId, dietaryPreference: notNone },
         attributes: ['id', 'firstName', 'lastName', 'documentNumber', 'dietaryPreference', 'dietaryComments'],
+        // Fechas a las que está inscrito (para acotar la lista a ESTA fecha; ver filtro abajo).
+        include: [{ model: EventSchedule, as: 'schedules', through: { attributes: [] }, attributes: ['id'], required: false }],
         order: [['lastName', 'ASC'], ['firstName', 'ASC']],
       }),
       Guest.findAll({
         where: { dietaryPreference: notNone },
         attributes: ['id', 'firstName', 'lastName', 'documentNumber', 'dietaryPreference'],
-        include: [{ model: Participant, as: 'participant', where: { eventId }, attributes: ['id', 'firstName', 'lastName'] }],
+        include: [
+          { model: Participant, as: 'participant', where: { eventId }, attributes: ['id', 'firstName', 'lastName'] },
+          // Fechas a las que está ligado el invitado (GuestSchedule), para acotar por fecha.
+          { model: EventSchedule, as: 'schedules', through: { attributes: [] }, attributes: ['id'], required: false },
+        ],
       }),
       Accreditation.findAll({
         where: { eventScheduleId: scheduleId },
@@ -711,11 +717,21 @@ export class AccreditationService {
       }) as unknown as Array<{ participantId: string | null; guestId: string | null }>,
     ]);
 
+    // Acreditación POR FECHA: acota la lista a las personas de ESTA fecha, igual que la
+    // búsqueda de acreditación. Participante inscrito en esta fecha (o precargado SIN
+    // fechas = fallback) e invitado ligado a esta fecha (o SIN fechas ligadas = fallback).
+    const inThisDate = (links: any[] | undefined): boolean => {
+      const l = links || [];
+      return l.length === 0 || l.some((s: any) => s.id === scheduleId);
+    };
+    const participantsHere = (participants as any[]).filter((p) => inThisDate(p.schedules));
+    const guestsHere = (guests as any[]).filter((g) => inThisDate(g.schedules));
+
     const accP = new Set(accs.filter((a) => a.participantId).map((a) => a.participantId));
     const accG = new Set(accs.filter((a) => a.guestId).map((a) => a.guestId));
 
     const items = [
-      ...participants.map((p: any) => ({
+      ...participantsHere.map((p: any) => ({
         id: p.id,
         type: 'Participante' as const,
         name: `${p.firstName || ''} ${p.lastName || ''}`.trim(),
@@ -724,7 +740,7 @@ export class AccreditationService {
         belongsTo: null as string | null,
         isAccredited: accP.has(p.id),
       })),
-      ...guests.map((g: any) => ({
+      ...guestsHere.map((g: any) => ({
         id: g.id,
         type: 'Invitado' as const,
         name: `${g.firstName || ''} ${g.lastName || ''}`.trim(),
