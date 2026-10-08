@@ -119,17 +119,22 @@ export class ParticipantAwardService {
    * @throws {Error} `'Cannot cancel an award assignment that has already been delivered.'` si ya fue entregada.
    */
   async cancelAwardAssignment(participantAwardId: string, userId: string) {
-    const participantAward = await ParticipantAward.findByPk(participantAwardId);
-    if (!participantAward) {
-      throw new Error('Award assignment not found.');
-    }
-    if (participantAward.deliveredAt) {
-      throw new Error('Cannot cancel an award assignment that has already been delivered.');
-    }
-    // Add permission check for userId if necessary
+    // Transacción + lock de la fila (simétrico con deliverAward): una entrega concurrente
+    // no debe colarse entre la lectura de deliveredAt y el destroy(). Sin esto, cancelar
+    // podía borrar un premio que acababa de entregarse (se perdía el registro de entrega).
+    return sequelize.transaction(async (transaction) => {
+      const participantAward = await ParticipantAward.findByPk(participantAwardId, { lock: transaction.LOCK.UPDATE, transaction });
+      if (!participantAward) {
+        throw new Error('Award assignment not found.');
+      }
+      if (participantAward.deliveredAt) {
+        throw new Error('Cannot cancel an award assignment that has already been delivered.');
+      }
+      // Add permission check for userId if necessary
 
-    await participantAward.destroy();
-    return { message: 'Award assignment cancelled successfully.' };
+      await participantAward.destroy({ transaction });
+      return { message: 'Award assignment cancelled successfully.' };
+    });
   }
 
   /**
