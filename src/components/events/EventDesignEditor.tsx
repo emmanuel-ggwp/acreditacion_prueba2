@@ -92,6 +92,9 @@ export default function EventDesignEditor({ eventId }: { eventId: string }) {
   const [loaded, setLoaded] = useState(false);
   const [device, setDevice] = useState<'desktop' | 'mobile'>('desktop');
 
+  // Al cambiar de evento, volver a cargar el estado (si no, `loaded` quedaría en true y
+  // mostraría el tema/imágenes del evento anterior).
+  useEffect(() => { setLoaded(false); }, [eventId]);
   useEffect(() => { if (eventId) { fetchEventById(eventId); fetchSchedulesForEvent(eventId); } }, [eventId, fetchEventById, fetchSchedulesForEvent]);
 
   // Cargar el estado desde el evento una sola vez.
@@ -187,9 +190,18 @@ export default function EventDesignEditor({ eventId }: { eventId: string }) {
   const titleFontObj = TITLE_FONTS.find((f) => f.key === theme.titleFont) || TITLE_FONTS[0];
   const fontHref = titleFontObj ? googleFontHref(titleFontObj) : null;
 
+  // La fuente del título va JUNTO a la plantilla (no en el root): así en móvil entra al
+  // iframe por el portal y React actualiza su href al cambiar de fuente; en escritorio se
+  // renderiza inline en el mismo documento.
+  const previewInner = (
+    <>
+      {fontHref && <link rel="stylesheet" href={fontHref} />}
+      <TemplateComponent event={previewEvent} slug={slug} preview />
+    </>
+  );
+
   return (
     <div className="fixed inset-0 z-40 flex flex-col bg-gray-100">
-      {fontHref && <link rel="stylesheet" href={fontHref} />}
       {/* Barra superior */}
       <header className="flex items-center justify-between gap-3 px-4 sm:px-6 py-3 bg-white border-b border-gray-200 flex-shrink-0">
         <div className="flex items-center gap-3 min-w-0">
@@ -242,13 +254,11 @@ export default function EventDesignEditor({ eventId }: { eventId: string }) {
               <div className="flex items-center justify-center h-64 text-gray-500">Cargando…</div>
             ) : device === 'mobile' ? (
               // Móvil: iframe con viewport propio para que las media queries sean reales.
-              <FramePreview device="mobile">
-                <TemplateComponent event={previewEvent} slug={slug} preview />
-              </FramePreview>
+              <FramePreview device="mobile">{previewInner}</FramePreview>
             ) : (
               // Escritorio: render inline (usa el viewport de la ventana = layout de
               // escritorio) y actualiza de forma 100% fiable al editar.
-              <TemplateComponent event={previewEvent} slug={slug} preview />
+              previewInner
             )}
           </div>
         </main>
