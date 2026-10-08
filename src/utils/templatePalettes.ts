@@ -37,3 +37,26 @@ export const TEMPLATE_PALETTES: Record<string, Record<string, string | number>> 
 export const TEMPLATE_NAMES: Record<string, string> = {
   default: 'Por Defecto', modern: 'Moderno', minimal: 'Minimalista', gala: 'Gala',
 };
+
+/**
+ * Valores por defecto de TODOS los campos del tema de la landing. La plantilla elegida
+ * sobreescribe los suyos (ver TEMPLATE_PALETTES); el resto toma estos. Compartido por el
+ * editor en vivo y el modal del evento para calcular defaults y el "restaurar".
+ */
+export const THEME_DEFAULTS: Record<string, any> = {
+  primaryColor: '#1e293b', secondaryColor: '#334155', buttonColor: '#1e293b', buttonTextColor: '#ffffff',
+  titleColor: '#ffffff', titleSize: 'lg', titleShadow: 'none',
+  textColor: '#111827', inputColor: '#f8fafc', inputTextColor: '', borderColor: '#e2e8f0', formBackgroundColor: '#ffffff',
+  dietModalColor: '#0b1220', dateCardColor: '#000000', dateCardOpacity: 0.5,
+  dateSelectedColor: '#1e293b', dateSelectedBgColor: '', dateSelectedTextColor: '#ffffff',
+  datesTitleColor: '#ffffff', datesSubtitleColor: '#ffffff',
+  galaFormOffset: 0, galaCustomFormColors: false,
+  overlayColor: '#0f172a', overlayOpacity: 0.55, titleFont: 'montserrat',
+};
+
+/** Default de un campo del tema para una plantilla (paleta si lo define; si no, el general). */
+export function themeDefaultFor(template: string, key: string): string {
+  const pal = TEMPLATE_PALETTES[template] || {};
+  const v = (key in pal) ? pal[key] : THEME_DEFAULTS[key];
+  return v == null ? '' : String(v);
+}

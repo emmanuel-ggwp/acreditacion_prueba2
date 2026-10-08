@@ -8,10 +8,11 @@ import useEventStore from '@/store/eventStore';
 import { createEventSchema, updateEventSchema } from '@/utils/validators/eventSchemas';
 import { CONFIGURABLE_FIELDS, getFormFields, CONFIGURABLE_GUEST_FIELDS, getGuestFields, CONFIGURABLE_ACCREDITATION_FIELDS, getAccreditationFields } from '@/utils/formFields';
 import { DEFAULT_DIET_LABELS } from '@/utils/dietary';
-import { TITLE_FONTS, googleFontHref } from '@/utils/fonts';
+import DesignControls, { ImageSlot } from './DesignControls';
+import { THEME_DEFAULTS, themeDefaultFor } from '@/utils/templatePalettes';
 import { errorHandler } from '@/utils/errors';
 import toast from 'react-hot-toast';
-import { Info, UploadCloud, Image as ImageIcon, X as XIcon, Loader2 } from 'lucide-react';
+import { Info } from 'lucide-react';
 import { uploadImage } from '@/utils/upload';
 import apiClient from '@/utils/apiClient';
 
@@ -73,45 +74,6 @@ const InfoTooltip: React.FC<{ text: string }> = ({ text }) => (
       {text}
     </span>
   </span>
-);
-
-// Campo de subida de imagen con vista previa.
-const ImageUploadField: React.FC<{
-  label: string;
-  value?: string | null;
-  uploading: boolean;
-  onSelect: (file?: File) => void;
-  onClear: () => void;
-}> = ({ label, value, uploading, onSelect, onClear }) => (
-  <div>
-    <p className="block text-sm font-semibold text-gray-700 mb-1">{label}</p>
-    <div className="flex items-center gap-3">
-      {value ? (
-        <div className="relative">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={value} alt={label} className="h-16 w-16 object-contain rounded-lg border border-gray-200 bg-gray-50" />
-          <button type="button" onClick={onClear} className="absolute -top-2 -right-2 bg-white rounded-full p-0.5 shadow ring-1 ring-gray-200 text-gray-400 hover:text-red-500">
-            <XIcon size={14} />
-          </button>
-        </div>
-      ) : (
-        <div className="h-16 w-16 rounded-lg border border-dashed border-gray-300 flex items-center justify-center text-gray-300">
-          <ImageIcon size={22} />
-        </div>
-      )}
-      <label className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 bg-gray-50 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer">
-        {uploading ? <Loader2 size={16} className="animate-spin" /> : <UploadCloud size={16} />}
-        {uploading ? 'Subiendo…' : 'Subir imagen'}
-        <input
-          type="file"
-          accept="image/png,image/jpeg,image/webp"
-          className="hidden"
-          disabled={uploading}
-          onChange={(e) => onSelect(e.target.files?.[0])}
-        />
-      </label>
-    </div>
-  </div>
 );
 
 // Paleta de colores por defecto de cada plantilla (acorde a su estilo).
@@ -291,6 +253,32 @@ const EventForm: React.FC<EventFormProps> = ({ event, onClose, onSuccess }) => {
       setUploading((u) => ({ ...u, [key]: false }));
     }
   };
+
+  // ---- Adaptador para <DesignControls> (controles de diseño compartidos con el editor en vivo) ----
+  const designTheme = (watch('registrationConfig.theme' as any) as Record<string, any>) || {};
+  const dcSetTheme = (k: string, v: any) => setValue(`registrationConfig.theme.${k}` as any, v, { shouldDirty: true });
+  const dcSetFormColor = (k: string, v: any) => {
+    setValue(`registrationConfig.theme.${k}` as any, v, { shouldDirty: true });
+    if (isGala && !watch('registrationConfig.theme.galaCustomFormColors' as any)) {
+      setValue('registrationConfig.theme.galaCustomFormColors' as any, true, { shouldDirty: true });
+    }
+  };
+  const dcDefaultFor = (k: string) => themeDefaultFor(selectedTemplate, k);
+  const dcResetTheme = () => {
+    if (!window.confirm('¿Restaurar todo el diseño (colores y tipografía) a los valores por defecto de la plantilla? Las imágenes no se tocan.')) return;
+    setValue('registrationConfig.theme' as any, { ...THEME_DEFAULTS, ...(TEMPLATE_PALETTES[selectedTemplate] || {}) }, { shouldDirty: true });
+  };
+  const IMG_FIELD: Record<ImageSlot, string> = {
+    logo: 'logoUrl', bg: 'backgroundImageUrl',
+    hero: 'registrationConfig.images.heroUrl', successD: 'registrationConfig.images.successUrl', successM: 'registrationConfig.images.successUrlMobile',
+  };
+  const dcImages: Record<ImageSlot, string> = { logo: logoUrl || '', bg: backgroundImageUrl || '', hero: heroUrl || '', successD: successUrl || '', successM: successUrlMobile || '' };
+  const dcOnImage = (slot: ImageSlot, file?: File) => {
+    if (slot === 'logo') return handleImageUpload('logoUrl', file);
+    if (slot === 'bg') return handleImageUpload('backgroundImageUrl', file);
+    return uploadConfigImage(IMG_FIELD[slot], slot as 'hero' | 'successD' | 'successM', file);
+  };
+  const dcOnClearImage = (slot: ImageSlot) => setValue(IMG_FIELD[slot] as any, '', { shouldDirty: true });
 
   const handleClose = () => {
     if (onClose) {
@@ -602,278 +590,18 @@ const EventForm: React.FC<EventFormProps> = ({ event, onClose, onSuccess }) => {
                 )}
 
                 <div className="space-y-5">
-                  <ImageUploadField
-                    label="Logo"
-                    value={logoUrl}
-                    uploading={!!uploading.logo}
-                    onSelect={(f) => handleImageUpload('logoUrl', f)}
-                    onClear={() => setValue('logoUrl', '', { shouldDirty: true })}
+                  <DesignControls
+                    isGala={isGala}
+                    theme={designTheme}
+                    setTheme={dcSetTheme}
+                    setFormColor={dcSetFormColor}
+                    defaultFor={dcDefaultFor}
+                    resetTheme={dcResetTheme}
+                    images={dcImages}
+                    uploading={uploading}
+                    onImage={dcOnImage}
+                    onClearImage={dcOnClearImage}
                   />
-                  <ImageUploadField
-                    label="Imagen de fondo"
-                    value={backgroundImageUrl}
-                    uploading={!!uploading.bg}
-                    onSelect={(f) => handleImageUpload('backgroundImageUrl', f)}
-                    onClear={() => setValue('backgroundImageUrl', '', { shouldDirty: true })}
-                  />
-                  <ImageUploadField
-                    label="Imagen del evento (destacada) — solo Gala"
-                    value={heroUrl}
-                    uploading={!!uploading.hero}
-                    onSelect={(f) => uploadConfigImage('registrationConfig.images.heroUrl', 'hero', f)}
-                    onClear={() => setValue('registrationConfig.images.heroUrl' as any, '', { shouldDirty: true })}
-                  />
-                  <ImageUploadField
-                    label="Imagen de éxito — escritorio (Gala: pantalla completa al inscribirse)"
-                    value={successUrl}
-                    uploading={!!uploading.successD}
-                    onSelect={(f) => uploadConfigImage('registrationConfig.images.successUrl', 'successD', f)}
-                    onClear={() => setValue('registrationConfig.images.successUrl' as any, '', { shouldDirty: true })}
-                  />
-                  <ImageUploadField
-                    label="Imagen de éxito — celular (opcional; si falta se usa la de escritorio)"
-                    value={successUrlMobile}
-                    uploading={!!uploading.successM}
-                    onSelect={(f) => uploadConfigImage('registrationConfig.images.successUrlMobile', 'successM', f)}
-                    onClear={() => setValue('registrationConfig.images.successUrlMobile' as any, '', { shouldDirty: true })}
-                  />
-
-                  <div>
-                    <p className="block text-sm font-semibold text-gray-700 mb-2">Colores</p>
-                    <p className="text-xs text-gray-500 mb-3">Cada color afecta una parte de la página pública de inscripción:</p>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-3">
-                      {([
-                        ['registrationConfig.theme.primaryColor', 'Principal', 'Acentos: barra superior, íconos y detalles.'],
-                        ['registrationConfig.theme.secondaryColor', 'Secundario', 'Acento complementario (degradados y detalles).'],
-                        ['registrationConfig.theme.buttonColor', 'Botones', 'Color de fondo del botón de registro.'],
-                        ['registrationConfig.theme.buttonTextColor', 'Texto de botones · solo Gala', 'Color de la LETRA dentro de los botones (Entrar, Continuar, Registrarse). Útil si el color del botón es claro.'],
-                        ['registrationConfig.theme.titleColor', 'Título · solo Gala', 'Color del nombre del evento (título) en la landing Gala.'],
-                        ['registrationConfig.theme.datesTitleColor', 'Título fechas · solo Gala', 'Color del texto “Elige una fecha de asistencia”.'],
-                        ['registrationConfig.theme.datesSubtitleColor', 'Subtítulo fechas · solo Gala', 'Color del texto “Selecciona la fecha y lugar al que asistirás”.'],
-                        ['registrationConfig.theme.dateSelectedColor', 'Borde fecha seleccionada · solo Gala', 'Color del borde que resalta la fecha cuando el asistente la selecciona.'],
-                        ['registrationConfig.theme.dateSelectedBgColor', 'Fondo fecha seleccionada · solo Gala', 'Color de FONDO de la tarjeta de fecha al seleccionarla (déjalo vacío para no cambiar el fondo).'],
-                        ['registrationConfig.theme.dateSelectedTextColor', 'Texto fecha seleccionada · solo Gala', 'Color de las LETRAS de la tarjeta de fecha seleccionada (útil si el fondo de selección es claro).'],
-                        ['registrationConfig.theme.textColor', 'Texto', 'Color del texto y las etiquetas del formulario.'],
-                        ['registrationConfig.theme.inputColor', 'Inputs', 'Fondo de los campos donde se escribe.'],
-                        ['registrationConfig.theme.borderColor', 'Bordes', 'Color del borde de los campos.'],
-                        ['registrationConfig.theme.formBackgroundColor', 'Fondo formulario', 'Fondo de la tarjeta que contiene el formulario.'],
-                        ['registrationConfig.theme.dietModalColor', 'Modal restricción · solo Gala', 'Fondo del modal para elegir la restricción alimentaria (plantilla Gala).'],
-                      ] as const).map(([name, label, desc]) => (
-                        <div key={name} className="flex items-start gap-2.5 text-sm text-gray-600">
-                          <input type="color" {...register(name as any)} className="h-9 w-10 rounded border border-gray-200 cursor-pointer bg-white p-0.5 flex-shrink-0" />
-                          <div className="min-w-0 flex-1">
-                            <span className="block font-medium text-gray-700">{label}</span>
-                            <span className="block text-xs text-gray-400 leading-snug mb-1">{desc}</span>
-                            <input
-                              type="text"
-                              {...register(name as any)}
-                              placeholder="#RRGGBB"
-                              maxLength={7}
-                              className="w-24 rounded border border-gray-200 px-2 py-1 text-xs font-mono uppercase outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/30"
-                            />
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* Color de letras de los inputs: automático por defecto, o fijo si se elige. */}
-                    {isGala && (() => {
-                      const itc = (watch('registrationConfig.theme.inputTextColor' as any) as string) || '';
-                      return (
-                        <div className="mt-4 rounded-lg border border-gray-200 p-3">
-                          <div className="flex items-start gap-2.5">
-                            <input type="color" {...register('registrationConfig.theme.inputTextColor' as any)} className="h-9 w-10 rounded border border-gray-200 cursor-pointer bg-white p-0.5 flex-shrink-0" />
-                            <div className="min-w-0 flex-1">
-                              <span className="block font-medium text-gray-700">Letras de los inputs <span className="text-xs font-normal text-amber-600">· solo Gala</span></span>
-                              <span className="block text-xs text-gray-400 leading-snug mb-1">Color de las LETRAS que se escriben en los campos. En <b>Automático</b> se ajusta solo según el fondo del input (oscuro sobre fondo claro, blanco sobre fondo oscuro).</span>
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <input type="text" {...register('registrationConfig.theme.inputTextColor' as any)} placeholder="Automático" maxLength={7} className="w-28 rounded border border-gray-200 px-2 py-1 text-xs font-mono uppercase outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/30" />
-                                <button type="button" onClick={() => setValue('registrationConfig.theme.inputTextColor' as any, '', { shouldDirty: true })} className="text-xs font-medium text-indigo-600 hover:text-indigo-700">Automático (por defecto)</button>
-                                <span className={`text-xs ${itc ? 'text-gray-400' : 'text-green-600'}`}>{itc ? 'Color fijo' : 'Automático activo'}</span>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })()}
-                  </div>
-
-                  {/* Opt-in: aplicar los colores de arriba al formulario en la plantilla Gala. */}
-                  {isGala && (
-                    <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
-                      <label className="flex items-start gap-2 text-sm text-gray-800 cursor-pointer">
-                        <input type="checkbox" {...register('registrationConfig.theme.galaCustomFormColors' as any)} className="h-4 w-4 mt-0.5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
-                        <span>
-                          <b>Personalizar colores del formulario</b> <span className="text-xs font-normal text-amber-600">· solo Gala</span>
-                          <span className="block text-xs text-gray-600 mt-0.5">
-                            Si lo activas, la plantilla Gala usa los colores <b>Fondo formulario</b>, <b>Inputs</b>, <b>Bordes</b> y <b>Texto</b> de arriba. Si lo dejas <b>apagado</b> (por defecto), Gala mantiene su estilo oscuro y <b>los eventos actuales no cambian</b>.
-                          </span>
-                        </span>
-                      </label>
-                    </div>
-                  )}
-
-                  {/* Tipografía del nombre del evento */}
-                  <div>
-                    <label className="text-sm font-semibold text-gray-700 mb-1 flex items-center">
-                      Tipografía del nombre del evento
-                      <InfoTooltip text="Fuente del título (nombre del evento) en la página pública. Si no la cambias, cada plantilla usa una fuente acorde a su estilo." />
-                    </label>
-                    <select
-                      {...register('registrationConfig.theme.titleFont' as any)}
-                      className="block w-full rounded-xl border-gray-200 bg-gray-50 px-4 py-3 text-gray-900 focus:border-indigo-500 focus:bg-white focus:ring-2 focus:ring-indigo-500/20 transition-all duration-200 sm:text-sm"
-                    >
-                      {TITLE_FONTS.map((f) => (<option key={f.key} value={f.key}>{f.label}</option>))}
-                    </select>
-                    {(() => {
-                      const key = watch('registrationConfig.theme.titleFont' as any);
-                      const font = TITLE_FONTS.find((f) => f.key === key) || TITLE_FONTS.find((f) => f.key === 'montserrat');
-                      const href = font ? googleFontHref(font) : null;
-                      return (
-                        <>
-                          {href && <link rel="stylesheet" href={href} />}
-                          <div className="mt-2 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 overflow-hidden">
-                            <span className="text-2xl text-gray-900" style={{ fontFamily: font?.stack || 'inherit' }}>
-                              {watch('name') || 'Nombre del evento'}
-                            </span>
-                          </div>
-                        </>
-                      );
-                    })()}
-                  </div>
-
-                  {/* Tamaño del título (nombre del evento) cuando no hay imagen destacada */}
-                  <div>
-                    <label className="text-sm font-semibold text-gray-700 mb-1 flex items-center">
-                      Tamaño del título (nombre del evento) <span className="ml-1 text-xs font-normal text-amber-600">· solo Gala</span>
-                      <InfoTooltip text="Tamaño del nombre del evento en el inicio de la landing Gala cuando NO se subió una imagen destacada. Si hay imagen destacada, el nombre va más pequeño debajo." />
-                    </label>
-                    <select
-                      {...register('registrationConfig.theme.titleSize' as any)}
-                      className="block w-full rounded-xl border-gray-200 bg-gray-50 px-4 py-3 text-gray-900 focus:border-indigo-500 focus:bg-white focus:ring-2 focus:ring-indigo-500/20 transition-all duration-200 sm:text-sm"
-                    >
-                      <option value="sm">Pequeño</option>
-                      <option value="md">Mediano</option>
-                      <option value="lg">Grande (recomendado)</option>
-                      <option value="xl">Muy grande</option>
-                      <option value="xxl">Enorme</option>
-                    </select>
-                    <p className="mt-1 text-xs text-gray-500">✅ Recomendado: <b>Grande</b> — se ve bien en computadora y celular sin desbordar.</p>
-                  </div>
-
-                  {/* Sombra del título */}
-                  <div>
-                    <label className="text-sm font-semibold text-gray-700 mb-1 flex items-center">
-                      Sombra del título <span className="ml-1 text-xs font-normal text-amber-600">· solo Gala</span>
-                      <InfoTooltip text="Agrega una sombra al nombre del evento para que resalte sobre el fondo (útil con imágenes de fondo claras o con mucho detalle)." />
-                    </label>
-                    <select
-                      {...register('registrationConfig.theme.titleShadow' as any)}
-                      className="block w-full rounded-xl border-gray-200 bg-gray-50 px-4 py-3 text-gray-900 focus:border-indigo-500 focus:bg-white focus:ring-2 focus:ring-indigo-500/20 transition-all duration-200 sm:text-sm"
-                    >
-                      <option value="none">Sin sombra</option>
-                      <option value="soft">Suave</option>
-                      <option value="strong">Fuerte</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="text-sm font-semibold text-gray-700 mb-1 flex items-center">
-                      Color de la capa (velo) sobre el fondo
-                      <InfoTooltip text="Color de la capa que se pone sobre la imagen de fondo. Combínalo con la opacidad de abajo. Sugerencia: oscuro para plantillas oscuras (Gala/Moderno) y claro para Minimal. Si no lo cambias, cada plantilla usa un valor por defecto adecuado." />
-                    </label>
-                    <div className="flex items-center gap-2 mb-4">
-                      <input type="color" {...register('registrationConfig.theme.overlayColor' as any)} className="h-9 w-10 rounded border border-gray-200 cursor-pointer bg-white p-0.5" />
-                      <input type="text" {...register('registrationConfig.theme.overlayColor' as any)} placeholder="#RRGGBB" maxLength={7} className="w-24 rounded border border-gray-200 px-2 py-1 text-xs font-mono uppercase outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/30" />
-                    </div>
-                    <label htmlFor="overlayOpacity" className="text-sm font-semibold text-gray-700 mb-1 flex items-center">
-                      Opacidad de la capa (velo)
-                      <InfoTooltip text="Qué tan visible es la capa de color sobre la imagen de fondo. 0 = capa invisible (se ve la foto), 1 = capa totalmente sólida." />
-                    </label>
-                    <input
-                      id="overlayOpacity"
-                      type="range"
-                      min="0"
-                      max="1"
-                      step="0.05"
-                      {...register('registrationConfig.theme.overlayOpacity', { setValueAs: (v) => (v === '' || v === null || v === undefined ? undefined : parseFloat(v)) })}
-                      className="w-full"
-                    />
-                  </div>
-
-                  {/* Tarjetas de fecha SIN foto: color de fondo + transparencia (Gala). */}
-                  <div>
-                    <label className="text-sm font-semibold text-gray-700 mb-1 flex items-center">
-                      Fondo de las tarjetas de fecha (sin foto) <span className="ml-1 text-xs font-normal text-amber-600">· solo Gala</span>
-                      <InfoTooltip text="Color de fondo y transparencia de las tarjetas de fecha cuando NO tienen foto. Las fechas que sí tienen foto conservan su imagen. Sugerencia: un color oscuro con algo de transparencia se ve elegante sobre el fondo." />
-                    </label>
-                    <div className="flex items-center gap-2 mb-4">
-                      <input type="color" {...register('registrationConfig.theme.dateCardColor' as any)} className="h-9 w-10 rounded border border-gray-200 cursor-pointer bg-white p-0.5" />
-                      <input type="text" {...register('registrationConfig.theme.dateCardColor' as any)} placeholder="#RRGGBB" maxLength={7} className="w-24 rounded border border-gray-200 px-2 py-1 text-xs font-mono uppercase outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/30" />
-                    </div>
-                    <label htmlFor="dateCardOpacity" className="text-sm font-semibold text-gray-700 mb-1 flex items-center">
-                      Transparencia de las tarjetas
-                      <InfoTooltip text="Qué tan sólido es el fondo de las tarjetas de fecha sin foto. 0 = totalmente transparente (se ve el fondo del evento), 1 = color sólido." />
-                    </label>
-                    <input
-                      id="dateCardOpacity"
-                      type="range"
-                      min="0"
-                      max="1"
-                      step="0.05"
-                      {...register('registrationConfig.theme.dateCardOpacity', { setValueAs: (v) => (v === '' || v === null || v === undefined ? undefined : parseFloat(v)) })}
-                      className="w-full"
-                    />
-                    {/* Vista previa del fondo elegido (sobre un tono oscuro tipo Gala). */}
-                    {(() => {
-                      const c = watch('registrationConfig.theme.dateCardColor' as any) || '#000000';
-                      const o = watch('registrationConfig.theme.dateCardOpacity' as any);
-                      const op = typeof o === 'number' ? o : 0.5;
-                      const toRgba = (hex: string, a: number) => {
-                        const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(String(hex).trim());
-                        if (!m) return `rgba(0,0,0,${a})`;
-                        return `rgba(${parseInt(m[1], 16)},${parseInt(m[2], 16)},${parseInt(m[3], 16)},${a})`;
-                      };
-                      return (
-                        <div className="mt-3 rounded-lg p-3" style={{ background: 'linear-gradient(135deg,#1e293b,#0b1220)' }}>
-                          <div className="mx-auto w-40 rounded-xl px-4 py-5 text-center text-white" style={{ backgroundColor: toRgba(c, op), border: '1px solid rgba(255,255,255,0.15)' }}>
-                            <p className="text-3xl font-light leading-none">12</p>
-                            <p className="text-[11px] uppercase tracking-widest text-white/75 mt-1">Septiembre</p>
-                            <p className="text-xs mt-2 font-semibold">Cena de gala</p>
-                          </div>
-                          <p className="text-center text-[11px] text-gray-400 mt-2">Vista previa de una tarjeta sin foto</p>
-                        </div>
-                      );
-                    })()}
-                  </div>
-
-                  {/* Posición vertical del bloque del formulario (Gala · solo escritorio). */}
-                  <div>
-                    <label htmlFor="galaFormOffset" className="text-sm font-semibold text-gray-700 mb-1 flex items-center">
-                      Posición del formulario (subir / bajar) <span className="ml-1 text-xs font-normal text-amber-600">· solo Gala · escritorio</span>
-                      <InfoTooltip text="Sube o baja TODO el bloque del formulario (título 'Completa la información…' + los campos) en la vista de computadora. Útil cuando el fondo tiene elementos arriba o abajo y quieres acomodar el formulario. En celular no cambia nada." />
-                    </label>
-                    <div className="flex items-center gap-3">
-                      <span className="text-xs text-gray-400 whitespace-nowrap">Más arriba</span>
-                      <input
-                        id="galaFormOffset"
-                        type="range"
-                        min="-200"
-                        max="300"
-                        step="10"
-                        {...register('registrationConfig.theme.galaFormOffset', { setValueAs: (v) => (v === '' || v === null || v === undefined ? undefined : parseInt(v, 10)) })}
-                        className="w-full"
-                      />
-                      <span className="text-xs text-gray-400 whitespace-nowrap">Más abajo</span>
-                    </div>
-                    <p className="mt-1 text-xs text-gray-500 text-center">
-                      {(() => {
-                        const v = watch('registrationConfig.theme.galaFormOffset' as any);
-                        const n = typeof v === 'number' ? v : 0;
-                        return n === 0 ? 'Posición normal' : (n < 0 ? `${Math.abs(n)}px más arriba` : `${n}px más abajo`);
-                      })()}
-                    </p>
-                  </div>
                 </div>
               </div>
 
