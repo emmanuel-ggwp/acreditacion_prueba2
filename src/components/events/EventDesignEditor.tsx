@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
-import { ArrowLeft, Save, UploadCloud, Loader2, X as XIcon, Image as ImageIcon, Eye } from 'lucide-react';
+import { ArrowLeft, Save, UploadCloud, Loader2, X as XIcon, Image as ImageIcon, Eye, Monitor, Smartphone } from 'lucide-react';
 import useEventStore from '@/store/eventStore';
 import { templates, TemplateType } from '@/components/public/templates';
 import { TEMPLATE_PALETTES, TEMPLATE_NAMES } from '@/utils/templatePalettes';
@@ -68,6 +69,70 @@ const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title
   </div>
 );
 
+/**
+ * Vista previa dentro de un <iframe> para que las media queries respondan al ANCHO del
+ * dispositivo (móvil real), no al del contenedor. Portaliza los hijos (la plantilla) al
+ * body del iframe y copia los estilos de la app a su <head> (incluye un MutationObserver
+ * para los estilos que Next/Tailwind inyecten después en desarrollo).
+ */
+const FramePreview: React.FC<{ device: 'desktop' | 'mobile'; children: React.ReactNode }> = ({ device, children }) => {
+  const frameRef = useRef<HTMLIFrameElement | null>(null);
+  const [body, setBody] = useState<HTMLElement | null>(null);
+
+  // Un iframe sin `src` no dispara `load` de forma fiable, así que inicializamos el
+  // documento (about:blank, mismo origen) desde un efecto, esperando a que exista su body.
+  useEffect(() => {
+    const frame = frameRef.current;
+    if (!frame) return;
+    let raf = 0;
+    let obs: MutationObserver | null = null;
+    const init = () => {
+      const doc = frame.contentDocument;
+      if (!doc || !doc.body) { raf = requestAnimationFrame(init); return; }
+      doc.head.innerHTML = '';
+      const meta = doc.createElement('meta');
+      meta.setAttribute('name', 'viewport');
+      meta.setAttribute('content', 'width=device-width, initial-scale=1');
+      doc.head.appendChild(meta);
+      const copyNode = (node: Element) => { try { doc.head.appendChild(node.cloneNode(true)); } catch { /* noop */ } };
+      document.querySelectorAll('style, link[rel="stylesheet"]').forEach(copyNode);
+      doc.documentElement.style.background = '#ffffff';
+      doc.body.style.margin = '0';
+      // Copia los estilos que Next/Tailwind inyecten después (JIT en desarrollo).
+      obs = new MutationObserver((muts) => {
+        for (const m of muts) m.addedNodes.forEach((n: any) => {
+          if (n.nodeType === 1 && (n.tagName === 'STYLE' || (n.tagName === 'LINK' && n.getAttribute('rel') === 'stylesheet'))) copyNode(n);
+        });
+      });
+      obs.observe(document.head, { childList: true });
+      setBody(doc.body);
+    };
+    init();
+    return () => { cancelAnimationFrame(raf); try { obs?.disconnect(); } catch { /* noop */ } };
+  }, []);
+
+  const mobile = device === 'mobile';
+  return (
+    <div className={`flex justify-center h-full ${mobile ? 'py-6 px-3 items-start' : ''}`}>
+      <iframe
+        ref={frameRef}
+        title="Vista previa de la landing"
+        className={mobile ? 'flex-shrink-0' : 'w-full'}
+        style={{
+          width: mobile ? 390 : '100%',
+          height: mobile ? 780 : '100%',
+          border: mobile ? '1px solid #cbd5e1' : 'none',
+          borderRadius: mobile ? 28 : 0,
+          boxShadow: mobile ? '0 12px 48px rgba(0,0,0,0.3)' : 'none',
+          background: '#fff',
+          maxWidth: '100%',
+        }}
+      />
+      {body && createPortal(children, body)}
+    </div>
+  );
+};
+
 export default function EventDesignEditor({ eventId }: { eventId: string }) {
   const router = useRouter();
   const { currentEvent, fetchEventById, EventSchedules, fetchSchedulesForEvent, updateEvent } = useEventStore();
@@ -82,6 +147,7 @@ export default function EventDesignEditor({ eventId }: { eventId: string }) {
   const [uploading, setUploading] = useState<Record<string, boolean>>({});
   const [saving, setSaving] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const [device, setDevice] = useState<'desktop' | 'mobile'>('desktop');
 
   useEffect(() => { if (eventId) { fetchEventById(eventId); fetchSchedulesForEvent(eventId); } }, [eventId, fetchEventById, fetchSchedulesForEvent]);
 
@@ -249,17 +315,23 @@ export default function EventDesignEditor({ eventId }: { eventId: string }) {
         </aside>
 
         {/* Vista previa en vivo */}
-        <main className="flex-1 min-h-0 min-w-0 overflow-auto bg-gray-200">
-          <div className="sticky top-0 z-10 flex items-center gap-2 bg-gray-800/90 text-white text-xs px-3 py-1.5">
-            <Eye size={13} /> Vista previa en vivo — los cambios se ven al instante (no se envía ninguna inscripción).
-          </div>
-          {!loaded ? (
-            <div className="flex items-center justify-center h-64 text-gray-500">Cargando…</div>
-          ) : (
-            <div className="origin-top">
-              <TemplateComponent event={previewEvent} slug={slug} preview />
+        <main className="flex-1 min-h-0 min-w-0 flex flex-col bg-gray-200">
+          <div className="flex items-center justify-between gap-2 bg-gray-800/90 text-white text-xs px-3 py-1.5 flex-shrink-0">
+            <span className="flex items-center gap-2 min-w-0"><Eye size={13} className="flex-shrink-0" /> <span className="truncate">Vista previa en vivo — no se envía ninguna inscripción.</span></span>
+            <div className="inline-flex rounded-md bg-white/10 p-0.5 flex-shrink-0">
+              <button type="button" onClick={() => setDevice('desktop')} title="Escritorio" className={`inline-flex items-center gap-1 px-2 py-0.5 rounded ${device === 'desktop' ? 'bg-white text-gray-900' : 'text-white/80 hover:text-white'}`}><Monitor size={13} /> Escritorio</button>
+              <button type="button" onClick={() => setDevice('mobile')} title="Celular" className={`inline-flex items-center gap-1 px-2 py-0.5 rounded ${device === 'mobile' ? 'bg-white text-gray-900' : 'text-white/80 hover:text-white'}`}><Smartphone size={13} /> Celular</button>
             </div>
-          )}
+          </div>
+          <div className="flex-1 min-h-0 overflow-auto">
+            {!loaded ? (
+              <div className="flex items-center justify-center h-64 text-gray-500">Cargando…</div>
+            ) : (
+              <FramePreview device={device}>
+                <TemplateComponent event={previewEvent} slug={slug} preview />
+              </FramePreview>
+            )}
+          </div>
         </main>
       </div>
     </div>
