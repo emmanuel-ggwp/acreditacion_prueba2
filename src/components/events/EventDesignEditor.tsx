@@ -169,6 +169,14 @@ export default function EventDesignEditor({ eventId }: { eventId: string }) {
   const setT = (k: string, v: any) => setTheme((p) => ({ ...p, [k]: v }));
   const onPickTemplate = (t: string) => { setTemplate(t); const pal = TEMPLATE_PALETTES[t]; if (pal) setTheme((p) => ({ ...p, ...pal })); };
   const isGala = template === 'gala';
+  // En Gala, los colores del FORMULARIO (fondo de inputs, bordes, fondo del formulario y
+  // letras de inputs) solo se aplican si está activada "Personalizar colores del formulario".
+  // Al editar uno de esos colores se activa SOLO, para que el cambio se vea de inmediato.
+  const setFormColor = (k: string, v: any) => setTheme((p) => {
+    const next: Record<string, any> = { ...p, [k]: v };
+    if (isGala && !p.galaCustomFormColors) next.galaCustomFormColors = true;
+    return next;
+  });
 
   const doUpload = async (key: string, setter: (u: string) => void, file?: File) => {
     if (!file) return;
@@ -265,11 +273,11 @@ export default function EventDesignEditor({ eventId }: { eventId: string }) {
               <ColorField label="Secundario" value={theme.secondaryColor} onChange={(v) => setT('secondaryColor', v)} hint="Acento complementario (degradados y detalles menores)." />
               <ColorField label="Botones" value={theme.buttonColor} onChange={(v) => setT('buttonColor', v)} hint="Fondo de los botones (Entrar, Continuar, Registrarse)." />
               <ColorField label="Texto de botones" value={theme.buttonTextColor} onChange={(v) => setT('buttonTextColor', v)} hint="Color de la letra DENTRO de los botones." />
-              <ColorField label="Texto" value={theme.textColor} onChange={(v) => setT('textColor', v)} hint="Color del texto y las etiquetas del formulario." />
-              <ColorField label="Inputs (fondo)" value={theme.inputColor} onChange={(v) => setT('inputColor', v)} hint="Fondo de los campos donde el asistente escribe." />
-              <ColorField label="Letras de inputs" value={theme.inputTextColor} onChange={(v) => setT('inputTextColor', v)} hint="Color de lo que se escribe en los campos. Vacío = automático según el fondo." allowEmpty />
-              <ColorField label="Bordes" value={theme.borderColor} onChange={(v) => setT('borderColor', v)} hint="Color del borde de los campos." />
-              <ColorField label="Fondo formulario" value={theme.formBackgroundColor} onChange={(v) => setT('formBackgroundColor', v)} hint="Fondo de la tarjeta que contiene el formulario." />
+              <ColorField label="Texto" value={theme.textColor} onChange={(v) => setT('textColor', v)} hint={isGala ? 'Color del texto/etiquetas del formulario. En Gala las letras de los campos se ajustan con “Letras de inputs”.' : 'Color del texto y las etiquetas del formulario.'} />
+              <ColorField label="Inputs (fondo)" value={theme.inputColor} onChange={(v) => setFormColor('inputColor', v)} hint={isGala ? 'Fondo de los campos. En Gala activa “Personalizar colores del formulario” (se activa solo al cambiarlo).' : 'Fondo de los campos donde el asistente escribe.'} />
+              <ColorField label="Letras de inputs" value={theme.inputTextColor} onChange={(v) => setFormColor('inputTextColor', v)} hint="Color de lo que se escribe en los campos. Vacío = automático según el fondo." allowEmpty />
+              <ColorField label="Bordes" value={theme.borderColor} onChange={(v) => setFormColor('borderColor', v)} hint={isGala ? 'Borde de los campos. En Gala requiere “Personalizar colores del formulario” (se activa solo).' : 'Color del borde de los campos.'} />
+              <ColorField label="Fondo formulario" value={theme.formBackgroundColor} onChange={(v) => setFormColor('formBackgroundColor', v)} hint={isGala ? 'Fondo de la tarjeta del formulario. En Gala requiere “Personalizar colores del formulario” (se activa solo).' : 'Fondo de la tarjeta que contiene el formulario.'} />
             </div>
             {isGala && (
               <label className="flex items-start gap-2 text-sm text-gray-800 cursor-pointer rounded-lg border border-amber-200 bg-amber-50 p-2.5">
