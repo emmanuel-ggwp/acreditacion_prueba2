@@ -970,7 +970,7 @@ export class ParticipantService {
         // Fechas en que el participante se inscribió (para avisar si acredita en otra fecha).
         { model: EventSchedule, as: 'schedules', through: { attributes: [] } },
       ],
-      limit: 10,
+      limit: 25,
     });
 
     // Acreditación POR FECHA: si se acredita una fecha concreta, solo se muestran los
