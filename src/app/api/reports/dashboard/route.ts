@@ -18,15 +18,10 @@ export const GET = withAuth(async (req: AuthenticatedRequest) => {
     const query = Object.fromEntries(searchParams.entries());
     const { eventId } = dashboardQuerySchema.parse(query);
 
-    let eventIdNum: number | undefined = undefined;
-    if (eventId) {
-      eventIdNum = parseInt(eventId, 10);
-      if (isNaN(eventIdNum)) {
-        return NextResponse.json({ message: 'Invalid event ID' }, { status: 400 });
-      }
-    }
-
-    const stats = await reportService.getDashboardStats(eventIdNum);
+    // eventId es un UUID (string). Antes se hacía parseInt(uuid, 10), que para un UUID
+    // como "4d24189e-…" devuelve 4 (no NaN: se corta en la primera no-cifra) → el dashboard
+    // por evento consultaba Event.findByPk(4) y fallaba. Se pasa el string tal cual.
+    const stats = await reportService.getDashboardStats(eventId);
     return NextResponse.json(stats);
   } catch (error: any) {
     console.error('Error generating dashboard stats:', error);

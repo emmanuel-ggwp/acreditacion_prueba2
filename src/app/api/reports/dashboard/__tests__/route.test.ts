@@ -40,24 +40,25 @@ describe('GET /api/reports/dashboard', () => {
     expect(mockedReportService.getDashboardStats).toHaveBeenCalledWith(undefined);
   });
 
-  it('parsea eventId numérico y lo pasa al servicio', async () => {
+  it('pasa el eventId (UUID) al servicio tal cual', async () => {
     mockedReportService.getDashboardStats.mockResolvedValue({ ok: true });
 
-    const res = await (GET as any)(makeRequest('http://localhost/api/reports/dashboard?eventId=5'), { params: {} });
+    const res = await (GET as any)(makeRequest('http://localhost/api/reports/dashboard?eventId=4d24189e-4100-4720-86df-72e235d748ec'), { params: {} });
     const body = await res.json();
 
     expect(res.status).toBe(200);
     expect(body).toEqual({ ok: true });
-    expect(mockedReportService.getDashboardStats).toHaveBeenCalledWith(5);
+    expect(mockedReportService.getDashboardStats).toHaveBeenCalledWith('4d24189e-4100-4720-86df-72e235d748ec');
   });
 
-  it('devuelve 400 si eventId no es numérico', async () => {
-    const res = await (GET as any)(makeRequest('http://localhost/api/reports/dashboard?eventId=abc'), { params: {} });
-    const body = await res.json();
+  it('pasa un UUID que empieza con dígito sin truncarlo (regresión: antes parseInt lo rompía)', async () => {
+    mockedReportService.getDashboardStats.mockResolvedValue({ ok: true });
 
-    expect(res.status).toBe(400);
-    expect(body).toEqual({ message: 'Invalid event ID' });
-    expect(mockedReportService.getDashboardStats).not.toHaveBeenCalled();
+    const res = await (GET as any)(makeRequest('http://localhost/api/reports/dashboard?eventId=4d24189e-aaaa'), { params: {} });
+
+    expect(res.status).toBe(200);
+    // Antes: parseInt('4d24189e-aaaa', 10) === 4 → getDashboardStats(4) fallaba. Ahora va el string.
+    expect(mockedReportService.getDashboardStats).toHaveBeenCalledWith('4d24189e-aaaa');
   });
 
   it('devuelve 500 si el servicio lanza', async () => {
