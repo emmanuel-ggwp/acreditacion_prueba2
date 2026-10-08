@@ -91,10 +91,21 @@ export default function EventDesignEditor({ eventId }: { eventId: string }) {
   const [saving, setSaving] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [device, setDevice] = useState<'desktop' | 'mobile'>('desktop');
+  // Hay cambios sin guardar: para avisar al salir (Volver / cerrar / refrescar).
+  const [dirty, setDirty] = useState(false);
+  const isUploading = Object.values(uploading).some(Boolean);
 
   // Al cambiar de evento, volver a cargar el estado (si no, `loaded` quedaría en true y
   // mostraría el tema/imágenes del evento anterior).
-  useEffect(() => { setLoaded(false); }, [eventId]);
+  useEffect(() => { setLoaded(false); setDirty(false); }, [eventId]);
+
+  // Aviso nativo del navegador al refrescar/cerrar con cambios sin guardar.
+  useEffect(() => {
+    if (!dirty) return;
+    const handler = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ''; };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [dirty]);
   useEffect(() => { if (eventId) { fetchEventById(eventId); fetchSchedulesForEvent(eventId); } }, [eventId, fetchEventById, fetchSchedulesForEvent]);
 
   // Cargar el estado desde el evento una sola vez.
@@ -109,27 +120,29 @@ export default function EventDesignEditor({ eventId }: { eventId: string }) {
       setSuccessUrl(e.registrationConfig?.images?.successUrl || '');
       setSuccessUrlMobile(e.registrationConfig?.images?.successUrlMobile || '');
       setLoaded(true);
+      setDirty(false);
     }
   }, [currentEvent, eventId, loaded]);
 
-  const setT = (k: string, v: any) => setTheme((p) => ({ ...p, [k]: v }));
+  const setT = (k: string, v: any) => { setDirty(true); setTheme((p) => ({ ...p, [k]: v })); };
   // Reset COMPLETO a los defaults de la plantilla elegida (igual que "Restaurar por
   // defecto" y que EventForm), para no arrastrar claves solo-Gala de una plantilla previa.
-  const onPickTemplate = (t: string) => { setTemplate(t); setTheme({ ...THEME_DEFAULTS, ...(TEMPLATE_PALETTES[t] || {}) }); };
+  const onPickTemplate = (t: string) => { setDirty(true); setTemplate(t); setTheme({ ...THEME_DEFAULTS, ...(TEMPLATE_PALETTES[t] || {}) }); };
   const isGala = template === 'gala';
   // En Gala, los colores del FORMULARIO (fondo de inputs, bordes, fondo del formulario y
   // letras de inputs) solo se aplican si está activada "Personalizar colores del formulario".
   // Al editar uno de esos colores se activa SOLO, para que el cambio se vea de inmediato.
-  const setFormColor = (k: string, v: any) => setTheme((p) => {
+  const setFormColor = (k: string, v: any) => { setDirty(true); setTheme((p) => {
     const next: Record<string, any> = { ...p, [k]: v };
     if (isGala && !p.galaCustomFormColors) next.galaCustomFormColors = true;
     return next;
-  });
+  }); };
   const defaultFor = (k: string) => themeDefaultFor(template, k);
   // Reset general: devuelve TODOS los colores/tipografía a los valores por defecto de la
   // plantilla actual (no toca las imágenes, que son contenido).
   const resetAll = () => {
     if (!window.confirm('¿Restaurar todo el diseño (colores y tipografía) a los valores por defecto de la plantilla? Las imágenes no se tocan.')) return;
+    setDirty(true);
     setTheme({ ...THEME_DEFAULTS, ...(TEMPLATE_PALETTES[template] || {}) });
   };
 
@@ -139,7 +152,7 @@ export default function EventDesignEditor({ eventId }: { eventId: string }) {
   const doUpload = async (slot: ImageSlot, file?: File) => {
     if (!file) return;
     setUploading((u) => ({ ...u, [slot]: true }));
-    try { slotSetters[slot](await uploadImage(file)); toast.success('Imagen subida'); }
+    try { slotSetters[slot](await uploadImage(file)); setDirty(true); toast.success('Imagen subida'); }
     catch (e: any) { toast.error(e.message || 'Error al subir la imagen'); }
     finally { setUploading((u) => ({ ...u, [slot]: false })); }
   };
@@ -182,9 +195,16 @@ export default function EventDesignEditor({ eventId }: { eventId: string }) {
         backgroundImageUrl: backgroundImageUrl || null,
         registrationConfig: { ...restCfg, theme, images: { ...(restCfg.images || {}), heroUrl: heroUrl || null, successUrl: successUrl || null, successUrlMobile: successUrlMobile || null } },
       } as any);
+      setDirty(false);
       toast.success('Diseño guardado');
     } catch { toast.error('No se pudo guardar el diseño'); }
     finally { setSaving(false); }
+  };
+
+  // Volver al evento, avisando si hay cambios sin guardar.
+  const handleBack = () => {
+    if (dirty && !window.confirm('Tienes cambios de diseño sin guardar. ¿Salir sin guardar?')) return;
+    router.push(`/events/${eventId}`);
   };
 
   const titleFontObj = TITLE_FONTS.find((f) => f.key === theme.titleFont) || TITLE_FONTS[0];
@@ -205,12 +225,12 @@ export default function EventDesignEditor({ eventId }: { eventId: string }) {
       {/* Barra superior */}
       <header className="flex items-center justify-between gap-3 px-4 sm:px-6 py-3 bg-white border-b border-gray-200 flex-shrink-0">
         <div className="flex items-center gap-3 min-w-0">
-          <button onClick={() => router.push(`/events/${eventId}`)} className="inline-flex items-center gap-1.5 text-sm text-gray-600 hover:text-gray-900"><ArrowLeft size={18} /> Volver</button>
+          <button onClick={handleBack} className="inline-flex items-center gap-1.5 text-sm text-gray-600 hover:text-gray-900"><ArrowLeft size={18} /> Volver</button>
           <span className="text-gray-300">|</span>
           <h1 className="text-sm sm:text-base font-semibold text-gray-900 truncate">Editor de diseño {(currentEvent as any)?.name ? `· ${(currentEvent as any).name}` : ''}</h1>
         </div>
-        <button onClick={save} disabled={saving} className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-50 flex-shrink-0">
-          {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />} Guardar
+        <button onClick={save} disabled={saving || isUploading} title={isUploading ? 'Espera a que termine de subir la imagen' : undefined} className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 disabled:opacity-50 flex-shrink-0">
+          {saving || isUploading ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />} {isUploading ? 'Subiendo…' : 'Guardar'}
         </button>
       </header>
 
@@ -235,7 +255,7 @@ export default function EventDesignEditor({ eventId }: { eventId: string }) {
             images={imagesForControls}
             uploading={uploading}
             onImage={doUpload}
-            onClearImage={(slot) => slotSetters[slot]('')}
+            onClearImage={(slot) => { slotSetters[slot](''); setDirty(true); }}
           />
           <div className="h-6" />
         </aside>
