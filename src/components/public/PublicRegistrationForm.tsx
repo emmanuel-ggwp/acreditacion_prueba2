@@ -799,7 +799,7 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
                 )}
 
                 <div>
-                  <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-1">Invitados nuevos de esta fecha</p>
+                  <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-1">Invitados <span className="font-normal normal-case text-gray-400">(hasta {maxGuests})</span></p>
                   <div className="space-y-2">
                     {stt.news.map((g, i) => (
                       <div key={i} className="border border-gray-200 rounded-md p-2 space-y-2">

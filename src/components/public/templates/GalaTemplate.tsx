@@ -566,7 +566,7 @@ export default function GalaTemplate({ event, slug, preview = false }: TemplateP
           </div>
         )}
         <div className="mt-3">
-          <p className="text-white/60 text-xs uppercase tracking-wide mb-1">{guestTermPlural} nuevos de esta fecha <span className="text-white/40 normal-case">(hasta {maxGuests})</span></p>
+          <p className="text-white/60 text-xs uppercase tracking-wide mb-1">{guestTermPlural} <span className="text-white/40 normal-case">(hasta {maxGuests})</span></p>
           {stt.news.map((g, i) => (
             <div key={i} className="mb-3 rounded-xl p-2" style={{ border: '1px solid rgba(255,255,255,0.18)' }}>
               <div className="flex flex-col sm:flex-row gap-2">

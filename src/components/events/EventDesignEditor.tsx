@@ -261,15 +261,15 @@ export default function EventDesignEditor({ eventId }: { eventId: string }) {
 
           <Section title="Colores">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-x-4 gap-y-3">
-              <ColorField label="Principal" value={theme.primaryColor} onChange={(v) => setT('primaryColor', v)} />
-              <ColorField label="Secundario" value={theme.secondaryColor} onChange={(v) => setT('secondaryColor', v)} />
-              <ColorField label="Botones" value={theme.buttonColor} onChange={(v) => setT('buttonColor', v)} />
-              <ColorField label="Texto de botones" value={theme.buttonTextColor} onChange={(v) => setT('buttonTextColor', v)} />
-              <ColorField label="Texto" value={theme.textColor} onChange={(v) => setT('textColor', v)} />
-              <ColorField label="Inputs (fondo)" value={theme.inputColor} onChange={(v) => setT('inputColor', v)} />
-              <ColorField label="Letras de inputs" value={theme.inputTextColor} onChange={(v) => setT('inputTextColor', v)} hint="Vacío = automático por contraste." allowEmpty />
-              <ColorField label="Bordes" value={theme.borderColor} onChange={(v) => setT('borderColor', v)} />
-              <ColorField label="Fondo formulario" value={theme.formBackgroundColor} onChange={(v) => setT('formBackgroundColor', v)} />
+              <ColorField label="Principal" value={theme.primaryColor} onChange={(v) => setT('primaryColor', v)} hint="Acentos del tema: barra/encabezado superior, íconos y detalles." />
+              <ColorField label="Secundario" value={theme.secondaryColor} onChange={(v) => setT('secondaryColor', v)} hint="Acento complementario (degradados y detalles menores)." />
+              <ColorField label="Botones" value={theme.buttonColor} onChange={(v) => setT('buttonColor', v)} hint="Fondo de los botones (Entrar, Continuar, Registrarse)." />
+              <ColorField label="Texto de botones" value={theme.buttonTextColor} onChange={(v) => setT('buttonTextColor', v)} hint="Color de la letra DENTRO de los botones." />
+              <ColorField label="Texto" value={theme.textColor} onChange={(v) => setT('textColor', v)} hint="Color del texto y las etiquetas del formulario." />
+              <ColorField label="Inputs (fondo)" value={theme.inputColor} onChange={(v) => setT('inputColor', v)} hint="Fondo de los campos donde el asistente escribe." />
+              <ColorField label="Letras de inputs" value={theme.inputTextColor} onChange={(v) => setT('inputTextColor', v)} hint="Color de lo que se escribe en los campos. Vacío = automático según el fondo." allowEmpty />
+              <ColorField label="Bordes" value={theme.borderColor} onChange={(v) => setT('borderColor', v)} hint="Color del borde de los campos." />
+              <ColorField label="Fondo formulario" value={theme.formBackgroundColor} onChange={(v) => setT('formBackgroundColor', v)} hint="Fondo de la tarjeta que contiene el formulario." />
             </div>
             {isGala && (
               <label className="flex items-start gap-2 text-sm text-gray-800 cursor-pointer rounded-lg border border-amber-200 bg-amber-50 p-2.5">
@@ -284,7 +284,7 @@ export default function EventDesignEditor({ eventId }: { eventId: string }) {
             <select value={theme.titleFont} onChange={(e) => setT('titleFont', e.target.value)} className="block w-full rounded-lg border-gray-200 bg-gray-50 px-3 py-2 text-sm">
               {TITLE_FONTS.map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}
             </select>
-            <ColorField label="Capa (velo) sobre el fondo" value={theme.overlayColor} onChange={(v) => setT('overlayColor', v)} />
+            <ColorField label="Capa (velo) sobre el fondo" value={theme.overlayColor} onChange={(v) => setT('overlayColor', v)} hint="Color de la capa que se pone sobre la imagen de fondo (oscurece/aclara para que se lea el texto)." />
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Opacidad de la capa: {Math.round((Number(theme.overlayOpacity) || 0) * 100)}%</label>
               <input type="range" min="0" max="1" step="0.05" value={Number(theme.overlayOpacity) || 0} onChange={(e) => setT('overlayOpacity', parseFloat(e.target.value))} className="w-full" />
@@ -293,7 +293,7 @@ export default function EventDesignEditor({ eventId }: { eventId: string }) {
 
           {isGala && (
             <Section title="Fecha y título (Gala)">
-              <ColorField label="Título del evento" value={theme.titleColor} onChange={(v) => setT('titleColor', v)} />
+              <ColorField label="Título del evento" value={theme.titleColor} onChange={(v) => setT('titleColor', v)} hint="Color del nombre del evento (el título grande del inicio)." />
               <label className="block text-sm font-medium text-gray-700">Tamaño del título</label>
               <select value={theme.titleSize} onChange={(e) => setT('titleSize', e.target.value)} className="block w-full rounded-lg border-gray-200 bg-gray-50 px-3 py-2 text-sm">
                 <option value="sm">Pequeño</option><option value="md">Mediano</option><option value="lg">Grande</option><option value="xl">Muy grande</option><option value="xxl">Enorme</option>
@@ -302,17 +302,17 @@ export default function EventDesignEditor({ eventId }: { eventId: string }) {
               <select value={theme.titleShadow} onChange={(e) => setT('titleShadow', e.target.value)} className="block w-full rounded-lg border-gray-200 bg-gray-50 px-3 py-2 text-sm">
                 <option value="none">Sin sombra</option><option value="soft">Suave</option><option value="strong">Fuerte</option>
               </select>
-              <ColorField label="Título de la lista de fechas" value={theme.datesTitleColor} onChange={(v) => setT('datesTitleColor', v)} />
-              <ColorField label="Subtítulo de fechas" value={theme.datesSubtitleColor} onChange={(v) => setT('datesSubtitleColor', v)} />
-              <ColorField label="Borde fecha seleccionada" value={theme.dateSelectedColor} onChange={(v) => setT('dateSelectedColor', v)} />
-              <ColorField label="Fondo fecha seleccionada" value={theme.dateSelectedBgColor} onChange={(v) => setT('dateSelectedBgColor', v)} hint="Vacío = no cambia el fondo al seleccionar." allowEmpty />
-              <ColorField label="Texto fecha seleccionada" value={theme.dateSelectedTextColor} onChange={(v) => setT('dateSelectedTextColor', v)} />
-              <ColorField label="Fondo tarjetas de fecha (sin foto)" value={theme.dateCardColor} onChange={(v) => setT('dateCardColor', v)} />
+              <ColorField label="Título de la lista de fechas" value={theme.datesTitleColor} onChange={(v) => setT('datesTitleColor', v)} hint="Color del texto “Elige una fecha de asistencia”." />
+              <ColorField label="Subtítulo de fechas" value={theme.datesSubtitleColor} onChange={(v) => setT('datesSubtitleColor', v)} hint="Color del texto “Selecciona la fecha y lugar…” bajo el título de fechas." />
+              <ColorField label="Borde fecha seleccionada" value={theme.dateSelectedColor} onChange={(v) => setT('dateSelectedColor', v)} hint="Color del BORDE que resalta la tarjeta de fecha al elegirla." />
+              <ColorField label="Fondo fecha seleccionada" value={theme.dateSelectedBgColor} onChange={(v) => setT('dateSelectedBgColor', v)} hint="Color de FONDO de la tarjeta de fecha al elegirla. Vacío = no cambia el fondo." allowEmpty />
+              <ColorField label="Texto fecha seleccionada" value={theme.dateSelectedTextColor} onChange={(v) => setT('dateSelectedTextColor', v)} hint="Color de las LETRAS de la tarjeta de fecha elegida (útil si el fondo es claro)." />
+              <ColorField label="Fondo tarjetas de fecha (sin foto)" value={theme.dateCardColor} onChange={(v) => setT('dateCardColor', v)} hint="Fondo de las tarjetas de fecha que NO tienen foto (con su transparencia abajo)." />
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Transparencia de las tarjetas: {Math.round((Number(theme.dateCardOpacity) || 0) * 100)}%</label>
                 <input type="range" min="0" max="1" step="0.05" value={Number(theme.dateCardOpacity) || 0} onChange={(e) => setT('dateCardOpacity', parseFloat(e.target.value))} className="w-full" />
               </div>
-              <ColorField label="Modal de restricción" value={theme.dietModalColor} onChange={(v) => setT('dietModalColor', v)} />
+              <ColorField label="Modal de restricción" value={theme.dietModalColor} onChange={(v) => setT('dietModalColor', v)} hint="Fondo de la ventana para elegir la restricción/preferencia alimentaria." />
             </Section>
           )}
           <div className="h-6" />
@@ -330,10 +330,15 @@ export default function EventDesignEditor({ eventId }: { eventId: string }) {
           <div className="flex-1 min-h-0 overflow-auto">
             {!loaded ? (
               <div className="flex items-center justify-center h-64 text-gray-500">Cargando…</div>
-            ) : (
-              <FramePreview device={device}>
+            ) : device === 'mobile' ? (
+              // Móvil: iframe con viewport propio para que las media queries sean reales.
+              <FramePreview device="mobile">
                 <TemplateComponent event={previewEvent} slug={slug} preview />
               </FramePreview>
+            ) : (
+              // Escritorio: render inline (usa el viewport de la ventana = layout de
+              // escritorio) y actualiza de forma 100% fiable al editar.
+              <TemplateComponent event={previewEvent} slug={slug} preview />
             )}
           </div>
         </main>
