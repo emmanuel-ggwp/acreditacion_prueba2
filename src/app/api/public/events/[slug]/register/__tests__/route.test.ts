@@ -26,7 +26,7 @@ const eventCountMock = getEventParticipantCount as jest.Mock;
 const SCH = '11111111-1111-4111-a111-111111111111';
 const PARTICIPANT_ID = '55555555-5555-4555-a555-555555555555';
 
-let tx: { commit: jest.Mock; rollback: jest.Mock };
+let tx: { commit: jest.Mock; rollback: jest.Mock; LOCK: { UPDATE: string } };
 
 const openEvent = (over: Record<string, unknown> = {}) => ({
   id: 'ev1',
@@ -76,7 +76,7 @@ describe('POST /api/public/events/[slug]/register', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     jest.spyOn(console, 'error').mockImplementation(() => {});
-    tx = { commit: jest.fn().mockResolvedValue(undefined), rollback: jest.fn().mockResolvedValue(undefined) };
+    tx = { commit: jest.fn().mockResolvedValue(undefined), rollback: jest.fn().mockResolvedValue(undefined), LOCK: { UPDATE: 'UPDATE' } };
     (sequelize.transaction as jest.Mock).mockResolvedValue(tx);
     limitMock.mockResolvedValue(null);
     eventCountMock.mockResolvedValue(0);
@@ -107,6 +107,33 @@ describe('POST /api/public/events/[slug]/register', () => {
     expect(participant.addSchedules).toHaveBeenCalled();
     expect(tx.commit).toHaveBeenCalled();
     expect(tx.rollback).not.toHaveBeenCalled();
+  });
+
+  it('bloquea la fila del evento (serializa) cuando hay cupo definido', async () => {
+    EventMock.findOne.mockResolvedValue(openEvent({ maxCapacity: 10 }));
+    EventScheduleMock.findAll.mockResolvedValue([{ id: SCH, maxCapacity: 0, scheduleName: 'S1' }]);
+    ParticipantMock.findOne.mockResolvedValue(null);
+    ParticipantMock.create.mockResolvedValue(makeParticipant());
+    eventCountMock.mockResolvedValue(5); // < 10: no está lleno, el registro procede
+
+    const res = await call(validOpenBody());
+
+    expect(res.status).toBe(201);
+    // Se bloquea la fila del evento (LOCK.UPDATE) antes de contar: evita que dos registros
+    // simultáneos por el último cupo lo sobrepasen.
+    expect(EventMock.findByPk).toHaveBeenCalledWith('ev1', expect.objectContaining({ lock: 'UPDATE' }));
+  });
+
+  it('NO bloquea (sin coste) cuando el evento es ilimitado', async () => {
+    EventMock.findOne.mockResolvedValue(openEvent({ maxCapacity: 0 }));
+    EventScheduleMock.findAll.mockResolvedValue([{ id: SCH, maxCapacity: 0, scheduleName: 'S1' }]);
+    ParticipantMock.findOne.mockResolvedValue(null);
+    ParticipantMock.create.mockResolvedValue(makeParticipant());
+
+    const res = await call(validOpenBody());
+
+    expect(res.status).toBe(201);
+    expect(EventMock.findByPk).not.toHaveBeenCalled();
   });
 
   it('devuelve 429 cuando el rate-limit corta (antes de abrir la transacción)', async () => {

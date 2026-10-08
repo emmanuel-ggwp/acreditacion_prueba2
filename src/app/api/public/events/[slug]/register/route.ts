@@ -106,6 +106,23 @@ export async function POST(
     }
     const primaryScheduleId = scheduleIds[0];
 
+    // Concurrencia del cupo: si HAY algún cupo que respetar (evento o alguna fecha pedida),
+    // se SERIALIZAN las inscripciones de ESTE evento bloqueando su fila. Sin esto, dos
+    // inscripciones simultáneas por el último cupo leían ambas `count < max` y entraban →
+    // se sobrepasaba el aforo (igual que la acreditación bloquea la fila del horario).
+    //
+    // DEBE ir ANTES de crear/leer el participante: el INSERT del participante toma un lock
+    // de clave foránea (FOR KEY SHARE) sobre la fila del evento; si el FOR UPDATE se pidiera
+    // DESPUÉS, dos transacciones entrarían en DEADLOCK (cada una con su lock de FK esperando
+    // el FOR UPDATE de la otra). Tomando el FOR UPDATE primero, se serializan limpiamente.
+    // Los eventos SIN cupo (ilimitados) no pagan esta serialización.
+    const anyCapacityLimit =
+      (Number((event as any).maxCapacity) || 0) > 0 ||
+      schedules.some((s: any) => (Number((s as any).maxCapacity) || 0) > 0);
+    if (anyCapacityLimit) {
+      await Event.findByPk(event.id, { lock: t.LOCK.UPDATE, transaction: t });
+    }
+
     // Sale del resultado VALIDADO. Antes salía de `body.guests` —el cuerpo crudo—, con
     // lo que el esquema de invitados, que existe, resultaba decorativo (F4-02).
     let guestsInput: PublicGuestInput[] = [];
