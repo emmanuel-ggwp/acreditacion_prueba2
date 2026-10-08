@@ -113,35 +113,11 @@ const EventForm: React.FC<EventFormProps> = ({ event, onClose, onSuccess }) => {
         ...(event?.registrationConfig || {}),
         mode: event?.registrationConfig?.mode || 'open',
         theme: {
-          primaryColor: '#1e293b',
-          secondaryColor: '#334155',
-          buttonColor: '#1e293b',
-          titleColor: '#ffffff',
-          titleSize: 'lg',
-          titleShadow: 'none',
-          textColor: '#111827',
-          inputColor: '#f8fafc',
-          // Vacío = automático: las letras de los inputs se ajustan solas al fondo.
-          inputTextColor: '',
-          borderColor: '#e2e8f0',
-          formBackgroundColor: '#ffffff',
-          dietModalColor: '#0b1220',
-          dateCardColor: '#000000',
-          dateCardOpacity: 0.5,
+          // Fuente única de los defaults del tema (compartida con el editor en vivo).
+          ...THEME_DEFAULTS,
           // Default = Principal del evento, así el borde de la fecha seleccionada se ve
           // igual que antes hasta que el usuario elija otro color.
-          dateSelectedColor: event?.registrationConfig?.theme?.primaryColor || '#1e293b',
-          // Fondo al seleccionar: vacío por defecto = no cambia (solo el borde, como antes).
-          dateSelectedBgColor: '',
-          dateSelectedTextColor: '#ffffff',
-          buttonTextColor: '#ffffff',
-          datesTitleColor: '#ffffff',
-          datesSubtitleColor: '#ffffff',
-          galaFormOffset: 0,
-          galaCustomFormColors: false,
-          overlayColor: '#0f172a',
-          overlayOpacity: 0.55,
-          titleFont: 'montserrat',
+          dateSelectedColor: event?.registrationConfig?.theme?.primaryColor || THEME_DEFAULTS.dateSelectedColor,
           ...((event?.registrationConfig?.theme) || {}),
         },
         formFields: getFormFields(event?.registrationConfig),
