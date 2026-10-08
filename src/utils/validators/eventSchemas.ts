@@ -67,6 +67,7 @@ export const customQuestionSchema = z.object({
   key: z.string(),                 // id estable (ej. 'q_transporte')
   label: z.string(),               // título visible (ej. "¿Necesitas transporte?")
   selectLabel: z.string().optional(), // etiqueta del desplegable (ej. "Recorrido")
+  selectHelp: z.string().optional(),  // mensaje aclaratorio al elegir "Sí" (ej. "Selecciona la ruta que necesitas")
   options: z.array(z.string()).default([]), // opciones; vacío = pregunta solo Sí/No
   required: z.boolean().default(false),     // si elige Sí, debe escoger una opción
   active: z.boolean().default(true),
@@ -87,6 +88,8 @@ export const themeConfigSchema = z.object({
   // Sombra del título: 'none' | 'soft' | 'strong'.
   titleShadow: z.string().optional(),
   inputColor: z.string().optional(),
+  // Color de las LETRAS de los inputs (Gala). Vacío = automático por contraste con el fondo.
+  inputTextColor: z.string().optional(),
   borderColor: z.string().optional(),
   formBackgroundColor: z.string().optional(),
   // Fondo del modal de restricción alimentaria (Gala).
@@ -96,6 +99,10 @@ export const themeConfigSchema = z.object({
   dateCardOpacity: z.number().min(0).max(1).optional(),
   // Color del borde que resalta la fecha SELECCIONADA (Gala). Si no se define, usa el Principal.
   dateSelectedColor: z.string().optional(),
+  // Fondo de la tarjeta de fecha cuando está SELECCIONADA (Gala). Vacío = no cambia el fondo.
+  dateSelectedBgColor: z.string().optional(),
+  // Color de las letras de la tarjeta de fecha SELECCIONADA (Gala). Si no se define, blanco.
+  dateSelectedTextColor: z.string().optional(),
   // Color del texto dentro de los botones (Entrar, Continuar, Registrarse…) — Gala.
   buttonTextColor: z.string().optional(),
   // Colores de los textos de la pantalla de selección de fecha (Gala).

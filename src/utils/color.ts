@@ -25,3 +25,26 @@ export function hexToRgba(hex: string | undefined | null, alpha: number): string
   const b = parseInt(h.slice(4, 6), 16);
   return `rgba(${r},${g},${b},${a})`;
 }
+
+/**
+ * Devuelve un color de texto legible (oscuro o claro) según la luminancia del fondo.
+ * Útil para que las letras de un input/tarjeta se vean tanto sobre fondo claro como
+ * oscuro sin que el usuario tenga que elegir el color del texto a mano.
+ *
+ * @param hex Color de fondo (hex `#RGB`/`#RRGGBB`, con o sin `#`). Inválido → se asume oscuro.
+ * @param dark Color a usar sobre fondos CLAROS (por defecto gris muy oscuro).
+ * @param light Color a usar sobre fondos OSCUROS (por defecto blanco).
+ * @returns `dark` si el fondo es claro, `light` si es oscuro.
+ */
+export function readableTextOn(hex: string | undefined | null, dark = '#111827', light = '#ffffff'): string {
+  if (!hex || typeof hex !== 'string') return light;
+  let h = hex.replace('#', '').trim();
+  if (h.length === 3) h = h.split('').map((c) => c + c).join('');
+  if (h.length !== 6 || /[^0-9a-fA-F]/.test(h)) return light;
+  const r = parseInt(h.slice(0, 2), 16) / 255;
+  const g = parseInt(h.slice(2, 4), 16) / 255;
+  const b = parseInt(h.slice(4, 6), 16) / 255;
+  // Luminancia perceptual aproximada (coeficientes Rec. 709).
+  const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  return lum > 0.6 ? dark : light;
+}

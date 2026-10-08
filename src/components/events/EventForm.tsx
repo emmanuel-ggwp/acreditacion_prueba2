@@ -194,6 +194,8 @@ const EventForm: React.FC<EventFormProps> = ({ event, onClose, onSuccess }) => {
           titleShadow: 'none',
           textColor: '#111827',
           inputColor: '#f8fafc',
+          // Vacío = automático: las letras de los inputs se ajustan solas al fondo.
+          inputTextColor: '',
           borderColor: '#e2e8f0',
           formBackgroundColor: '#ffffff',
           dietModalColor: '#0b1220',
@@ -202,6 +204,9 @@ const EventForm: React.FC<EventFormProps> = ({ event, onClose, onSuccess }) => {
           // Default = Principal del evento, así el borde de la fecha seleccionada se ve
           // igual que antes hasta que el usuario elija otro color.
           dateSelectedColor: event?.registrationConfig?.theme?.primaryColor || '#1e293b',
+          // Fondo al seleccionar: vacío por defecto = no cambia (solo el borde, como antes).
+          dateSelectedBgColor: '',
+          dateSelectedTextColor: '#ffffff',
           buttonTextColor: '#ffffff',
           datesTitleColor: '#ffffff',
           datesSubtitleColor: '#ffffff',
@@ -646,6 +651,8 @@ const EventForm: React.FC<EventFormProps> = ({ event, onClose, onSuccess }) => {
                         ['registrationConfig.theme.datesTitleColor', 'Título fechas · solo Gala', 'Color del texto “Elige una fecha de asistencia”.'],
                         ['registrationConfig.theme.datesSubtitleColor', 'Subtítulo fechas · solo Gala', 'Color del texto “Selecciona la fecha y lugar al que asistirás”.'],
                         ['registrationConfig.theme.dateSelectedColor', 'Borde fecha seleccionada · solo Gala', 'Color del borde que resalta la fecha cuando el asistente la selecciona.'],
+                        ['registrationConfig.theme.dateSelectedBgColor', 'Fondo fecha seleccionada · solo Gala', 'Color de FONDO de la tarjeta de fecha al seleccionarla (déjalo vacío para no cambiar el fondo).'],
+                        ['registrationConfig.theme.dateSelectedTextColor', 'Texto fecha seleccionada · solo Gala', 'Color de las LETRAS de la tarjeta de fecha seleccionada (útil si el fondo de selección es claro).'],
                         ['registrationConfig.theme.textColor', 'Texto', 'Color del texto y las etiquetas del formulario.'],
                         ['registrationConfig.theme.inputColor', 'Inputs', 'Fondo de los campos donde se escribe.'],
                         ['registrationConfig.theme.borderColor', 'Bordes', 'Color del borde de los campos.'],
@@ -668,6 +675,27 @@ const EventForm: React.FC<EventFormProps> = ({ event, onClose, onSuccess }) => {
                         </div>
                       ))}
                     </div>
+
+                    {/* Color de letras de los inputs: automático por defecto, o fijo si se elige. */}
+                    {isGala && (() => {
+                      const itc = (watch('registrationConfig.theme.inputTextColor' as any) as string) || '';
+                      return (
+                        <div className="mt-4 rounded-lg border border-gray-200 p-3">
+                          <div className="flex items-start gap-2.5">
+                            <input type="color" {...register('registrationConfig.theme.inputTextColor' as any)} className="h-9 w-10 rounded border border-gray-200 cursor-pointer bg-white p-0.5 flex-shrink-0" />
+                            <div className="min-w-0 flex-1">
+                              <span className="block font-medium text-gray-700">Letras de los inputs <span className="text-xs font-normal text-amber-600">· solo Gala</span></span>
+                              <span className="block text-xs text-gray-400 leading-snug mb-1">Color de las LETRAS que se escriben en los campos. En <b>Automático</b> se ajusta solo según el fondo del input (oscuro sobre fondo claro, blanco sobre fondo oscuro).</span>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <input type="text" {...register('registrationConfig.theme.inputTextColor' as any)} placeholder="Automático" maxLength={7} className="w-28 rounded border border-gray-200 px-2 py-1 text-xs font-mono uppercase outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/30" />
+                                <button type="button" onClick={() => setValue('registrationConfig.theme.inputTextColor' as any, '', { shouldDirty: true })} className="text-xs font-medium text-indigo-600 hover:text-indigo-700">Automático (por defecto)</button>
+                                <span className={`text-xs ${itc ? 'text-gray-400' : 'text-green-600'}`}>{itc ? 'Color fijo' : 'Automático activo'}</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
 
                   {/* Opt-in: aplicar los colores de arriba al formulario en la plantilla Gala. */}
@@ -1153,6 +1181,13 @@ const EventForm: React.FC<EventFormProps> = ({ event, onClose, onSuccess }) => {
                                 placeholder="Etiqueta de la lista (opcional, ej. Recorrido)"
                                 className="mt-2 w-full rounded-lg border-gray-200 bg-white px-3 py-2 text-gray-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 sm:text-sm"
                               />
+                              <input
+                                value={q.selectHelp || ''}
+                                onChange={(e) => patch(i, 'selectHelp', e.target.value)}
+                                placeholder="Mensaje aclaratorio (opcional, ej. Selecciona la ruta que necesitas)"
+                                className="mt-2 w-full rounded-lg border-gray-200 bg-white px-3 py-2 text-gray-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 sm:text-sm"
+                              />
+                              <p className="mt-1 text-xs text-gray-400">El mensaje se muestra al asistente cuando elige "Sí", encima de la lista.</p>
                               <div className="mt-3">
                                 <p className="text-xs font-medium text-gray-600 mb-1">Opciones de la lista <span className="font-normal text-gray-400">(déjalas vacías para una pregunta solo Sí/No)</span></p>
                                 <div className="space-y-2">

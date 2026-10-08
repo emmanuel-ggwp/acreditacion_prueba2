@@ -74,6 +74,10 @@ export default function CustomQuestionFields({ questions, answers, onChange, ton
             {q.options.length > 0 && (
               <div className="mt-2">
                 {q.selectLabel && <label className={subCls}>{q.selectLabel}</label>}
+                {/* Mensaje aclaratorio del organizador, visible al elegir "Sí". */}
+                {a.enabled && q.selectHelp && (
+                  <p className={`text-xs mb-1 italic ${dark ? 'text-white/70' : 'text-gray-500'}`}>{q.selectHelp}</p>
+                )}
                 <select
                   value={a.enabled ? (a.value || '') : ''}
                   disabled={!a.enabled}

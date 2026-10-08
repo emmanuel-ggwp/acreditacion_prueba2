@@ -9,7 +9,7 @@ import { getFormFields, guestDietaryEnabled, guestDietaryRequired, getGuestMode,
 import CustomQuestionFields from '@/components/public/CustomQuestionFields';
 import { getCustomQuestions, initCustomAnswers, missingRequiredCustom, type CustomAnswers } from '@/utils/customQuestions';
 import { getDietaryOptions, isFreeTextDiet, dietaryFull, dietaryLabel, ensureDietOption, DIET_COMMENTS_MAX, GUEST_DIET_DETAIL_MAX } from '@/utils/dietary';
-import { hexToRgba } from '@/utils/color';
+import { hexToRgba, readableTextOn } from '@/utils/color';
 import { CONTACT_EMAIL } from '@/utils/contact';
 import { getTitleFont, googleFontHref } from '@/utils/fonts';
 import { formatDateCL, formatTimeCL } from '@/utils/formatters';
@@ -61,6 +61,10 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
   // Color del borde que resalta la fecha seleccionada. Default = Principal (así los
   // eventos existentes, que no lo tienen definido, se ven igual que antes).
   const dateSelectedColor = theme.dateSelectedColor || primary;
+  // Fondo de la tarjeta de fecha CUANDO está seleccionada (vacío = no cambia el fondo,
+  // solo el borde, como antes) y color de sus letras (default blanco = como antes).
+  const dateSelectedBgColor = theme.dateSelectedBgColor || '';
+  const dateSelectedTextColor = theme.dateSelectedTextColor || '#ffffff';
   // Colores de los textos de la pantalla de selección de fecha.
   const datesTitleColor = theme.datesTitleColor || '#ffffff';       // "Elige una fecha de asistencia"
   const datesSubtitleColor = theme.datesSubtitleColor || '#ffffff'; // "Selecciona la fecha y lugar…"
@@ -211,10 +215,22 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
   // Solo si el evento activó "personalizar colores del formulario" se aplican los del
   // tema (Fondo formulario / Inputs / Bordes / Texto). Así los eventos existentes NO cambian.
   const galaCustomForm = !!theme.galaCustomFormColors;
+  // Fondo del input: el personalizado (claro u oscuro) o el oscuro fijo de Gala.
+  const inputBg = galaCustomForm ? (theme.inputColor || '#0b1220') : '#0b1220';
+  // Color del TEXTO del input: el que eligió el evento (`inputTextColor`) o, si lo dejó
+  // vacío, AUTOMÁTICO por contraste contra el fondo (oscuro sobre claro, blanco sobre
+  // oscuro). Así las letras se ven siempre, y el organizador puede fijar el color.
+  const resolvedInputText = galaCustomForm
+    ? (theme.inputTextColor || readableTextOn(theme.inputColor || '#0b1220'))
+    : '#ffffff';
   const inputStyle: React.CSSProperties = galaCustomForm
-    ? { backgroundColor: theme.inputColor || '#0b1220', borderColor: theme.borderColor || 'rgba(255,255,255,0.4)', color: theme.textColor || '#ffffff' }
+    ? { backgroundColor: inputBg, borderColor: theme.borderColor || 'rgba(255,255,255,0.4)', color: resolvedInputText }
     : { backgroundColor: 'rgba(0,0,0,0.55)', borderColor: 'rgba(255,255,255,0.4)', color: '#ffffff' };
-  const inputClass = 'w-full rounded-full px-4 py-3 placeholder-white/50 border focus:outline-none focus:border-white transition';
+  // Placeholder a juego con el color del texto (antes era blanco fijo → invisible sobre
+  // fondo claro). Se aplica vía la clase `gala-input` + un <style> en el render.
+  const inputPlaceholderColor = hexToRgba(resolvedInputText, 0.5);
+  const inputClass = 'gala-input w-full rounded-full px-4 py-3 border focus:outline-none focus:border-white transition';
+  const placeholderStyle = <style>{`.gala-input::placeholder{color:${inputPlaceholderColor};opacity:1;}`}</style>;
 
   // ---- Lookup por RUT ----
   const doLookup = async () => {
@@ -656,6 +672,12 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
 
   const renderDateCard = (s: any) => {
     const selected = selectedScheduleIds.includes(s.id);
+    // Fondo y color de texto de la tarjeta según si está seleccionada. Sin foto y
+    // seleccionada: usa el fondo/letra elegidos (si hay); si no, el aspecto de siempre.
+    const cardBg = s.imageUrl
+      ? 'rgba(0,0,0,0.5)'
+      : (selected && dateSelectedBgColor ? dateSelectedBgColor : hexToRgba(dateCardColor, dateCardOpacity));
+    const cardTextColor = (selected && !s.imageUrl) ? dateSelectedTextColor : '#ffffff';
     const already = registeredScheduleIds.includes(s.id);
     const full = !!s.full;
     // Inscripción cerrada para esta fecha: se muestra pero no se puede elegir.
@@ -684,7 +706,7 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
     const monthName = validDate ? formatDateCL(d, { month: 'long' }) : '';
 
     return (
-      <button key={s.id} type="button" disabled={blocked} onClick={() => { if (!blocked) toggleDate(s.id); }} className="w-full sm:w-[18rem] text-left rounded-2xl overflow-hidden transition shadow-lg disabled:cursor-not-allowed" style={{ outline: selected ? `3px solid ${dateSelectedColor}` : '3px solid transparent', backgroundColor: s.imageUrl ? 'rgba(0,0,0,0.5)' : hexToRgba(dateCardColor, dateCardOpacity), border: '1px solid rgba(255,255,255,0.15)', opacity: blocked ? 0.55 : 1 }}>
+      <button key={s.id} type="button" disabled={blocked} onClick={() => { if (!blocked) toggleDate(s.id); }} className="w-full sm:w-[18rem] text-left rounded-2xl overflow-hidden transition shadow-lg disabled:cursor-not-allowed" style={{ outline: selected ? `3px solid ${dateSelectedColor}` : '3px solid transparent', backgroundColor: cardBg, border: '1px solid rgba(255,255,255,0.15)', opacity: blocked ? 0.55 : 1 }}>
         {s.imageUrl ? (
           <>
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -702,15 +724,15 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
         ) : (
           // Diseño SIN imagen: tipográfico, sin íconos. Día grande y liviano, con
           // día de la semana y mes en mayúsculas espaciadas y una fina línea de acento.
-          <div className="px-6 py-8 text-white flex flex-col items-center text-center" style={{ minHeight: '13rem', justifyContent: 'center' }}>
+          <div className="px-6 py-8 flex flex-col items-center text-center" style={{ minHeight: '13rem', justifyContent: 'center', color: cardTextColor }}>
             {badge && <div className="mb-3">{badge}</div>}
-            <p className="text-[11px] uppercase tracking-[0.3em] text-white/50 capitalize">{weekdayName}</p>
+            <p className="text-[11px] uppercase tracking-[0.3em] capitalize" style={{ opacity: 0.55 }}>{weekdayName}</p>
             <p className="text-6xl font-light leading-none my-1.5" style={{ fontFamily: titleFont.stack }}>{dayNum}</p>
-            <p className="text-sm uppercase tracking-[0.3em] text-white/75 capitalize">{monthName}</p>
+            <p className="text-sm uppercase tracking-[0.3em] capitalize" style={{ opacity: 0.8 }}>{monthName}</p>
             <div className="h-px w-8 my-4" style={{ backgroundColor: primary }} />
             <p className="font-semibold">{s.label || s.scheduleName}</p>
-            <p className="text-sm text-white/70 mt-1">{fmtTime(s.startDateTime)} – {fmtTime(s.endDateTime)}</p>
-            {s.location && <p className="text-xs text-white/50 mt-1.5 uppercase tracking-wide">{s.location}</p>}
+            <p className="text-sm mt-1" style={{ opacity: 0.75 }}>{fmtTime(s.startDateTime)} – {fmtTime(s.endDateTime)}</p>
+            {s.location && <p className="text-xs mt-1.5 uppercase tracking-wide" style={{ opacity: 0.55 }}>{s.location}</p>}
           </div>
         )}
       </button>
@@ -903,6 +925,7 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
     return (
       <div className="relative min-h-screen px-4 py-10 md:py-14 md:bg-fixed" style={pageStyle}>
         {overlayNode}
+        {placeholderStyle}
         <div className="relative max-w-4xl mx-auto">
           <header className="text-center mb-8 md:mt-16">
             {event.logoUrl && (
@@ -942,6 +965,7 @@ export default function GalaTemplate({ event, slug }: TemplateProps) {
   return (
     <div className="relative min-h-screen px-4 py-10 md:py-14 md:bg-fixed" style={pageStyle}>
       {overlayNode}
+      {placeholderStyle}
       <style>{`@media (min-width:768px){.gala-form-block{margin-top:${galaFormOffset}px}}`}</style>
       <div className="relative max-w-2xl mx-auto gala-form-block">
         <header className="text-center mb-6">

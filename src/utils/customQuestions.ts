@@ -18,6 +18,9 @@ export interface CustomQuestion {
   key: string;
   label: string;
   selectLabel?: string;
+  // Mensaje aclaratorio opcional que se muestra al elegir "Sí" (ej. "Selecciona la ruta
+  // que necesitas"). Guía la elección de la lista; lo escribe el organizador.
+  selectHelp?: string;
   options: string[];       // vacío = pregunta solo Sí/No (sin desplegable)
   required: boolean;
   active: boolean;
@@ -50,6 +53,7 @@ export function getCustomQuestions(registrationConfig: any): CustomQuestion[] {
       key: String(q.key),
       label: String(q.label),
       selectLabel: q.selectLabel ? String(q.selectLabel) : undefined,
+      selectHelp: q.selectHelp ? String(q.selectHelp) : undefined,
       options: Array.isArray(q.options) ? q.options.map((o: any) => String(o)).filter(Boolean) : [],
       required: !!q.required,
       active: q.active !== false,
