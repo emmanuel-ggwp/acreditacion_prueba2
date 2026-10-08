@@ -206,11 +206,15 @@ export default function EventDesignEditor({ eventId }: { eventId: string }) {
     setSaving(true);
     try {
       const prevCfg: any = (currentEvent as any)?.registrationConfig || {};
+      // Se descarta `fields` (array legacy que ya no se usa — la config real está en
+      // `formFields`): algunos eventos antiguos/importados lo tienen malformado y haría
+      // fallar la validación del update. EventForm tampoco lo conserva.
+      const { fields: _legacyFields, ...restCfg } = prevCfg;
       await updateEvent(eventId, {
         publicTemplate: template,
         logoUrl: logoUrl || null,
         backgroundImageUrl: backgroundImageUrl || null,
-        registrationConfig: { ...prevCfg, theme, images: { ...(prevCfg.images || {}), heroUrl: heroUrl || null, successUrl: successUrl || null, successUrlMobile: successUrlMobile || null } },
+        registrationConfig: { ...restCfg, theme, images: { ...(restCfg.images || {}), heroUrl: heroUrl || null, successUrl: successUrl || null, successUrlMobile: successUrlMobile || null } },
       } as any);
       toast.success('Diseño guardado');
     } catch { toast.error('No se pudo guardar el diseño'); }

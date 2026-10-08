@@ -34,8 +34,11 @@ export default async function RootLayout({
   await headers();
 
   return (
-    <html lang="es">
-      <body className="font-sans antialiased">
+    // `suppressHydrationWarning`: algunas extensiones del navegador (ej. ColorZilla añade
+    // `cz-shortcut-listen` al <body>) modifican el HTML antes de que React hidrate y
+    // provocan un warning de hidratación benigno. Se acota al <html>/<body>.
+    <html lang="es" suppressHydrationWarning>
+      <body className="font-sans antialiased" suppressHydrationWarning>
         <AuthProvider>
           <MainLayout>
             {children}
