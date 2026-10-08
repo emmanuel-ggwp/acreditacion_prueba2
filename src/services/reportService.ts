@@ -17,7 +17,7 @@
  *   inyección de fórmulas CSV.
  */
 import { Op, fn, col, literal, Sequelize, QueryTypes } from 'sequelize';
-import { startOfHour, endOfHour, eachHourOfInterval, format, startOfDay, endOfDay, subMinutes } from 'date-fns';
+import { startOfHour, endOfHour, eachHourOfInterval, startOfDay, endOfDay, subMinutes } from 'date-fns';
 import { stringify } from 'csv-stringify/sync';
 import * as XLSX from 'xlsx';
 import { sequelize } from '@/lib/sequelize';
@@ -31,6 +31,28 @@ import {
   Award,
   ParticipantAward
 } from '@/models/index';
+
+// ---- Formateo en zona horaria de Chile (America/Santiago) ----
+// IMPORTANTE: date-fns `format` usa la TZ del PROCESO (los droplets suelen correr en UTC),
+// lo que desfasaba 3-4h las fechas/horas de los reportes exportados y del timeline. Se
+// fuerza America/Santiago con Intl (independiente del reloj del servidor), igual que
+// src/utils/formatters.ts hace en el cliente.
+const CL_TZ = 'America/Santiago';
+function clParts(d: Date): { yyyy: string; MM: string; dd: string; HH: string; mm: string; ss: string } {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: CL_TZ, year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+  }).formatToParts(d);
+  const g = (t: string) => parts.find((p) => p.type === t)?.value || '';
+  let HH = g('hour');
+  if (HH === '24') HH = '00'; // algunos runtimes devuelven '24' para medianoche
+  return { yyyy: g('year'), MM: g('month'), dd: g('day'), HH, mm: g('minute'), ss: g('second') };
+}
+const clDateTime = (d: Date) => { const t = clParts(d); return `${t.dd}/${t.MM}/${t.yyyy} ${t.HH}:${t.mm}`; };
+const clDate = (d: Date) => { const t = clParts(d); return `${t.dd}/${t.MM}/${t.yyyy}`; };
+const clTimeHms = (d: Date) => { const t = clParts(d); return `${t.HH}:${t.mm}:${t.ss}`; };
+// Clave de bucket por hora (en Santiago), formato 'yyyy-MM-dd HH:00' para el timeline.
+const clHourKey = (d: Date) => { const t = clParts(d); return `${t.yyyy}-${t.MM}-${t.dd} ${t.HH}:00`; };
 
 /**
  * Encapsula la generación de reportes, estadísticas y exportaciones CSV del evento.
@@ -251,11 +273,13 @@ export class ReportService {
         
         const hourMap = new Map<string, number>();
         
+        // Las horas se bucketean y etiquetan en Santiago (clHourKey), no en la TZ del
+        // servidor: así una acreditación cercana a medianoche cae en la hora/día correctos.
         const interval = eachHourOfInterval({ start: startOfHour(firstTime), end: endOfHour(lastTime) });
-        interval.forEach(d => hourMap.set(format(d, 'yyyy-MM-dd HH:mm'), 0));
+        interval.forEach(d => hourMap.set(clHourKey(d), 0));
 
         accreditations.forEach((acc) => {
-            const key = format(startOfHour(acc.checkInTime), 'yyyy-MM-dd HH:mm');
+            const key = clHourKey(acc.checkInTime);
             if (hourMap.has(key)) {
                 hourMap.set(key, (hourMap.get(key) || 0) + 1);
             }
@@ -300,7 +324,7 @@ export class ReportService {
    * @returns Promesa que resuelve a `{ eventName, totalParticipants, totalAccredited, awardsPending }` (con evento) o a `{ totalEvents, activeEvents, totalParticipants, accreditationsToday }` (global).
    * @throws {Error} `'Event not found'` si se pasa `eventId` y no existe ese evento.
    */
-  async getDashboardStats(eventId?: number) {
+  async getDashboardStats(eventId?: string) {
     if (eventId) {
       const event = await Event.findByPk(eventId);
       if (!event) throw new Error('Event not found');
@@ -422,13 +446,19 @@ export class ReportService {
             es.start_date_time as "eventDate",
             CASE WHEN acc.id IS NOT NULL THEN 'Sí' ELSE 'No' END as "Asistencia",
             acc.check_in_time as "checkInTime",
-            (SELECT COUNT(*) FROM guests g
+            -- Invitados = con NOMBRE (filas guests ligadas a esta fecha, o sin fecha = fallback)
+            -- + NUMÉRICOS declarados (p.guest_count, modos count/companion; no crean fila).
+            ((SELECT COUNT(*) FROM guests g
              WHERE g.participant_id = p.id AND g.deleted_at IS NULL
                AND (EXISTS (SELECT 1 FROM guest_schedules gs WHERE gs.guest_id = g.id AND gs.schedule_id = es.id)
-                    OR NOT EXISTS (SELECT 1 FROM guest_schedules gs3 WHERE gs3.guest_id = g.id))) as "Cant. Invitados",
-            (SELECT COUNT(*) FROM accreditations acc_g
+                    OR NOT EXISTS (SELECT 1 FROM guest_schedules gs3 WHERE gs3.guest_id = g.id)))
+             + COALESCE(p.guest_count, 0))::int as "Cant. Invitados",
+            -- Asistentes = invitados con nombre acreditados en esta fecha + numéricos que
+            -- llegaron (acc.guest_count de la acreditación del participante en esta fecha).
+            ((SELECT COUNT(*) FROM accreditations acc_g
              INNER JOIN guests g ON acc_g.guest_id = g.id
-             WHERE g.participant_id = p.id AND acc_g.event_schedule_id = es.id AND g.deleted_at IS NULL) as "Cant. Invitados Asistentes",
+             WHERE g.participant_id = p.id AND acc_g.event_schedule_id = es.id AND g.deleted_at IS NULL)
+             + COALESCE(acc.guest_count, 0))::int as "Cant. Invitados Asistentes",
             (SELECT STRING_AGG(a.name, ', ')
              FROM participant_awards pa
              INNER JOIN awards a ON pa.award_id = a.id
@@ -466,10 +496,10 @@ export class ReportService {
         "Email": row["Email"],
         "Dieta": row["Dieta"],
         "Comentarios Dieta": row["Comentarios Dieta"],
-        "Fecha Inscripción": row["registrationDate"] ? format(new Date(row["registrationDate"]), 'dd/MM/yyyy HH:mm') : '',
-        "Fecha Evento": row["eventDate"] ? format(new Date(row["eventDate"]), 'dd/MM/yyyy') : '',
+        "Fecha Inscripción": row["registrationDate"] ? clDateTime(new Date(row["registrationDate"])) : '',
+        "Fecha Evento": row["eventDate"] ? clDate(new Date(row["eventDate"])) : '',
         "Asistencia": row["Asistencia"],
-        "Hora Acreditación": row["checkInTime"] ? format(new Date(row["checkInTime"]), 'HH:mm:ss') : '',
+        "Hora Acreditación": row["checkInTime"] ? clTimeHms(new Date(row["checkInTime"])) : '',
         "Cant. Invitados": row["Cant. Invitados"],
         "Cant. Invitados Asistentes": row["Cant. Invitados Asistentes"],
         "Invitados (detalle)": row["guestsDetail"] || '',
@@ -520,7 +550,7 @@ export class ReportService {
         "Tipo": row["Tipo"] === 'CARGA' ? 'Carga' : row["Tipo"] === 'ACOMPANANTE' ? 'Acompañante' : (row["Tipo"] || ''),
         "Dieta": row["Dieta"] && row["Dieta"] !== 'NONE' ? row["Dieta"] : '',
         "Asistió": row["Asistió"],
-        "Hora Acreditación": row["checkInTime"] ? format(new Date(row["checkInTime"]), 'dd/MM/yyyy HH:mm') : '',
+        "Hora Acreditación": row["checkInTime"] ? clDateTime(new Date(row["checkInTime"])) : '',
     }));
   }
 

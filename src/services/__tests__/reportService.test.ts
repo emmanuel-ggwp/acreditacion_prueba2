@@ -249,14 +249,14 @@ describe('ReportService', () => {
 
   describe('getDashboardStats', () => {
     it('devuelve estadísticas del evento cuando se pasa un eventId', async () => {
-      (EventMock.findByPk as jest.Mock).mockResolvedValue({ id: 5, name: 'Evento X' });
+      (EventMock.findByPk as jest.Mock).mockResolvedValue({ id: 'evt-5', name: 'Evento X' });
       (AccreditationMock.count as jest.Mock).mockResolvedValue(40);
       (ParticipantAwardMock.count as jest.Mock).mockResolvedValue(7);
       (ParticipantMock.count as jest.Mock).mockResolvedValue(120);
 
-      const result = await service.getDashboardStats(5);
+      const result = await service.getDashboardStats('evt-5');
 
-      expect(EventMock.findByPk).toHaveBeenCalledWith(5);
+      expect(EventMock.findByPk).toHaveBeenCalledWith('evt-5');
       expect(result).toEqual({
         eventName: 'Evento X',
         totalParticipants: 120,
@@ -268,7 +268,7 @@ describe('ReportService', () => {
     it('lanza error si el evento no existe (con eventId)', async () => {
       (EventMock.findByPk as jest.Mock).mockResolvedValue(null);
 
-      await expect(service.getDashboardStats(99)).rejects.toThrow('Event not found');
+      await expect(service.getDashboardStats('evt-99')).rejects.toThrow('Event not found');
     });
 
     it('devuelve estadísticas globales cuando no se pasa eventId', async () => {
@@ -368,10 +368,12 @@ describe('ReportService', () => {
         Email: 'j@e.com',
         Dieta: 'Veg',
         'Comentarios Dieta': 'sin gluten',
-        registrationDate: new Date(2026, 8, 20, 14, 30),
-        eventDate: new Date(2026, 8, 20),
+        // Instantes UTC explícitos: el servicio formatea en America/Santiago (UTC-3 en
+        // sept), así el test es determinista sin depender de la TZ del runner (CI = UTC).
+        registrationDate: new Date('2026-09-20T17:30:00Z'), // 14:30 Santiago
+        eventDate: new Date('2026-09-20T12:00:00Z'),        // 20/09/2026 Santiago
         Asistencia: 'Sí',
-        checkInTime: new Date(2026, 8, 20, 9, 5, 30),
+        checkInTime: new Date('2026-09-20T12:05:30Z'),      // 09:05:30 Santiago
         'Cant. Invitados': 2,
         'Cant. Invitados Asistentes': 1,
         guestsDetail: 'Ana · 999 · 10 años',
@@ -463,7 +465,7 @@ describe('ReportService', () => {
         Tipo: 'CARGA',
         Dieta: 'VEGETARIAN',
         Asistió: 'Sí',
-        checkInTime: new Date(2026, 8, 20, 9, 5),
+        checkInTime: new Date('2026-09-20T12:05:00Z'), // 09:05 Santiago (UTC-3 en sept)
       };
       queryMock.mockResolvedValue([row]);
 
