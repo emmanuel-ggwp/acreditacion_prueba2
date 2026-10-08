@@ -9,7 +9,7 @@ import { createEventSchema, updateEventSchema } from '@/utils/validators/eventSc
 import { CONFIGURABLE_FIELDS, getFormFields, CONFIGURABLE_GUEST_FIELDS, getGuestFields, CONFIGURABLE_ACCREDITATION_FIELDS, getAccreditationFields } from '@/utils/formFields';
 import { DEFAULT_DIET_LABELS } from '@/utils/dietary';
 import DesignControls, { ImageSlot } from './DesignControls';
-import { THEME_DEFAULTS, themeDefaultFor } from '@/utils/templatePalettes';
+import { THEME_DEFAULTS, themeDefaultFor, TEMPLATE_PALETTES, TEMPLATE_NAMES } from '@/utils/templatePalettes';
 import { errorHandler } from '@/utils/errors';
 import toast from 'react-hot-toast';
 import { Info } from 'lucide-react';
@@ -75,41 +75,6 @@ const InfoTooltip: React.FC<{ text: string }> = ({ text }) => (
     </span>
   </span>
 );
-
-// Paleta de colores por defecto de cada plantilla (acorde a su estilo).
-// Se cargan al elegir la plantilla; luego el usuario puede ajustarlas.
-const TEMPLATE_PALETTES: Record<string, Record<string, string | number>> = {
-  // Predeterminada: índigo clásico y neutro.
-  // Nota: titleColor/dateSelectedColor se incluyen en TODAS las paletas (aunque sean
-  // "solo Gala") para que, al cambiar DESDE Gala a otra, se restablezcan y no quede el
-  // título en blanco (o el borde de fecha teal) heredado de Gala.
-  default: {
-    primaryColor: '#1e293b', secondaryColor: '#334155', buttonColor: '#1e293b',
-    titleColor: '#111827', dateSelectedColor: '#1e293b',
-    textColor: '#111827', inputColor: '#f8fafc', borderColor: '#e2e8f0',
-    formBackgroundColor: '#ffffff', overlayColor: '#0f172a', overlayOpacity: 0.55, titleFont: 'montserrat',
-  },
-  // Moderno: azul/violeta vibrante sobre panel oscuro.
-  modern: {
-    primaryColor: '#7c93b3', secondaryColor: '#475569', buttonColor: '#334155',
-    titleColor: '#0f172a', dateSelectedColor: '#334155',
-    textColor: '#0f172a', inputColor: '#f1f5f9', borderColor: '#cbd5e1',
-    formBackgroundColor: '#ffffff', overlayColor: '#0f172a', overlayOpacity: 0.6, titleFont: 'poppins',
-  },
-  // Minimalista: monocromático, neutro, limpio.
-  minimal: {
-    primaryColor: '#111827', secondaryColor: '#6b7280', buttonColor: '#111827',
-    titleColor: '#111827', dateSelectedColor: '#111827',
-    textColor: '#111827', inputColor: '#ffffff', borderColor: '#e5e7eb',
-    formBackgroundColor: '#ffffff', overlayColor: '#ffffff', overlayOpacity: 0.8, titleFont: 'inter',
-  },
-  // Gala: teal sobre fondo oscuro inmersivo.
-  gala: {
-    primaryColor: '#008a98', secondaryColor: '#00b4c8', buttonColor: '#008a98', dateSelectedColor: '#008a98',
-    textColor: '#ffffff', titleColor: '#ffffff', inputColor: '#0b1220', borderColor: '#334155',
-    formBackgroundColor: '#0b1220', overlayColor: '#000000', overlayOpacity: 0.55, titleFont: 'playfair',
-  },
-};
 
 const EventForm: React.FC<EventFormProps> = ({ event, onClose, onSuccess }) => {
   const router = useRouter();
@@ -217,7 +182,6 @@ const EventForm: React.FC<EventFormProps> = ({ event, onClose, onSuccess }) => {
   // Plantilla elegida: varias opciones de diseño son EXCLUSIVAS de Gala.
   const selectedTemplate = (watch('publicTemplate') as string) || 'default';
   const isGala = selectedTemplate === 'gala';
-  const TEMPLATE_NAMES: Record<string, string> = { default: 'Por Defecto', modern: 'Moderno', minimal: 'Minimalista', gala: 'Gala' };
 
   const [emailTemplates, setEmailTemplates] = useState<{ id: string; name: string }[]>([]);
   useEffect(() => {
