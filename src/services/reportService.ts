@@ -17,7 +17,7 @@
  *   inyección de fórmulas CSV.
  */
 import { Op, fn, col, literal, Sequelize, QueryTypes } from 'sequelize';
-import { startOfHour, endOfHour, eachHourOfInterval, startOfDay, endOfDay, subMinutes } from 'date-fns';
+import { startOfHour, endOfHour, eachHourOfInterval, subMinutes } from 'date-fns';
 import { stringify } from 'csv-stringify/sync';
 import * as XLSX from 'xlsx';
 import { sequelize } from '@/lib/sequelize';
@@ -53,6 +53,20 @@ const clDate = (d: Date) => { const t = clParts(d); return `${t.dd}/${t.MM}/${t.
 const clTimeHms = (d: Date) => { const t = clParts(d); return `${t.HH}:${t.mm}:${t.ss}`; };
 // Clave de bucket por hora (en Santiago), formato 'yyyy-MM-dd HH:00' para el timeline.
 const clHourKey = (d: Date) => { const t = clParts(d); return `${t.yyyy}-${t.MM}-${t.dd} ${t.HH}:00`; };
+
+// Rango [inicio, fin) del día de HOY en America/Santiago, como instantes UTC. date-fns
+// startOfDay/endOfDay usan la TZ del PROCESO (UTC en prod), lo que contaba "hoy" por el día
+// UTC y no el de Chile: p. ej. una acreditación de las 22:00 en Chile cae en el día UTC
+// siguiente y NO aparecía en "acreditados hoy". Se calcula con el offset de Chile (Intl).
+function clTodayRange(now: Date = new Date()): { start: Date; end: Date } {
+  const t = clParts(now);
+  // Hora de pared de Chile interpretada como UTC, menos el instante real = offset de Chile.
+  const wallAsUtc = Date.UTC(+t.yyyy, +t.MM - 1, +t.dd, +t.HH, +t.mm, +t.ss);
+  const offsetMs = wallAsUtc - now.getTime();
+  // Inicio del día de Chile (00:00) como instante UTC = (00:00 de pared como UTC) − offset.
+  const startMs = Date.UTC(+t.yyyy, +t.MM - 1, +t.dd, 0, 0, 0) - offsetMs;
+  return { start: new Date(startMs), end: new Date(startMs + 86400000) };
+}
 
 /**
  * Encapsula la generación de reportes, estadísticas y exportaciones CSV del evento.
@@ -350,14 +364,15 @@ export class ReportService {
         awardsPending,
       };
     } else {
-      const today = new Date();
+      // "Hoy" = el día en America/Santiago (no el del servidor, que en prod es UTC).
+      const { start, end } = clTodayRange();
       return {
         totalEvents: await Event.count(),
         // Eventos vigentes (no cancelados): es lo que el panel muestra arriba.
         activeEvents: await Event.count({ where: { isActive: true } }),
         totalParticipants: await Participant.count(),
         accreditationsToday: await Accreditation.count({
-          where: { checkInTime: { [Op.between]: [startOfDay(today), endOfDay(today)] } }
+          where: { checkInTime: { [Op.gte]: start, [Op.lt]: end } }
         }),
       };
     }
