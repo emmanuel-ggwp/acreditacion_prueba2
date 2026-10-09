@@ -21,6 +21,7 @@ import { startOfHour, endOfHour, eachHourOfInterval, subMinutes } from 'date-fns
 import { stringify } from 'csv-stringify/sync';
 import * as XLSX from 'xlsx';
 import { sequelize } from '@/lib/sequelize';
+import { clParts, clDayRange } from '@/utils/serverDate';
 
 import { 
   Event, 
@@ -36,37 +37,12 @@ import {
 // IMPORTANTE: date-fns `format` usa la TZ del PROCESO (los droplets suelen correr en UTC),
 // lo que desfasaba 3-4h las fechas/horas de los reportes exportados y del timeline. Se
 // fuerza America/Santiago con Intl (independiente del reloj del servidor), igual que
-// src/utils/formatters.ts hace en el cliente.
-const CL_TZ = 'America/Santiago';
-function clParts(d: Date): { yyyy: string; MM: string; dd: string; HH: string; mm: string; ss: string } {
-  const parts = new Intl.DateTimeFormat('en-GB', {
-    timeZone: CL_TZ, year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
-  }).formatToParts(d);
-  const g = (t: string) => parts.find((p) => p.type === t)?.value || '';
-  let HH = g('hour');
-  if (HH === '24') HH = '00'; // algunos runtimes devuelven '24' para medianoche
-  return { yyyy: g('year'), MM: g('month'), dd: g('day'), HH, mm: g('minute'), ss: g('second') };
-}
+// src/utils/formatters.ts hace en el cliente. `clParts`/`clDayRange` viven en serverDate.
 const clDateTime = (d: Date) => { const t = clParts(d); return `${t.dd}/${t.MM}/${t.yyyy} ${t.HH}:${t.mm}`; };
 const clDate = (d: Date) => { const t = clParts(d); return `${t.dd}/${t.MM}/${t.yyyy}`; };
 const clTimeHms = (d: Date) => { const t = clParts(d); return `${t.HH}:${t.mm}:${t.ss}`; };
 // Clave de bucket por hora (en Santiago), formato 'yyyy-MM-dd HH:00' para el timeline.
 const clHourKey = (d: Date) => { const t = clParts(d); return `${t.yyyy}-${t.MM}-${t.dd} ${t.HH}:00`; };
-
-// Rango [inicio, fin) del día de HOY en America/Santiago, como instantes UTC. date-fns
-// startOfDay/endOfDay usan la TZ del PROCESO (UTC en prod), lo que contaba "hoy" por el día
-// UTC y no el de Chile: p. ej. una acreditación de las 22:00 en Chile cae en el día UTC
-// siguiente y NO aparecía en "acreditados hoy". Se calcula con el offset de Chile (Intl).
-function clTodayRange(now: Date = new Date()): { start: Date; end: Date } {
-  const t = clParts(now);
-  // Hora de pared de Chile interpretada como UTC, menos el instante real = offset de Chile.
-  const wallAsUtc = Date.UTC(+t.yyyy, +t.MM - 1, +t.dd, +t.HH, +t.mm, +t.ss);
-  const offsetMs = wallAsUtc - now.getTime();
-  // Inicio del día de Chile (00:00) como instante UTC = (00:00 de pared como UTC) − offset.
-  const startMs = Date.UTC(+t.yyyy, +t.MM - 1, +t.dd, 0, 0, 0) - offsetMs;
-  return { start: new Date(startMs), end: new Date(startMs + 86400000) };
-}
 
 /**
  * Encapsula la generación de reportes, estadísticas y exportaciones CSV del evento.
@@ -365,7 +341,7 @@ export class ReportService {
       };
     } else {
       // "Hoy" = el día en America/Santiago (no el del servidor, que en prod es UTC).
-      const { start, end } = clTodayRange();
+      const { start, end } = clDayRange();
       return {
         totalEvents: await Event.count(),
         // Eventos vigentes (no cancelados): es lo que el panel muestra arriba.

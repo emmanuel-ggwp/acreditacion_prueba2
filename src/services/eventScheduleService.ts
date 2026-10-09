@@ -12,6 +12,7 @@ import { Op, fn, col } from 'sequelize';
 import { Event, EventSchedule, Accreditation } from '@/models/index';
 import { createScheduleSchema, updateScheduleSchema } from '@/utils/validators/eventSchemas';
 import { auditLogService } from './auditLogService';
+import { clDayRange } from '@/utils/serverDate';
 
 /** Nombre legible de una fecha (`label` o, en su defecto, `scheduleName`) para la auditoría. */
 const scheduleName = (s: any) => s.label || s.scheduleName;
@@ -207,16 +208,17 @@ export class EventScheduleService {
    * @returns Arreglo de fechas activas (`EventSchedule`) con `accreditedCount` y su evento.
    */
   async getActiveSchedules() {
-    const now = new Date();
-    const startToday = new Date(now); startToday.setHours(0, 0, 0, 0);
-    const endToday = new Date(now); endToday.setHours(23, 59, 59, 999);
+    // "HOY" = el día en America/Santiago (no en la TZ del servidor, que en prod es UTC):
+    // si no, una fecha publicada de la tarde-noche en Chile (que cae en el día UTC
+    // siguiente) no aparecería como "de hoy" para abrirla/prepararla.
+    const { start: startToday, end: endToday } = clDayRange();
 
     return EventSchedule.findAll({
       where: {
         isActive: true,
         [Op.or]: [
           { status: 'accrediting' },
-          { status: 'published', startDateTime: { [Op.between]: [startToday, endToday] } },
+          { status: 'published', startDateTime: { [Op.gte]: startToday, [Op.lt]: endToday } },
         ],
       },
       include: [

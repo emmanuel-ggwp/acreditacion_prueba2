@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { Op } from 'sequelize';
-import { startOfDay, endOfDay } from 'date-fns';
+import { clDayRange } from '@/utils/serverDate';
 import Accreditation from '@/models/Accreditation';
 import EventSchedule from '@/models/EventSchedule';
 import { withAuth, AuthenticatedRequest } from '@/middleware/auth';
@@ -23,12 +23,14 @@ export const GET = withAuth(async (request: AuthenticatedRequest) => {
       include: [{ model: EventSchedule, where: { eventId } }],
     });
 
-    const today = new Date();
+    // "Hoy" en America/Santiago (no en la TZ del servidor, que en prod es UTC).
+    const { start, end } = clDayRange();
     const accreditationsToday = await Accreditation.count({
       include: [{ model: EventSchedule, where: { eventId } }],
       where: {
         checkInTime: {
-          [Op.between]: [startOfDay(today), endOfDay(today)],
+          [Op.gte]: start,
+          [Op.lt]: end,
         },
       },
     });
