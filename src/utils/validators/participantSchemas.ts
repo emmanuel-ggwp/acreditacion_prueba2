@@ -62,6 +62,14 @@ export const createParticipantSchema = participantSchema.omit({
 export const updateParticipantSchema = createParticipantSchema.partial().extend({
   allowedGuests: z.number().int().min(0).optional(),
   scheduleIds: z.array(z.string().uuid()).optional(),
+  // Premiación manual ("Premiar", con motivo, desde la lista de participantes). Se permite
+  // SOLO en la API de EDICIÓN, que está role-gated a ADMIN/OPERATOR. Sigue FUERA de
+  // `createParticipantSchema`, `bulkCreateParticipantSchema` y `publicRegistrationSchema`
+  // (que los omiten), para que no se puedan fijar por la vía genérica de alta ni por el
+  // registro público/anónimo (mass-assignment). Ningún servicio más escribe `isAwarded`:
+  // esta es la ÚNICA vía para marcar/desmarcar premiados.
+  isAwarded: z.boolean().optional(),
+  awardReason: z.string().optional().nullable(),
 });
 
 export const bulkCreateParticipantSchema = z.array(

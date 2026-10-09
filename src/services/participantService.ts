@@ -393,8 +393,10 @@ export class ParticipantService {
   async updateParticipant(participantId: string, data: z.infer<typeof updateParticipantSchema>, userId?: string) {
     const validatedData = updateParticipantSchema.parse(data);
     // `eventId` se descarta: un participante NO se mueve de evento por la API de
-    // edición (mass-assignment). Se registra qué evento tiene, no se cambia. El
-    // esquema ya excluye isAwarded/awardReason/createdAt/updatedAt.
+    // edición (mass-assignment). Se registra qué evento tiene, no se cambia.
+    // `isAwarded`/`awardReason` SÍ se permiten aquí (ruta ADMIN/OPERATOR): es la
+    // premiación manual desde la lista de participantes. createdAt/updatedAt los gestiona
+    // la BD (el esquema los excluye).
     const { scheduleIds, eventId: _ignoredEventId, ...rest } = validatedData as any;
     const participant = await Participant.findByPk(participantId);
     if (!participant) {

@@ -395,6 +395,31 @@ describe('ParticipantService', () => {
       );
     });
 
+    it('marca al participante como premiado (isAwarded/awardReason se persisten, ya no se descartan)', async () => {
+      const p = makeParticipant({ isAwarded: false, awardReason: null });
+      (ParticipantMock.findByPk as jest.Mock).mockResolvedValue(p);
+
+      await service.updateParticipant(
+        PARTICIPANT_ID,
+        { isAwarded: true, awardReason: 'Mejor stand' } as any,
+        USER_ID,
+      );
+
+      // El esquema de UPDATE (ruta ADMIN/OPERATOR) ya NO elimina estos campos: llegan a update().
+      expect(p.update).toHaveBeenCalledWith(
+        expect.objectContaining({ isAwarded: true, awardReason: 'Mejor stand' }),
+      );
+    });
+
+    it('quita la premiación (isAwarded:false + awardReason:null)', async () => {
+      const p = makeParticipant({ isAwarded: true, awardReason: 'x' });
+      (ParticipantMock.findByPk as jest.Mock).mockResolvedValue(p);
+
+      await service.updateParticipant(PARTICIPANT_ID, { isAwarded: false, awardReason: null } as any, USER_ID);
+
+      expect(p.update).toHaveBeenCalledWith(expect.objectContaining({ isAwarded: false, awardReason: null }));
+    });
+
     it('reemplaza los horarios y limpia GuestSchedule huérfanos preservando acreditados', async () => {
       const p = makeParticipant();
       (ParticipantMock.findByPk as jest.Mock).mockResolvedValue(p);
