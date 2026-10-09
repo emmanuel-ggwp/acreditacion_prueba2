@@ -78,10 +78,10 @@ export default function GalaTemplate({ event, slug, preview = false }: TemplateP
   // y PC (md:) para poder cambiar el de PC sin tocar el de móvil (theme.titleSizePc).
   // 'lg' es el recomendado.
   const TITLE_SIZES_MOBILE: Record<string, string> = {
-    sm: 'text-2xl', md: 'text-3xl', lg: 'text-3xl', xl: 'text-4xl', xxl: 'text-5xl',
+    xs: 'text-xl', sm: 'text-2xl', md: 'text-3xl', lg: 'text-3xl', xl: 'text-4xl', xxl: 'text-5xl',
   };
   const TITLE_SIZES_PC: Record<string, string> = {
-    sm: 'md:text-3xl', md: 'md:text-4xl', lg: 'md:text-5xl', xl: 'md:text-6xl', xxl: 'md:text-7xl',
+    xs: 'md:text-2xl', sm: 'md:text-3xl', md: 'md:text-4xl', lg: 'md:text-5xl', xl: 'md:text-6xl', xxl: 'md:text-7xl',
   };
   const baseTitleSize = TITLE_SIZES_MOBILE[theme.titleSize as string] ? (theme.titleSize as string) : 'lg';
   // 'auto' / ausente / valor inválido ⇒ el PC sigue al tamaño base (comportamiento previo).
