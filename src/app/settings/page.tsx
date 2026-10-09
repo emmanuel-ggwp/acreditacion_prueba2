@@ -2,6 +2,7 @@ import RoleGuard from '@/components/auth/RoleGuard';
 import { ROLES } from '@/utils/constants';
 import EmailTemplateManager from '@/components/settings/EmailTemplateManager';
 import DbConsole from '@/components/settings/DbConsole';
+import DbEditor from '@/components/settings/DbEditor';
 
 export default function SettingsPage() {
   return (
@@ -10,6 +11,7 @@ export default function SettingsPage() {
         <h1 className="text-3xl font-bold mb-6">Configuración</h1>
         <EmailTemplateManager />
         <DbConsole />
+        <DbEditor />
       </div>
     </RoleGuard>
   );
