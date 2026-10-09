@@ -136,10 +136,20 @@ export default function DesignControls({ isGala, theme, setTheme, setFormColor, 
       {isGala && (
         <Section title="Fecha y título (Gala)">
           <ColorField label="Título del evento" value={theme.titleColor} onChange={(v) => setTheme('titleColor', v)} defaultValue={defaultFor('titleColor')} hint="Color del nombre del evento (el título grande del inicio)." />
-          <label className="block text-sm font-medium text-gray-700">Tamaño del título</label>
-          <select value={theme.titleSize || 'lg'} onChange={(e) => setTheme('titleSize', e.target.value)} className="block w-full rounded-lg border-gray-200 bg-gray-50 px-3 py-2 text-sm">
-            <option value="sm">Pequeño</option><option value="md">Mediano</option><option value="lg">Grande</option><option value="xl">Muy grande</option><option value="xxl">Enorme</option>
-          </select>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Tamaño del título</label>
+            <p className="text-xs text-gray-400 leading-snug mb-1">Tamaño base (también el de móvil).</p>
+            <select value={theme.titleSize || 'lg'} onChange={(e) => setTheme('titleSize', e.target.value)} className="block w-full rounded-lg border-gray-200 bg-gray-50 px-3 py-2 text-sm">
+              <option value="sm">Pequeño</option><option value="md">Mediano</option><option value="lg">Grande</option><option value="xl">Muy grande</option><option value="xxl">Enorme</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Tamaño del título en PC</label>
+            <p className="text-xs text-gray-400 leading-snug mb-1">Cambia el tamaño SOLO en computador; el móvil mantiene el de arriba. «Automático» = igual que arriba.</p>
+            <select value={theme.titleSizePc || 'auto'} onChange={(e) => setTheme('titleSizePc', e.target.value)} className="block w-full rounded-lg border-gray-200 bg-gray-50 px-3 py-2 text-sm">
+              <option value="auto">Automático (igual que arriba)</option><option value="sm">Pequeño</option><option value="md">Mediano</option><option value="lg">Grande</option><option value="xl">Muy grande</option><option value="xxl">Enorme</option>
+            </select>
+          </div>
           <label className="block text-sm font-medium text-gray-700">Sombra del título</label>
           <select value={theme.titleShadow || 'none'} onChange={(e) => setTheme('titleShadow', e.target.value)} className="block w-full rounded-lg border-gray-200 bg-gray-50 px-3 py-2 text-sm">
             <option value="none">Sin sombra</option><option value="soft">Suave</option><option value="strong">Fuerte</option>

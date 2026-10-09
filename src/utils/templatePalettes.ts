@@ -45,7 +45,7 @@ export const TEMPLATE_NAMES: Record<string, string> = {
  */
 export const THEME_DEFAULTS: Record<string, any> = {
   primaryColor: '#1e293b', secondaryColor: '#334155', buttonColor: '#1e293b', buttonTextColor: '#ffffff',
-  titleColor: '#ffffff', titleSize: 'lg', titleShadow: 'none',
+  titleColor: '#ffffff', titleSize: 'lg', titleSizePc: 'auto', titleShadow: 'none',
   textColor: '#111827', inputColor: '#f8fafc', inputTextColor: '', borderColor: '#e2e8f0', formBackgroundColor: '#ffffff',
   dietModalColor: '#0b1220', dateCardColor: '#000000', dateCardOpacity: 0.5,
   dateSelectedColor: '#1e293b', dateSelectedBgColor: '', dateSelectedTextColor: '#ffffff',

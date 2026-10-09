@@ -74,15 +74,22 @@ export default function GalaTemplate({ event, slug, preview = false }: TemplateP
   // arriba, positivo = más abajo). Default 0 = sin cambios (los eventos actuales no se mueven).
   const galaFormOffset = typeof theme.galaFormOffset === 'number' ? theme.galaFormOffset : 0;
   // Tamaño del título (nombre del evento) en el inicio SIN imagen destacada.
-  // Clases literales para que Tailwind las incluya; 'lg' es el recomendado.
-  const TITLE_SIZES: Record<string, string> = {
-    sm: 'text-2xl md:text-3xl',
-    md: 'text-3xl md:text-4xl',
-    lg: 'text-3xl md:text-5xl',
-    xl: 'text-4xl md:text-6xl',
-    xxl: 'text-5xl md:text-7xl',
+  // Clases literales para que Tailwind las incluya. El tamaño se separa en MÓVIL (base)
+  // y PC (md:) para poder cambiar el de PC sin tocar el de móvil (theme.titleSizePc).
+  // 'lg' es el recomendado.
+  const TITLE_SIZES_MOBILE: Record<string, string> = {
+    sm: 'text-2xl', md: 'text-3xl', lg: 'text-3xl', xl: 'text-4xl', xxl: 'text-5xl',
   };
-  const titleSizeClass = TITLE_SIZES[theme.titleSize as string] || TITLE_SIZES.lg;
+  const TITLE_SIZES_PC: Record<string, string> = {
+    sm: 'md:text-3xl', md: 'md:text-4xl', lg: 'md:text-5xl', xl: 'md:text-6xl', xxl: 'md:text-7xl',
+  };
+  const baseTitleSize = TITLE_SIZES_MOBILE[theme.titleSize as string] ? (theme.titleSize as string) : 'lg';
+  // 'auto' / ausente / valor inválido ⇒ el PC sigue al tamaño base (comportamiento previo).
+  const pcTitleSize = TITLE_SIZES_PC[theme.titleSizePc as string] ? (theme.titleSizePc as string) : baseTitleSize;
+  const titleSizeClass = `${TITLE_SIZES_MOBILE[baseTitleSize]} ${TITLE_SIZES_PC[pcTitleSize]}`;
+  // Inicio CON imagen destacada: el nombre es un subtítulo pequeño (text-2xl) con md:text-3xl
+  // fijo. Ahí también se puede anular el tamaño de PC manteniendo el móvil.
+  const heroTitlePcClass = TITLE_SIZES_PC[theme.titleSizePc as string] || 'md:text-3xl';
   // Sombra del título (para que resalte sobre el fondo).
   const TITLE_SHADOWS: Record<string, string> = {
     none: 'none',
@@ -877,7 +884,7 @@ export default function GalaTemplate({ event, slug, preview = false }: TemplateP
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={heroUrl} alt={event.name} className="w-full max-w-xs sm:max-w-md md:max-w-lg h-auto mb-6 drop-shadow-2xl" />
               <p className="text-lg md:text-xl mb-1" style={{ fontFamily: titleFont.stack, color: titleColor, opacity: 0.85, textShadow: titleShadow }}>Bienvenidos</p>
-              <h1 className="text-2xl md:text-3xl font-semibold mb-8 break-words max-w-full" style={{ fontFamily: titleFont.stack, color: titleColor, textShadow: titleShadow }}>{event.name}</h1>
+              <h1 className={`text-2xl ${heroTitlePcClass} font-semibold mb-8 break-words max-w-full`} style={{ fontFamily: titleFont.stack, color: titleColor, textShadow: titleShadow }}>{event.name}</h1>
             </>
           ) : (
             <>

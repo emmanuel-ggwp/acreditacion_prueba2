@@ -83,8 +83,13 @@ export const themeConfigSchema = z.object({
   // Color del título (nombre del evento) en la landing.
   titleColor: z.string().optional(),
   // Tamaño del título (nombre del evento) en el inicio de Gala cuando no hay imagen
-  // destacada: 'sm' | 'md' | 'lg' (recomendado) | 'xl' | 'xxl'.
+  // destacada: 'sm' | 'md' | 'lg' (recomendado) | 'xl' | 'xxl'. Es el tamaño BASE
+  // (también el de móvil).
   titleSize: z.string().optional(),
+  // Tamaño del título SOLO en PC (escritorio): anula el tamaño de `titleSize` únicamente
+  // en pantallas grandes; el móvil mantiene el de `titleSize`. 'auto' (o ausente) = sigue
+  // a `titleSize`. Valores: 'auto' | 'sm' | 'md' | 'lg' | 'xl' | 'xxl'.
+  titleSizePc: z.string().optional(),
   // Sombra del título: 'none' | 'soft' | 'strong'.
   titleShadow: z.string().optional(),
   inputColor: z.string().optional(),
