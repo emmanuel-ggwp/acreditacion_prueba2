@@ -11,6 +11,9 @@ yarn-error.log*
 out/
 dist/
 coverage/
+# Migraciones compiladas a JS para correr en prod sin tsx (npm run migrate:build).
+# Se generan en el build (postbuild); nunca se versionan.
+dist-migrate/
 
 # Environment variables
 .env*

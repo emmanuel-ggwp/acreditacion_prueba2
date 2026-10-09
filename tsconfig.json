@@ -59,7 +59,8 @@
     ".next/dev/types/**/*.ts"
   ],
   "exclude": [
-    "node_modules"
+    "node_modules",
+    "dist-migrate"
   ]
   // comment to trigger server restart
 }

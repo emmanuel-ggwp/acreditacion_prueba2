@@ -35,10 +35,16 @@ const main = async () => {
   const { sequelize } = await import('../src/lib/sequelize');
   await import('../src/models');
 
+  // Bajo tsx (desarrollo) este runner es .ts y las migraciones son .ts; compilado a
+  // JS (producción, runner SIN tsx: `npm run migrate:build` + `db:migrate:prod`) es
+  // .js y las migraciones son .js. Se descubre la extensión del PROPIO runner para
+  // globear las migraciones de la misma clase (nunca mezcla .ts y .js).
+  const migrationExt = __filename.endsWith('.ts') ? 'ts' : 'js';
+
   const umzug = new Umzug({
     migrations: {
       // glob exige separadores POSIX también en Windows
-      glob: ['*.ts', { cwd: path.join(__dirname, '..', 'migrations').replace(/\\/g, '/') }],
+      glob: [`*.${migrationExt}`, { cwd: path.join(__dirname, '..', 'migrations').replace(/\\/g, '/') }],
     },
     context: sequelize,
     storage: new SequelizeStorage({ sequelize }), // tabla SequelizeMeta

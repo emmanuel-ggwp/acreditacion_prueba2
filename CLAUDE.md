@@ -25,13 +25,16 @@ Guía para desarrolladores y agentes de IA que trabajan en este repositorio. Des
 | Comando | Acción |
 |---|---|
 | `npm run dev` | Servidor de desarrollo (puerto 3000). |
-| `npm run build` | Build de producción. |
+| `npm run build` | Build de producción. Su `postbuild` compila además las migraciones a `dist-migrate/` (runner sin `tsx` para prod). |
 | `npm start` | Sirve el build (`next start -H 127.0.0.1`; escucha SOLO en loopback a propósito). |
 | `npm run lint` | ESLint. |
 | `npm test` | Jest (incluye el gate de cobertura). |
 | `npm run test:coverage` | Jest con reporte de cobertura. |
-| `npm run db:migrate` | Aplica migraciones pendientes (`umzug up`). **Esto es lo que crea/actualiza el esquema.** |
-| `npm run db:migrate:status` | Estado de migraciones. |
+| `npm run db:migrate` | Aplica migraciones pendientes con `tsx` (**desarrollo**). **Esto es lo que crea/actualiza el esquema.** |
+| `npm run db:migrate:status` | Estado de migraciones (desarrollo, `tsx`). |
+| `npm run db:migrate:prod` | Aplica migraciones con `node` desde `dist-migrate/` (**producción**, SIN `tsx`/`typescript`; requiere `npm run build` antes). |
+| `npm run db:migrate:prod:status` | Estado de migraciones en producción (`node`). |
+| `npm run migrate:build` | Compila el runner y las migraciones a `dist-migrate/` (`tsc -p tsconfig.migrate.json`); lo invoca `postbuild`. |
 | `npm run db:seed` / `db:seed:users` | Datos de ejemplo / usuarios. |
 | `npm run db:sync` | ⚠️ `sync` de Sequelize — **destructivo/alterante**, NO usar en producción. Usa migraciones. |
 
@@ -113,4 +116,4 @@ Modos de invitados (`getGuestMode` en `src/utils/formFields.ts`): `named` (filas
 
 ## Despliegue (resumen)
 
-Servidor: droplet DigitalOcean + Nginx + systemd, BD **PostgreSQL administrada** de DigitalOcean (requiere `DB_SSL=true` + `DB_CA_CERT`). Flujo: `git pull` → `npm ci` → cargar entorno de prod y `npm run build` → `npm run db:migrate` → reiniciar el servicio. El detalle y las precondiciones están en `infra/RUNBOOK.md`, `planes/07-reconstruccion-droplet.md` y `planes/08-precondiciones-despliegue.md`.
+Servidor: droplet DigitalOcean + Nginx + systemd, BD **PostgreSQL administrada** de DigitalOcean (requiere `DB_SSL=true` + `DB_CA_CERT`). Flujo: `git pull` → `npm ci` → cargar entorno de prod y `npm run build` → `npm run db:migrate:prod` → reiniciar el servicio. En prod las migraciones corren con `node` desde `dist-migrate/` (que genera el `postbuild`), porque `tsx`/`typescript` son devDependencies y no están instalados; `npm run db:migrate` (con `tsx`) es solo para desarrollo. El detalle y las precondiciones están en `infra/RUNBOOK.md`, `planes/07-reconstruccion-droplet.md` y `planes/08-precondiciones-despliegue.md`.

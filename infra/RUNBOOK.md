@@ -115,7 +115,19 @@ CA, usuario de aplicación, DATABASE_URL, certificado si faltaba el DNS). El
 script se re-ejecuta sin miedo después de completarlas: es idempotente y no
 regenera secretos.
 
-## 7. Migraciones en el droplet (`npm run db:migrate`)
+## 7. Migraciones en el droplet (`npm run db:migrate:prod`)
+
+**Runner sin `tsx`.** En el droplet NO están `tsx` ni `typescript` (son
+devDependencies y no se instalan en producción) — por eso un `npm run db:migrate`
+«no encontraba nada que migrar». Las migraciones se corren desde su **versión
+compilada a JS** en `dist-migrate/`, con `node` y solo dependencias de producción
+(`umzug` —que pasó a dependency—, `sequelize`, `pg`, `zod`, `bcryptjs`, `dotenv`).
+Esa compilación la hace **`npm run build`** (gancho `postbuild` → `migrate:build`,
+que corre `tsc -p tsconfig.migrate.json`), aprovechando que en el build
+`typescript` sí está porque `next build` lo exige. Por tanto: **primero
+`npm run build`, y recién después las migraciones**. `scripts/migrate.ts` sigue
+siendo la fuente única (en desarrollo se corre con `tsx` vía `npm run db:migrate`);
+el runner detecta si es `.ts`/`.js` y globea las migraciones de su misma clase.
 
 Dos identidades (§1, paso 6): el **servicio** conecta con el usuario de
 aplicación (la `DATABASE_URL` de `/etc/tuacreditacion.env`) y las
@@ -131,7 +143,7 @@ DBH=<host-del-cluster>          # el mismo host que usa el servicio; echo "$DBH"
 sudo env DOADMIN_PW="$PW" DBH="$DBH" bash -c '
   set -a; . /etc/tuacreditacion.env; set +a
   export DATABASE_URL="postgresql://doadmin:${DOADMIN_PW}@${DBH}:25060/defaultdb"
-  cd /srv/tuacreditacion/app && npm run db:migrate:status && npm run db:migrate
+  cd /srv/tuacreditacion/app && npm run db:migrate:prod:status && npm run db:migrate:prod
 '
 unset PW
 ```
@@ -158,6 +170,13 @@ unset PW
   (`ls -la /srv/tuacreditacion/app/.env`). Un `.env` pegado desde la consola
   no pisa las variables exportadas, pero es configuración fuera de sitio: el
   entorno del servidor vive en `/etc/tuacreditacion.env` y solo ahí (F6-01).
+- **`dist-migrate/` debe existir** (lo crea `npm run build`). Si falta, `node`
+  falla con «Cannot find module dist-migrate/scripts/migrate.js»: faltó el build.
 - El **primer** comando (`status`) no toca nada: lista ejecutadas y pendientes.
-  Revertir es `npx tsx scripts/migrate.ts down` con el mismo entorno y
+  Revertir es `node dist-migrate/scripts/migrate.js down` con el mismo entorno y
   revierte **solo la última**; la línea base `0001` se niega a revertirse.
+- **Estado por SQL.** La tabla de control se llama **`sequelize_meta`**
+  (minúsculas, por `underscored: true`), NO `"SequelizeMeta"`. Para ver qué se
+  aplicó: `SELECT name FROM sequelize_meta ORDER BY name;`. En la consola de solo
+  lectura, un `SELECT ... FROM "SequelizeMeta"` da «no existe la relación» aunque
+  las migraciones sí hayan corrido — es el nombre, no la ausencia.

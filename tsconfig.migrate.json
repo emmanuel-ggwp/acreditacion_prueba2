@@ -1,0 +1,41 @@
+{
+  // Compila SOLO la cadena de migración a CommonJS en dist-migrate/, para correr las
+  // migraciones en PRODUCCIÓN con `node` (sin tsx ni typescript en runtime). La app y
+  // el typecheck siguen usando tsconfig.json; este es un config aparte y acotado.
+  //
+  // Se compila en el build (`postbuild` → `migrate:build`), cuando typescript todavía
+  // está instalado porque `next build` lo exige. Después basta `node` + deps de
+  // producción (umzug, sequelize, pg, zod, bcryptjs, dotenv) para `db:migrate:prod`.
+  //
+  // Cierre incluido: el runner, las migraciones y lo que importan en runtime
+  // (lib/sequelize, lib/env, los 17 modelos y utils/email). Nada usa alias `@/`.
+  "compilerOptions": {
+    "target": "es2022",
+    "lib": ["es2022"],
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "strict": false,
+    "noImplicitAny": false,
+    "noEmit": false,
+    "declaration": false,
+    "sourceMap": false,
+    "incremental": false,
+    "isolatedModules": false,
+    "forceConsistentCasingInFileNames": true,
+    "outDir": "dist-migrate",
+    "rootDir": ".",
+    "types": ["node"]
+  },
+  "include": [
+    "scripts/migrate.ts",
+    "migrations/**/*.ts",
+    "src/models/**/*.ts",
+    "src/lib/sequelize.ts",
+    "src/lib/env.ts",
+    "src/utils/email.ts"
+  ],
+  "exclude": ["node_modules", "dist-migrate"]
+}
