@@ -22,6 +22,12 @@ import { addDays } from 'date-fns';
 import { auditLogService } from './auditLogService';
 import { normalizeEmail } from '@/utils/email';
 
+// Hash bcrypt del MISMO costo (12) que los usuarios reales (ver hook del modelo User).
+// Se compara contra él cuando el email NO existe, para que el login tarde lo mismo exista
+// o no la cuenta (anti-enumeración por TIMING: complementa el mensaje genérico SB-28, que
+// ya iguala el texto). No es una contraseña real ni un secreto; solo iguala el tiempo de bcrypt.
+const DUMMY_PASSWORD_HASH = '$2b$12$EM6PXMuNrFL6W71fEXnh3.0KI.s1pMw7DZxRgpO.VlKD6JK/DGyGm';
+
 /**
  * Encapsula la autenticación de usuarios y la gestión de tokens de sesión.
  */
@@ -46,7 +52,11 @@ export class AuthService {
     // La columna guarda la forma canónica (hook del modelo, R2-03c): buscar
     // sin normalizar dejaría fuera a quien teclee su email con mayúsculas.
     const user = await User.findOne({ where: { email: normalizeEmail(validatedCredentials.email) } });
-    if (!user || !bcrypt.compareSync(validatedCredentials.password, user.password)) {
+    // Se compara SIEMPRE, incluso si el usuario no existe (contra un hash dummy de MISMO
+    // costo), para que el tiempo de respuesta no revele si el email existe (anti-enumeración
+    // por timing). `bcrypt.compare` async: no bloquea el event loop como el `compareSync` previo.
+    const passwordOk = await bcrypt.compare(validatedCredentials.password, user ? user.password : DUMMY_PASSWORD_HASH);
+    if (!user || !passwordOk) {
       // Generic error message to prevent user enumeration
       throw new Error('Invalid credentials');
     }
@@ -157,7 +167,18 @@ export class AuthService {
   async refreshAccessToken(token: string) {
     const existingRefreshToken = await RefreshToken.findOne({ where: { token } });
 
-    if (!existingRefreshToken || existingRefreshToken.isRevoked) {
+    if (!existingRefreshToken) {
+      throw new Error('Invalid or revoked refresh token');
+    }
+
+    // REUSO de un token ya revocado (rotado antes): señal de robo. Se revoca TODA la familia
+    // de tokens de refresco del usuario, de modo que tanto el atacante como la sesión legítima
+    // tengan que volver a autenticarse (detección de reuso estándar de rotación de tokens).
+    if (existingRefreshToken.isRevoked) {
+      await RefreshToken.update(
+        { isRevoked: true },
+        { where: { userId: existingRefreshToken.userId, isRevoked: false } }
+      );
       throw new Error('Invalid or revoked refresh token');
     }
 
@@ -176,8 +197,16 @@ export class AuthService {
       throw new Error('User not found for this token or is inactive');
     }
 
-    // Invalidate the old refresh token
-    await existingRefreshToken.update({ isRevoked: true });
+    // Revoca el token usado de forma ATÓMICA (solo si aún no estaba revocado). Si otra
+    // petición concurrente ya lo rotó (doble refresco, dos pestañas), `affected` es 0 y se
+    // corta: así un mismo token no emite dos pares de tokens (cierra la carrera TOCTOU).
+    const [affected] = await RefreshToken.update(
+      { isRevoked: true },
+      { where: { id: existingRefreshToken.id, isRevoked: false } }
+    );
+    if (affected === 0) {
+      throw new Error('Invalid or revoked refresh token');
+    }
 
     // Generate new tokens
     const { accessToken: newAccessToken, refreshToken: newRefreshToken } = generateTokens({

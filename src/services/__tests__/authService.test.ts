@@ -43,14 +43,14 @@ describe('AuthService', () => {
       const refreshTokenInstance = { token: 'refresh-token' };
 
       UserMock.findOne.mockResolvedValue(user as any);
-      bcryptMock.compareSync.mockReturnValue(true);
+      (bcryptMock.compare as jest.Mock).mockResolvedValue(true);
       generateTokensMock.mockReturnValue(tokens);
       RefreshTokenMock.create.mockResolvedValue(refreshTokenInstance as any);
 
       const result = await authService.login(credentials);
 
       expect(UserMock.findOne).toHaveBeenCalledWith({ where: { email: credentials.email } });
-      expect(bcrypt.compareSync).toHaveBeenCalledWith(credentials.password, user.password);
+      expect(bcrypt.compare).toHaveBeenCalledWith(credentials.password, user.password);
       expect(user.update).toHaveBeenCalledWith({ lastLogin: expect.any(Date) });
       expect(generateTokens).toHaveBeenCalledWith({ id: user.id, role: user.role, email: user.email, username: user.username });
       expect(RefreshTokenMock.create).toHaveBeenCalledWith({
@@ -90,7 +90,7 @@ describe('AuthService', () => {
         isActive: false,
       };
       UserMock.findOne.mockResolvedValue(user as any);
-      bcryptMock.compareSync.mockReturnValue(true);
+      (bcryptMock.compare as jest.Mock).mockResolvedValue(true);
 
       await expect(authService.login(credentials)).rejects.toThrow('Invalid credentials');
     });
@@ -137,12 +137,16 @@ describe('AuthService', () => {
 
       // La fila del token existe, no está revocada y no ha expirado.
       const existingToken = {
+        id: 'rt-1',
+        userId: user.id,
         token: refreshToken,
         isRevoked: false,
         expiresAt: addDays(new Date(), 30),
         update: jest.fn().mockResolvedValue(undefined),
       };
       RefreshTokenMock.findOne.mockResolvedValue(existingToken as any);
+      // Revoke ATÓMICO del token usado: afecta 1 fila (aún no estaba revocado).
+      (RefreshTokenMock.update as jest.Mock).mockResolvedValue([1]);
       verifyRefreshTokenMock.mockReturnValue(refreshTokenPayload);
       UserMock.findByPk.mockResolvedValue({ ...user, isActive: true } as any);
       generateTokensMock.mockReturnValue(newTokens);
@@ -153,8 +157,11 @@ describe('AuthService', () => {
       expect(RefreshTokenMock.findOne).toHaveBeenCalledWith({ where: { token: refreshToken } });
       expect(verifyRefreshToken).toHaveBeenCalledWith(refreshToken);
       expect(UserMock.findByPk).toHaveBeenCalledWith(user.id);
-      // Se invalida el token anterior (rotación) y se emite uno nuevo.
-      expect(existingToken.update).toHaveBeenCalledWith({ isRevoked: true });
+      // Se invalida el token anterior (rotación, revoke atómico) y se emite uno nuevo.
+      expect(RefreshTokenMock.update).toHaveBeenCalledWith(
+        { isRevoked: true },
+        { where: { id: 'rt-1', isRevoked: false } }
+      );
       expect(generateTokens).toHaveBeenCalledWith({ id: user.id, role: user.role, email: user.email, username: user.username });
       expect(RefreshTokenMock.create).toHaveBeenCalledWith(
         expect.objectContaining({ token: newTokens.refreshToken, userId: user.id })
@@ -165,6 +172,19 @@ describe('AuthService', () => {
     it('should throw if the refresh token is not found or revoked', async () => {
       RefreshTokenMock.findOne.mockResolvedValue(null);
       await expect(authService.refreshAccessToken('missing-token')).rejects.toThrow('Invalid or revoked refresh token');
+    });
+
+    it('detecta el REUSO de un token ya revocado: revoca toda la familia del usuario', async () => {
+      const revokedToken = { id: 'rt-2', userId: 'user-9', token: 'reused', isRevoked: true, expiresAt: addDays(new Date(), 30) };
+      RefreshTokenMock.findOne.mockResolvedValue(revokedToken as any);
+      (RefreshTokenMock.update as jest.Mock).mockResolvedValue([3]);
+
+      await expect(authService.refreshAccessToken('reused')).rejects.toThrow('Invalid or revoked refresh token');
+      // Reuso = señal de robo: se revocan TODOS los refresh tokens activos del usuario.
+      expect(RefreshTokenMock.update).toHaveBeenCalledWith(
+        { isRevoked: true },
+        { where: { userId: 'user-9', isRevoked: false } }
+      );
     });
 
     it('should revoke and throw for an expired refresh token', async () => {
