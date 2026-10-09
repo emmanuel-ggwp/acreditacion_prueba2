@@ -130,6 +130,14 @@ export class UserService {
       if (updatePwErr) throw new Error(updatePwErr);
     }
 
+    // No dejar el sistema sin NINGÚN administrador activo: si este usuario es el último
+    // ADMIN activo, no se puede degradar su rol ni desactivarlo (lo haga él u otro admin).
+    const losesAdmin = (data.role !== undefined && data.role !== 'ADMIN') || data.isActive === false;
+    if (losesAdmin && (user as any).role === 'ADMIN' && (user as any).isActive) {
+      const otherActiveAdmins = await User.count({ where: { role: 'ADMIN', isActive: true, id: { [Op.ne]: id } } });
+      if (otherActiveAdmins === 0) throw new Error('No puedes dejar el sistema sin ningún administrador activo.');
+    }
+
     const before: any = { email: (user as any).email, firstName: (user as any).firstName, lastName: (user as any).lastName, role: (user as any).role, isActive: (user as any).isActive };
     const patch: any = {};
     // Comparación y guardado sobre la forma canónica (hook del modelo, R2-03c).
@@ -177,6 +185,11 @@ export class UserService {
     if (actorId && actorId === id) throw new Error('No puedes eliminar tu propia cuenta.');
     const user = await User.findByPk(id);
     if (!user) throw new Error('Usuario no encontrado.');
+    // No eliminar al ÚLTIMO administrador activo (evita quedarse sin gestión de usuarios).
+    if ((user as any).role === 'ADMIN' && (user as any).isActive) {
+      const otherActiveAdmins = await User.count({ where: { role: 'ADMIN', isActive: true, id: { [Op.ne]: id } } });
+      if (otherActiveAdmins === 0) throw new Error('No puedes eliminar al último administrador activo.');
+    }
     const name = (user as any).username;
     await user.destroy(); // soft delete (paranoid)
     if (actorId) {

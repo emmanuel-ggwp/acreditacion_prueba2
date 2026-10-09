@@ -264,6 +264,25 @@ describe('UserService', () => {
       expect(user.update).toHaveBeenCalled();
       expect(AuditLogMock.create).not.toHaveBeenCalled();
     });
+
+    it('no permite degradar/desactivar al ÚLTIMO admin activo', async () => {
+      const user = makeUser({ role: 'ADMIN', isActive: true });
+      (UserMock.findByPk as jest.Mock).mockResolvedValue(user);
+      (UserMock.count as jest.Mock).mockResolvedValue(0); // no hay otro admin activo
+
+      await expect(service.update('user-1', { role: 'MANAGER' }, 'actor-1'))
+        .rejects.toThrow('No puedes dejar el sistema sin ningún administrador activo.');
+      expect(user.update).not.toHaveBeenCalled();
+    });
+
+    it('permite degradar un admin si hay otro admin activo', async () => {
+      const user = makeUser({ role: 'ADMIN', isActive: true });
+      (UserMock.findByPk as jest.Mock).mockResolvedValue(user);
+      (UserMock.count as jest.Mock).mockResolvedValue(2); // hay otros admins activos
+
+      await service.update('user-1', { role: 'MANAGER' }, 'actor-1');
+      expect(user.update).toHaveBeenCalledWith(expect.objectContaining({ role: 'MANAGER' }));
+    });
   });
 
   describe('remove', () => {
@@ -308,6 +327,15 @@ describe('UserService', () => {
       expect(user.destroy).toHaveBeenCalled();
       expect(AuditLogMock.create).not.toHaveBeenCalled();
       expect(result).toEqual({ ok: true });
+    });
+
+    it('no permite eliminar al ÚLTIMO admin activo', async () => {
+      const user = makeUser({ id: 'target', role: 'ADMIN', isActive: true });
+      (UserMock.findByPk as jest.Mock).mockResolvedValue(user);
+      (UserMock.count as jest.Mock).mockResolvedValue(0); // no hay otro admin activo
+
+      await expect(service.remove('target', 'actor-1')).rejects.toThrow('No puedes eliminar al último administrador activo.');
+      expect(user.destroy).not.toHaveBeenCalled();
     });
   });
 });
