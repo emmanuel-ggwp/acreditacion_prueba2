@@ -118,6 +118,14 @@ describe('ReportService', () => {
       expect(EventMock.findByPk).toHaveBeenCalledWith(eventId);
       expect(queryMock).toHaveBeenCalledTimes(3);
 
+      // El fallback de invitados SIN guest_schedules se cuenta por las fechas REALES del
+      // participante (participant_schedules), no por la guest.schedule_id heredada: así
+      // coincide con el Excel y no se cuenta a un invitado en una fecha donde su titular ya
+      // no está (bug "Gala Centinela 2026").
+      const guestRegSql = String(queryMock.mock.calls[0][0]);
+      expect(guestRegSql).toContain('participant_schedules');
+      expect(guestRegSql).not.toMatch(/SELECT\s+g\.schedule_id\s+AS\s+sid/i);
+
       expect(result.eventInfo).toBe(event);
 
       expect(result.scheduleStats).toEqual([
