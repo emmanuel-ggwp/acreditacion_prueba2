@@ -209,7 +209,10 @@ export const updateEventSchema = createEventSchema.partial().extend({
   allowMultipleSchedules: z.boolean().optional(),
 });
 
-export const scheduleSchema = z.object({
+// Objeto base SIN .refine(): Zod 4 no permite .omit()/.partial() sobre un esquema con
+// refinamientos (desde 4.6 lanza; antes descartaba el refine en silencio). Los esquemas
+// derivados parten de aquí y aplican el refine ellos mismos.
+const scheduleBaseSchema = z.object({
   id: z.guid(),
   eventId: z.guid(),
   scheduleName: z.string().min(3, 'El nombre del horario debe tener al menos 3 caracteres'),
@@ -228,17 +231,22 @@ export const scheduleSchema = z.object({
   // para esta fecha, y si la fecha se muestra en la landing pública.
   registrationOpen: z.boolean().optional(),
   visibleInLanding: z.boolean().optional(),
-}).refine(data => new Date(data.endDateTime) > new Date(data.startDateTime), {
-  message: 'La fecha de término debe ser posterior a la fecha de inicio',
-  path: ['endDateTime'],
 });
 
-export const createScheduleSchema = scheduleSchema.omit({ id: true, isActive: true });
+const endAfterStart = {
+  check: (data: { startDateTime: string; endDateTime: string }) => new Date(data.endDateTime) > new Date(data.startDateTime),
+  params: { message: 'La fecha de término debe ser posterior a la fecha de inicio', path: ['endDateTime'] },
+};
+
+export const scheduleSchema = scheduleBaseSchema.refine(endAfterStart.check, endAfterStart.params);
+
+const createScheduleBaseSchema = scheduleBaseSchema.omit({ id: true, isActive: true });
+export const createScheduleSchema = createScheduleBaseSchema.refine(endAfterStart.check, endAfterStart.params);
 // En EDICIÓN, blockType es opcional SIN default: si se reinyectara 'SINGLE', un update
 // parcial que no lo envía sobreescribiría un AM/PM/FULL_DAY/CUSTOM previo. La regla
-// "término posterior al inicio" se valida en el servicio con valores efectivos, porque
-// .partial() descarta el .refine() del esquema base (y puede venir una sola fecha).
-export const updateScheduleSchema = createScheduleSchema.partial().extend({
+// "término posterior al inicio" se valida en el servicio con valores efectivos (en un
+// update parcial puede venir una sola fecha).
+export const updateScheduleSchema = createScheduleBaseSchema.partial().extend({
   blockType: z.enum(['SINGLE', 'AM', 'PM', 'FULL_DAY', 'CUSTOM']).optional(),
 });
 

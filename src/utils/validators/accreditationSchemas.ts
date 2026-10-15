@@ -1,7 +1,9 @@
 
 import { z } from 'zod';
 
-export const accreditationSchema = z.object({
+// Objeto base SIN .refine(): Zod 4 no permite .omit() sobre un esquema con refinamientos
+// (desde 4.6 lanza; antes descartaba el refine en silencio).
+const accreditationBaseSchema = z.object({
   id: z.guid(),
   participantId: z.guid().nullable(),
   guestId: z.guid().nullable(),
@@ -12,12 +14,16 @@ export const accreditationSchema = z.object({
   notes: z.string().optional().nullable(),
   createdAt: z.iso.datetime({ message: 'Formato de fecha de creación inválido' }).optional(),
   updatedAt: z.iso.datetime({ message: 'Formato de fecha de actualización inválido' }).optional(),
-}).refine(data => data.participantId || data.guestId, {
-  message: "Debe proporcionarse participantId o guestId",
-  path: ["participantId"],
 });
 
-export const createAccreditationSchema = accreditationSchema.omit({ id: true });
+const participantOrGuest = {
+  check: (data: { participantId: string | null; guestId: string | null }) => !!(data.participantId || data.guestId),
+  params: { message: "Debe proporcionarse participantId o guestId", path: ["participantId"] },
+};
+
+export const accreditationSchema = accreditationBaseSchema.refine(participantOrGuest.check, participantOrGuest.params);
+
+export const createAccreditationSchema = accreditationBaseSchema.omit({ id: true }).refine(participantOrGuest.check, participantOrGuest.params);
 
 const bulkAccreditationItemSchema = z.object({
     type: z.enum(['participant', 'guest']),
