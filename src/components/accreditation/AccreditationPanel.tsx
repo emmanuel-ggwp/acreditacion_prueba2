@@ -22,6 +22,8 @@ interface Stats { participants: number; guests: number; total: number; awarded: 
 interface ScheduleStat { scheduleId: string; label: string; startDateTime: string; location?: string; participants: number; guests: number; total: number }
 interface EventStats { perSchedule: ScheduleStat[]; totals: { participants: number; guests: number; total: number } }
 
+const LIVE_REFRESH_MS = 15000;
+
 const STATUS: Record<string, { label: string; cls: string }> = {
   accrediting: { label: 'En acreditación', cls: 'bg-green-100 text-green-700' },
   published: { label: 'Programado', cls: 'bg-blue-100 text-blue-700' },
@@ -120,6 +122,18 @@ const AccreditationPanel = ({ eventId: eventIdProp, scheduleId: scheduleIdProp }
     setSelectedPerson(null);
     setWorkOpen(true);
   };
+
+  // Refresco en vivo de los contadores mientras se trabaja en una fecha, para ver lo
+  // que acreditan los otros puestos. Se pausa con la pestaña oculta.
+  useEffect(() => {
+    if (!scheduleId) return;
+    const timer = setInterval(() => {
+      if (document.hidden) return;
+      loadStats();
+      loadEventStats();
+    }, LIVE_REFRESH_MS);
+    return () => clearInterval(timer);
+  }, [scheduleId, loadStats, loadEventStats]);
 
   const toggleStatus = async (s: any, status: string) => {
     try { await setScheduleStatus(s.id, eventId, status); } catch { /* el store guarda el error */ }
@@ -300,7 +314,7 @@ const AccreditationPanel = ({ eventId: eventIdProp, scheduleId: scheduleIdProp }
                 <StatCard icon={UserCheck} label="Participantes" value={stats?.participants ?? '—'} color="text-indigo-600" />
                 <StatCard icon={Users} label="Invitados" value={stats?.guests ?? '—'} color="text-teal-600" />
                 <StatCard icon={UsersRound} label="Total" value={stats?.total ?? '—'} color="text-gray-900" />
-                {(stats?.awardedTotal ?? 0) > 0 && <StatCard icon={Award} label="Premiados" value={stats?.awarded ?? 0} color="text-amber-600" onClick={() => setShowAwarded(true)} />}
+                {(stats?.awardedTotal ?? 0) > 0 && <StatCard icon={Award} label="Premiados llegaron" value={<>{stats?.awarded ?? 0}<span className="text-base font-semibold text-amber-400">/{stats?.awardedTotal ?? 0}</span></>} color="text-amber-600" onClick={() => setShowAwarded(true)} />}
               </div>
 
               <button

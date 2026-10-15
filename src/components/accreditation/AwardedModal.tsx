@@ -20,20 +20,29 @@ interface AwardedModalProps {
   onClose: () => void;
 }
 
+const REFRESH_MS = 10000;
+
 const fmtTime = (d?: string | null) => (d ? formatTimeCL(d, { hour: '2-digit', minute: '2-digit' }) : '');
 
 const AwardedModal: React.FC<AwardedModalProps> = ({ scheduleId, onClose }) => {
   const [list, setList] = useState<AwardedPerson[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Carga inicial y luego refresco en vivo cada REFRESH_MS (pausado con la pestaña
+  // oculta), para ver llegar a los premiados que acreditan otros puestos.
   useEffect(() => {
     let active = true;
-    setLoading(true);
-    apiClient.get<AwardedPerson[]>(`/api/accreditation/awarded?scheduleId=${scheduleId}`)
-      .then((res) => { if (active) setList(Array.isArray(res) ? res : []); })
-      .catch(() => { if (active) setList([]); })
-      .finally(() => { if (active) setLoading(false); });
-    return () => { active = false; };
+    const load = (initial: boolean) => {
+      if (initial) setLoading(true);
+      apiClient.get<AwardedPerson[]>(`/api/accreditation/awarded?scheduleId=${scheduleId}`)
+        .then((res) => { if (active) setList(Array.isArray(res) ? res : []); })
+        // En un refresco fallido se conserva la última lista buena.
+        .catch(() => { if (active && initial) setList([]); })
+        .finally(() => { if (active && initial) setLoading(false); });
+    };
+    load(true);
+    const timer = setInterval(() => { if (!document.hidden) load(false); }, REFRESH_MS);
+    return () => { active = false; clearInterval(timer); };
   }, [scheduleId]);
 
   const accredited = list.filter((p) => p.isAccredited);
@@ -51,6 +60,9 @@ const AwardedModal: React.FC<AwardedModalProps> = ({ scheduleId, onClose }) => {
             <h2 className="text-lg font-bold">Premiados</h2>
             <span className="text-sm text-gray-500">
               ({accredited.length}/{list.length} acreditados)
+            </span>
+            <span className="flex items-center gap-1 text-[11px] font-medium text-green-600" title="Se actualiza automáticamente">
+              <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse" /> En vivo
             </span>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-700 rounded-md p-1" aria-label="Cerrar">
