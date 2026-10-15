@@ -44,7 +44,7 @@ Orden de pasos. Los E# son las preguntas de la fase 2 aún abiertas
    privado** de la VPC, el usuario de aplicación y **sin `?sslmode=...`** (el
    arranque la rechaza si lo trae — P07-D7.10). Las `NEXT_PUBLIC_*` antes del
    build. Los secretos JWT ya los generó provision.sh: no tocarlos.
-8. **Desplegar el código** (fase 4), **aplicar las migraciones** (§7) y
+8. **Desplegar el código** (fase 4; pasos en §8), **aplicar las migraciones** (§7) y
    arrancar: `systemctl start tuacreditacion`.
 9. **Pasar la lista de comprobación posterior** (plan 07, fase 5): Host
    desconocido rechazado, puertos internos cerrados, `.php` en uploads no
@@ -180,3 +180,78 @@ unset PW
   aplicó: `SELECT name FROM sequelize_meta ORDER BY name;`. En la consola de solo
   lectura, un `SELECT ... FROM "SequelizeMeta"` da «no existe la relación» aunque
   las migraciones sí hayan corrido — es el nombre, no la ausencia.
+
+## 8. Actualizar la app con código nuevo (despliegue habitual)
+
+Lo que se hace **cada vez** que hay cambios en `main` y hay que llevarlos al
+servidor. Se entra por SSH con el usuario administrador (`operador`, dueño de
+`/srv/tuacreditacion/app`), **no** como root: si `git`, `npm` o el build corren
+como root, dejan ficheros de root en el árbol y el siguiente despliegue falla
+por permisos.
+
+**Cuándo:** fuera de horario de acreditación. El reinicio corta la app unos
+segundos; no se pierden datos, pero un operador en la puerta vería un error.
+
+```bash
+cd /srv/tuacreditacion/app
+
+# 1. Ver que no hay cambios locales. Debe decir "nothing to commit": el
+#    servidor no se edita a mano. Si hay algo, parar y averiguar qué es.
+git status
+
+# 2. Bajar el código nuevo.
+git pull
+
+# 3. Instalar las librerías EXACTAS del package-lock.json. Obligatorio aunque
+#    "parezca que no cambió nada": si se salta, el build usa las versiones
+#    viejas (p. ej. un parche de seguridad de Next.js no llega a producción).
+#    Instala también las devDependencies: el build las necesita (typescript,
+#    tailwindcss, postcss).
+npm ci
+
+# 4. Compilar con el entorno de producción. El build necesita las variables de
+#    /etc/tuacreditacion.env (las NEXT_PUBLIC_* quedan grabadas en el build y
+#    la app valida el entorno al compilar). El fichero es 600 del usuario de
+#    servicio: se lee con sudo y se carga SOLO dentro de los paréntesis, para
+#    que los secretos no queden en la sesión ni en el historial.
+( set -a; . <(sudo cat /etc/tuacreditacion.env); set +a; npm run build )
+
+# 5. Quitar las devDependencies, que en producción no hacen falta.
+npm prune --omit=dev
+
+# 6. Migraciones: SOLO si el cambio trae alguna nueva. Ver §7 (primero el
+#    `status`; si dice "Pendientes (0)", no hay nada que hacer).
+
+# 7. Reiniciar el servicio para que cargue el build nuevo.
+sudo systemctl restart tuacreditacion
+```
+
+**Comprobar que quedó bien:**
+
+```bash
+# Debe decir "active (running)". Si no, ver los logs (siguiente comando).
+systemctl status tuacreditacion --no-pager
+
+# Últimas líneas del log del servicio (errores de arranque, entorno, BD).
+sudo journalctl -u tuacreditacion -n 50 --no-pager
+
+# La app y la base responden: debe devolver {"status":"ok","db":"connected"}.
+curl -s http://127.0.0.1:3000/api/health; echo
+```
+
+Y entrar a la app desde el navegador y abrir alguna pantalla tocada por el
+cambio.
+
+**Si algo sale mal:**
+
+- **Falla `npm run build`:** la app sigue funcionando con el build anterior
+  mientras NO se reinicie. Ver el error, corregir en el repo, subir y repetir
+  desde el paso 2. No reiniciar con un build roto.
+- **Falla el arranque tras reiniciar** (el `status` no dice `running`): volver
+  a la versión anterior y recompilar:
+  `git log --oneline -5` para ver el commit previo, `git checkout <commit>` y
+  repetir los pasos 3, 4, 5 y 7. Después, `git checkout main` cuando el
+  arreglo esté subido.
+- **«Configuración de entorno inválida» en el log o en el build:** falta o
+  está mal una variable de `/etc/tuacreditacion.env` (ver §1, paso 7). El
+  mensaje nombra la variable.
