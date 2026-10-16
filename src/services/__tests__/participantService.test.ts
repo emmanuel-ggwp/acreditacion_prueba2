@@ -384,8 +384,28 @@ describe('ParticipantService', () => {
       expect(result.notFound).toHaveLength(0);
       expect(result.errors).toHaveLength(0);
       expect(p.update).toHaveBeenCalledWith({ isAwarded: true, awardReason: 'Sorteo' });
-      expect(AuditLogMock.create).toHaveBeenCalled();
       expect(ParticipantMock.create).not.toHaveBeenCalled();
+
+      // Un log POR PERSONA ("Premiado por Excel", con solo premiado/motivo como cambios)
+      // y un resumen explicativo de la carga.
+      expect(AuditLogMock.create).toHaveBeenCalledTimes(2);
+      expect(AuditLogMock.create).toHaveBeenNthCalledWith(1, expect.objectContaining({
+        action: 'UPDATE', entity: 'Participant', entityId: PARTICIPANT_ID, eventId: EVENT_ID, userId: USER_ID,
+        details: expect.objectContaining({
+          name: 'Ana Pérez',
+          origen: 'Premiado por Excel',
+          changes: { isAwarded: { from: false, to: true }, awardReason: { from: null, to: 'Sorteo' } },
+          nota: expect.stringContaining('Premiado por Excel'),
+        }),
+      }));
+      expect(AuditLogMock.create).toHaveBeenNthCalledWith(2, expect.objectContaining({
+        action: 'UPDATE', entity: 'Participant', entityId: EVENT_ID,
+        details: expect.objectContaining({
+          name: 'Premiados por Excel — Evento Test',
+          summary: expect.stringContaining('Ana Pérez'),
+          premiados: 1,
+        }),
+      }));
     });
 
     it('busca por correo cuando no hay RUT y guarda motivo null si no viene', async () => {
@@ -409,6 +429,11 @@ describe('ParticipantService', () => {
       expect(result.awarded).toBe(0);
       expect(result.notFound).toEqual([{ row: 1, rut: VALID_RUT, email: undefined, name: 'Nadie Existe' }]);
       expect(result.errors).toHaveLength(0);
+      // Sin log por persona (no se tocó a nadie); solo el resumen, que nombra al no encontrado.
+      expect(AuditLogMock.create).toHaveBeenCalledTimes(1);
+      expect(AuditLogMock.create).toHaveBeenCalledWith(expect.objectContaining({
+        details: expect.objectContaining({ summary: expect.stringContaining('NO se marcaron: Nadie Existe') }),
+      }));
     });
 
     it('busca por nombre y apellido cuando no hay RUT ni correo (coincidencia única)', async () => {
@@ -449,6 +474,14 @@ describe('ParticipantService', () => {
       expect(changed.alreadyAwarded).toBe(1);
       expect(changed.reasonUpdated).toBe(1);
       expect(p.update).toHaveBeenCalledWith({ awardReason: 'Reconocimiento' });
+      // El log por persona registra SOLO el cambio de motivo.
+      expect(AuditLogMock.create).toHaveBeenCalledWith(expect.objectContaining({
+        entityId: PARTICIPANT_ID,
+        details: expect.objectContaining({
+          changes: { awardReason: { from: 'Sorteo', to: 'Reconocimiento' } },
+          nota: expect.stringContaining('solo se actualizó el motivo'),
+        }),
+      }));
     });
 
     it('rechaza una fila con RUT inválido y una sin ningún dato, y sigue con el resto', async () => {

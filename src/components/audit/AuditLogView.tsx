@@ -167,6 +167,8 @@ const AuditLogView: React.FC = () => {
                             })}
                           </ul>
                           {d.fecha && <span className="block text-xs text-gray-500 mt-0.5">{d.fecha}</span>}
+                          {/* Nota explicativa (p. ej. "Premiado por Excel …"): dice de dónde vino el cambio. */}
+                          {d.nota && <span className="block text-xs text-gray-600 mt-0.5 italic">{d.nota}</span>}
                         </>
                       ) : l.action === 'SYSTEM-BULK-UPDATE' ? (
                         <span className="text-gray-500">Actualización automática de estados de horarios (published → accrediting → accredited)</span>

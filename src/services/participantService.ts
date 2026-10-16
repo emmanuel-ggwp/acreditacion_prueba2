@@ -461,18 +461,58 @@ export class ParticipantService {
           continue;
         }
 
+        const fullName = `${participant.firstName || ''} ${participant.lastName || ''}`.trim();
+        // Datos comunes de la entrada de auditoría por persona: en Actividad se ve el
+        // nombre, los campos que cambiaron (solo premiado y motivo) y una nota que
+        // explica que vino de la carga masiva por Excel.
+        const logBase = {
+          userId,
+          action: 'UPDATE' as const,
+          entity: 'Participant',
+          entityId: participant.id,
+          eventId,
+        };
+        const rowRef = `fila ${i + 2} del archivo`;
+
         if (participant.isAwarded) {
           results.alreadyAwarded++;
           if (reason && reason !== (participant.awardReason || '')) {
+            const prevReason = participant.awardReason || null;
+            // SOLO el motivo: la marca de premiado ya estaba y no se toca nada más.
             await participant.update({ awardReason: reason });
             results.reasonUpdated++;
+            await auditLogService.log({
+              ...logBase,
+              details: {
+                name: fullName,
+                email: participant.email || undefined,
+                origen: 'Premiado por Excel',
+                changes: { awardReason: { from: prevReason, to: reason } },
+                nota: `Premiado por Excel (carga masiva, ${rowRef}): ya estaba premiado en ${event.name}; solo se actualizó el motivo del premio. Ningún otro dato fue modificado.`,
+              },
+            });
           }
           continue;
         }
 
+        // SOLO se escriben la marca de premiado y el motivo; el resto del participante
+        // (nombre, correo, fechas, acreditación, invitados) no se toca.
         await participant.update({ isAwarded: true, awardReason: reason || null });
         results.awarded++;
-        awardedNames.push(`${participant.firstName || ''} ${participant.lastName || ''}`.trim());
+        awardedNames.push(fullName);
+        await auditLogService.log({
+          ...logBase,
+          details: {
+            name: fullName,
+            email: participant.email || undefined,
+            origen: 'Premiado por Excel',
+            changes: {
+              isAwarded: { from: false, to: true },
+              ...(reason ? { awardReason: { from: null, to: reason } } : {}),
+            },
+            nota: `Premiado por Excel (carga masiva, ${rowRef}) en ${event.name}${reason ? ` · motivo: ${reason}` : ' · sin motivo'}. Solo se marcó como premiado; ningún otro dato fue modificado.`,
+          },
+        });
       } catch (e: any) {
         results.errors.push({ ...ref, error: e.message });
       }
@@ -484,9 +524,16 @@ export class ParticipantService {
       entity: 'Participant',
       entityId: eventId,
       details: {
-        name: `Premiación masiva — ${event.name}`,
-        summary: `${results.awarded} premiados${results.alreadyAwarded ? `, ${results.alreadyAwarded} ya estaban premiados` : ''}${results.reasonUpdated ? ` (${results.reasonUpdated} con motivo actualizado)` : ''}, ${results.notFound.length} no encontrados, ${results.errors.length} con error (de ${rows.length} filas)`,
-        operacion: 'Premiación masiva (Excel)',
+        name: `Premiados por Excel — ${event.name}`,
+        summary: [
+          `Carga masiva de premiados desde Excel/CSV (${rows.length} filas).`,
+          `${results.awarded} marcado(s) como premiado(s)${awardedNames.length ? `: ${awardedNames.slice(0, 20).join(', ')}${awardedNames.length > 20 ? ` y ${awardedNames.length - 20} más` : ''}` : ''}.`,
+          results.alreadyAwarded ? `${results.alreadyAwarded} ya estaba(n) premiado(s) y se conservaron${results.reasonUpdated ? ` (${results.reasonUpdated} con el motivo actualizado)` : ''}.` : '',
+          results.notFound.length ? `${results.notFound.length} no estaba(n) en el padrón y NO se marcaron: ${results.notFound.slice(0, 20).map((n) => n.name || n.rut || n.email || `fila ${n.row + 1}`).join(', ')}${results.notFound.length > 20 ? ` y ${results.notFound.length - 20} más` : ''}.` : '',
+          results.errors.length ? `${results.errors.length} fila(s) con error (RUT inválido o sin datos) que no se procesaron.` : '',
+          'Solo se modificó la marca de premiado y el motivo; ningún otro dato de los participantes fue tocado.',
+        ].filter(Boolean).join(' '),
+        operacion: 'Premiado por Excel (carga masiva)',
         evento: event.name,
         premiados: results.awarded,
         yaPremiados: results.alreadyAwarded,
