@@ -11,6 +11,7 @@ import apiClient from '@/utils/apiClient';
 import Participant from '@/models/Participant';
 import ParticipantForm from './ParticipantForm';
 import ParticipantImport from './ParticipantImport';
+import ParticipantAwardImport from './ParticipantAwardImport';
 import { showToast } from '@/components/ui/Toast';
 import { exportParticipantsToExcel } from '@/utils/exportParticipants';
 import DeleteReasonModal from '@/components/ui/DeleteReasonModal';
@@ -86,6 +87,8 @@ const ParticipantList = ({ eventId }: { eventId: string }) => {
   // Modo "Inscribir" del form: convierte un precargado en inscrito (exige obligatorios + fecha).
   const [formInscribir, setFormInscribir] = useState(false);
   const [isImportOpen, setIsImportOpen] = useState(false);
+  // Premiación masiva desde Excel (marca premiados entre los que YA existen en el padrón).
+  const [isAwardImportOpen, setIsAwardImportOpen] = useState(false);
   const [selectedParticipant, setSelectedParticipant] = useState<Participant | undefined>(undefined);
   const [awarding, setAwarding] = useState<any | null>(null);
   const [awardReasonInput, setAwardReasonInput] = useState('');
@@ -434,6 +437,14 @@ const ParticipantList = ({ eventId }: { eventId: string }) => {
             {exporting ? 'Exportando…' : 'Exportar'}
           </button>
           <button
+            onClick={() => setIsAwardImportOpen(true)}
+            className="bg-white border border-amber-300 text-amber-800 px-4 py-2 rounded-lg hover:bg-amber-50 flex items-center gap-2 text-sm font-medium transition-colors"
+            title="Premiar en masa desde Excel/CSV a participantes que ya están en el padrón"
+          >
+            <Award size={18} />
+            Premiar por Excel
+          </button>
+          <button
             onClick={resendAll}
             disabled={resending}
             className="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-50 flex items-center gap-2 text-sm font-medium transition-colors disabled:opacity-50"
@@ -780,6 +791,14 @@ const ParticipantList = ({ eventId }: { eventId: string }) => {
         />
       )}
 
+      {isAwardImportOpen && (
+        <ParticipantAwardImport
+          eventId={eventId}
+          onClose={() => setIsAwardImportOpen(false)}
+          onImported={reload}
+        />
+      )}
+
       {deleteTarget && (
         <DeleteReasonModal
           title="Eliminar participante"
@@ -916,6 +935,14 @@ const ParticipantList = ({ eventId }: { eventId: string }) => {
                 <div>
                   <p className="font-semibold text-gray-900">Premiación</p>
                   <p className="text-gray-600">Marca o quita el premio de la persona y su motivo. No afecta su inscripción ni su acreditación.</p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-3">
+                <span className="flex-shrink-0 mt-0.5 h-8 w-8 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center"><FileUp size={16} /></span>
+                <div>
+                  <p className="font-semibold text-gray-900">Premiar por Excel <span className="text-xs font-normal text-gray-400">· botón superior</span></p>
+                  <p className="text-gray-600">Sube un Excel/CSV con RUT (o correo o nombre) y el motivo: marca como <b>premiados</b> a quienes <b>ya están</b> en el padrón. No crea a nadie; los que no se encuentren se listan sin marcar.</p>
                 </div>
               </div>
 

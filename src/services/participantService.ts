@@ -377,6 +377,128 @@ export class ParticipantService {
 
     return results;
   }
+  /**
+   * Premiación masiva desde Excel/CSV, posterior a la carga del padrón: marca como premiados
+   * (`isAwarded` + `awardReason`) a participantes que YA existen en el evento. No crea a nadie:
+   * cada fila se busca por RUT normalizado o correo y, si no trae ninguno de los dos, por nombre y
+   * apellido exactos (solo si la coincidencia es única). Las filas sin coincidencia se devuelven en
+   * `notFound` y no se marcan. Un participante ya premiado solo actualiza su motivo si la fila trae
+   * uno distinto. Registra un resumen en auditoría.
+   *
+   * @param eventId - ID del evento cuyo padrón se premia.
+   * @param rows - Filas ya mapeadas: `{ documentNumber?, email?, firstName?, lastName?, awardReason? }`.
+   * @param userId - ID del usuario que ejecuta (queda en la auditoría).
+   * @returns Contadores `awarded` (marcados nuevos), `alreadyAwarded` (ya lo estaban), `reasonUpdated`,
+   *   más `notFound` (filas sin participante) y `errors` (filas inválidas), ambas con detalle por fila.
+   * @throws {Error} `'Event not found'` si el evento no existe.
+   */
+  async importAwards(
+    eventId: string,
+    rows: any[],
+    userId: string
+  ) {
+    const event = await Event.findByPk(eventId);
+    if (!event) throw new Error('Event not found');
+
+    type RowRef = { row: number; rut?: string; email?: string; name?: string };
+    const results = {
+      awarded: 0,
+      alreadyAwarded: 0,
+      reasonUpdated: 0,
+      notFound: [] as RowRef[],
+      errors: [] as (RowRef & { error: string })[],
+    };
+    const awardedNames: string[] = [];
+
+    for (let i = 0; i < rows.length; i++) {
+      const r = rows[i] || {};
+      const rawRut = r.documentNumber != null ? String(r.documentNumber).trim() : '';
+      const email = r.email != null ? String(r.email).trim() : '';
+      const fName = String(r.firstName || '').trim();
+      const lName = String(r.lastName || '').trim();
+      const reason = r.awardReason != null ? String(r.awardReason).trim() : '';
+      const ref: RowRef = {
+        row: i + 1,
+        rut: rawRut || undefined,
+        email: email || undefined,
+        name: `${fName} ${lName}`.trim() || undefined,
+      };
+
+      try {
+        if (rawRut && !isValidRut(rawRut)) {
+          throw new Error('RUT inválido (dígito verificador incorrecto).');
+        }
+        if (!rawRut && !email && !fName && !lName) {
+          throw new Error('Fila sin RUT, correo ni nombre: no hay cómo identificar a la persona.');
+        }
+
+        // Búsqueda: RUT normalizado y/o correo (misma llave que la importación del padrón).
+        let participant: any = null;
+        const orConds: any[] = [];
+        if (rawRut) orConds.push(sqlWhere(normalizedRutCol(), cleanRut(rawRut)));
+        if (email) orConds.push({ email: { [Op.iLike]: email } });
+        if (orConds.length) {
+          participant = await Participant.findOne({ where: { eventId, [Op.or]: orConds } });
+        } else {
+          // Sin RUT ni correo: nombre y apellido exactos (sin distinguir mayúsculas), y solo
+          // si hay UNA coincidencia; con varias no se adivina y la fila queda sin marcar.
+          const matches = await Participant.findAll({
+            where: {
+              eventId,
+              firstName: { [Op.iLike]: fName },
+              lastName: { [Op.iLike]: lName },
+            },
+            limit: 2,
+          });
+          if (matches.length > 1) {
+            throw new Error('Hay más de un participante con ese nombre: agrega el RUT o el correo para distinguirlo.');
+          }
+          participant = matches[0] || null;
+        }
+
+        if (!participant) {
+          results.notFound.push(ref);
+          continue;
+        }
+
+        if (participant.isAwarded) {
+          results.alreadyAwarded++;
+          if (reason && reason !== (participant.awardReason || '')) {
+            await participant.update({ awardReason: reason });
+            results.reasonUpdated++;
+          }
+          continue;
+        }
+
+        await participant.update({ isAwarded: true, awardReason: reason || null });
+        results.awarded++;
+        awardedNames.push(`${participant.firstName || ''} ${participant.lastName || ''}`.trim());
+      } catch (e: any) {
+        results.errors.push({ ...ref, error: e.message });
+      }
+    }
+
+    await auditLogService.log({
+      userId,
+      action: 'UPDATE',
+      entity: 'Participant',
+      entityId: eventId,
+      details: {
+        name: `Premiación masiva — ${event.name}`,
+        summary: `${results.awarded} premiados${results.alreadyAwarded ? `, ${results.alreadyAwarded} ya estaban premiados` : ''}${results.reasonUpdated ? ` (${results.reasonUpdated} con motivo actualizado)` : ''}, ${results.notFound.length} no encontrados, ${results.errors.length} con error (de ${rows.length} filas)`,
+        operacion: 'Premiación masiva (Excel)',
+        evento: event.name,
+        premiados: results.awarded,
+        yaPremiados: results.alreadyAwarded,
+        noEncontrados: results.notFound.length,
+        errores: results.errors.length,
+        totalFilas: rows.length,
+        nombres: awardedNames.slice(0, 50),
+      },
+    });
+
+    return results;
+  }
 
   /**
    * Valida y actualiza un participante. No permite moverlo de evento (`eventId` se descarta). Si se

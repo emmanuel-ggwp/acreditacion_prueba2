@@ -356,6 +356,116 @@ describe('ParticipantService', () => {
   });
 
   // ------------------------------------------------------------------
+  // importAwards (premiación masiva desde Excel)
+  // ------------------------------------------------------------------
+  describe('importAwards', () => {
+    const existing = (over: any = {}) => ({
+      id: PARTICIPANT_ID, firstName: 'Ana', lastName: 'Pérez', isAwarded: false, awardReason: null,
+      update: jest.fn().mockResolvedValue(undefined),
+      ...over,
+    });
+
+    beforeEach(() => {
+      (EventMock.findByPk as jest.Mock).mockResolvedValue({ id: EVENT_ID, name: 'Evento Test' });
+    });
+
+    it('lanza error si el evento no existe', async () => {
+      (EventMock.findByPk as jest.Mock).mockResolvedValue(null);
+      await expect(service.importAwards(EVENT_ID, [], USER_ID)).rejects.toThrow('Event not found');
+    });
+
+    it('marca como premiado (con motivo) a un participante existente por RUT', async () => {
+      const p = existing();
+      (ParticipantMock.findOne as jest.Mock).mockResolvedValue(p);
+
+      const result = await service.importAwards(EVENT_ID, [{ documentNumber: VALID_RUT, awardReason: 'Sorteo' }], USER_ID);
+
+      expect(result.awarded).toBe(1);
+      expect(result.notFound).toHaveLength(0);
+      expect(result.errors).toHaveLength(0);
+      expect(p.update).toHaveBeenCalledWith({ isAwarded: true, awardReason: 'Sorteo' });
+      expect(AuditLogMock.create).toHaveBeenCalled();
+      expect(ParticipantMock.create).not.toHaveBeenCalled();
+    });
+
+    it('busca por correo cuando no hay RUT y guarda motivo null si no viene', async () => {
+      const p = existing();
+      (ParticipantMock.findOne as jest.Mock).mockResolvedValue(p);
+
+      const result = await service.importAwards(EVENT_ID, [{ email: 'ana@x.cl' }], USER_ID);
+
+      expect(result.awarded).toBe(1);
+      expect(ParticipantMock.findOne).toHaveBeenCalledWith(
+        expect.objectContaining({ where: expect.objectContaining({ eventId: EVENT_ID }) })
+      );
+      expect(p.update).toHaveBeenCalledWith({ isAwarded: true, awardReason: null });
+    });
+
+    it('avisa (notFound) y no marca cuando el participante no existe', async () => {
+      (ParticipantMock.findOne as jest.Mock).mockResolvedValue(null);
+
+      const result = await service.importAwards(EVENT_ID, [{ documentNumber: VALID_RUT, firstName: 'Nadie', lastName: 'Existe' }], USER_ID);
+
+      expect(result.awarded).toBe(0);
+      expect(result.notFound).toEqual([{ row: 1, rut: VALID_RUT, email: undefined, name: 'Nadie Existe' }]);
+      expect(result.errors).toHaveLength(0);
+    });
+
+    it('busca por nombre y apellido cuando no hay RUT ni correo (coincidencia única)', async () => {
+      const p = existing();
+      (ParticipantMock.findAll as jest.Mock).mockResolvedValue([p]);
+
+      const result = await service.importAwards(EVENT_ID, [{ firstName: 'Ana', lastName: 'Pérez', awardReason: 'Mejor disfraz' }], USER_ID);
+
+      expect(result.awarded).toBe(1);
+      expect(ParticipantMock.findOne).not.toHaveBeenCalled();
+      expect(ParticipantMock.findAll).toHaveBeenCalledWith(
+        expect.objectContaining({ where: expect.objectContaining({ eventId: EVENT_ID, firstName: { [Op.iLike]: 'Ana' }, lastName: { [Op.iLike]: 'Pérez' } }) })
+      );
+      expect(p.update).toHaveBeenCalledWith({ isAwarded: true, awardReason: 'Mejor disfraz' });
+    });
+
+    it('rechaza la fila si hay varios participantes con el mismo nombre', async () => {
+      (ParticipantMock.findAll as jest.Mock).mockResolvedValue([existing(), existing({ id: PARTICIPANT_ID_2 })]);
+
+      const result = await service.importAwards(EVENT_ID, [{ firstName: 'Ana', lastName: 'Pérez' }], USER_ID);
+
+      expect(result.awarded).toBe(0);
+      expect(result.errors).toHaveLength(1);
+      expect(result.errors[0].error).toContain('más de un participante');
+    });
+
+    it('no vuelve a premiar a un ya premiado; solo actualiza el motivo si viene distinto', async () => {
+      const p = existing({ isAwarded: true, awardReason: 'Sorteo' });
+      (ParticipantMock.findOne as jest.Mock).mockResolvedValue(p);
+
+      const same = await service.importAwards(EVENT_ID, [{ documentNumber: VALID_RUT, awardReason: 'Sorteo' }], USER_ID);
+      expect(same.awarded).toBe(0);
+      expect(same.alreadyAwarded).toBe(1);
+      expect(same.reasonUpdated).toBe(0);
+      expect(p.update).not.toHaveBeenCalled();
+
+      const changed = await service.importAwards(EVENT_ID, [{ documentNumber: VALID_RUT, awardReason: 'Reconocimiento' }], USER_ID);
+      expect(changed.alreadyAwarded).toBe(1);
+      expect(changed.reasonUpdated).toBe(1);
+      expect(p.update).toHaveBeenCalledWith({ awardReason: 'Reconocimiento' });
+    });
+
+    it('rechaza una fila con RUT inválido y una sin ningún dato, y sigue con el resto', async () => {
+      const p = existing();
+      (ParticipantMock.findOne as jest.Mock).mockResolvedValue(p);
+
+      const rows = [{ documentNumber: INVALID_RUT }, {}, { documentNumber: VALID_RUT }];
+      const result = await service.importAwards(EVENT_ID, rows, USER_ID);
+
+      expect(result.errors).toHaveLength(2);
+      expect(result.errors[0]).toMatchObject({ row: 1, error: expect.stringContaining('RUT inválido') });
+      expect(result.errors[1]).toMatchObject({ row: 2, error: expect.stringContaining('no hay cómo identificar') });
+      expect(result.awarded).toBe(1);
+    });
+  });
+
+  // ------------------------------------------------------------------
   // updateParticipant
   // ------------------------------------------------------------------
   describe('updateParticipant', () => {
