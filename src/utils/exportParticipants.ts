@@ -29,7 +29,7 @@ const guestFechas = (g: any, p: any) => {
 /**
  * Descarga un Excel (.xlsx) con los participantes del evento + sus invitados + fechas.
  * Hoja 1 "Participantes": UNA fila por participante; cada invitado sale en la misma fila
- *   en columnas propias (Invitado N · Dieta invitado N · Fecha invitado N).
+ *   en columnas propias (nombre, dieta, fecha elegida, acreditación y fecha/hora de check-in).
  * Hoja 2 "Invitados": una fila por invitado (lista plana), con su dieta y su fecha real.
  */
 export async function exportParticipantsToExcel(eventId: string, eventName: string) {
@@ -66,6 +66,9 @@ export async function exportParticipantsToExcel(eventId: string, eventName: stri
       guestCols[`Invitado ${i + 1}`] = g ? `${g.firstName} ${g.lastName || ''}`.trim() : '';
       guestCols[`Dieta invitado ${i + 1}`] = g ? dietaryLabel(g.dietaryPreference) : '';
       guestCols[`Fecha invitado ${i + 1}`] = g ? guestFechas(g, p) : '';
+      // El check-in del invitado es independiente del titular y de la fecha elegida.
+      guestCols[`Acreditado invitado ${i + 1}`] = g ? (g.isAccredited ? 'Sí' : 'No') : '';
+      guestCols[`Fecha y hora de acreditación invitado ${i + 1}`] = g ? fmtDateTime(g.accreditedAt) : '';
     }
 
     return {

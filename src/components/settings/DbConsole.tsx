@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Database, Play, Loader2, AlertTriangle } from 'lucide-react';
+import { Database, Play, Loader2, AlertTriangle, Copy } from 'lucide-react';
 import apiClient from '@/utils/apiClient';
+import { showToast } from '@/components/ui/Toast';
 
 interface QueryResult {
   columns: string[];
@@ -37,6 +38,30 @@ const DbConsole: React.FC = () => {
       setError(e?.message || 'No se pudo ejecutar la consulta.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const copyResponse = async () => {
+    // TSV: respeta el orden visible y conserva tabulaciones, saltos y comillas
+    // dentro de las celdas para poder pegar el resultado también en Excel.
+    const tsvCell = (value: any) => {
+      const text = cell(value);
+      return /[\t\r\n"]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+    };
+    const text = error ?? (result ? [
+      result.columns.map(tsvCell).join('\t'),
+      ...result.rows.map((row) => result.columns.map((column) => tsvCell(row[column])).join('\t')),
+    ].join('\n') : '');
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      if (!error && result?.truncated) {
+        showToast.warning(`Respuesta copiada: ${result.rowCount} filas. El resultado está recortado y hay más filas en la base.`);
+      } else {
+        showToast.success('Respuesta copiada');
+      }
+    } catch {
+      showToast.error('No se pudo copiar. Revisa el permiso del navegador para acceder al portapapeles.');
     }
   };
 
@@ -97,15 +122,27 @@ const DbConsole: React.FC = () => {
       </div>
 
       {error && (
-        <div className="mt-4 rounded-md bg-red-50 border border-red-200 p-3 text-sm text-red-700 whitespace-pre-wrap">{error}</div>
+        <div className="mt-4 rounded-md bg-red-50 border border-red-200 p-3 text-sm text-red-700">
+          <div className="flex justify-end mb-2">
+            <button type="button" onClick={copyResponse} className="inline-flex items-center gap-2 rounded-md border border-red-300 bg-white px-3 py-1.5 text-sm hover:bg-red-100">
+              <Copy size={16} /> Copiar respuesta
+            </button>
+          </div>
+          <p className="whitespace-pre-wrap">{error}</p>
+        </div>
       )}
 
       {result && (
         <div className="mt-4">
-          <p className="text-sm text-gray-600 mb-2">
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+          <p className="text-sm text-gray-600">
             {result.rowCount} fila{result.rowCount === 1 ? '' : 's'}
             {result.truncated && <span className="text-amber-700"> · resultado recortado a {result.rowCount} (hay más)</span>}
           </p>
+            <button type="button" onClick={copyResponse} disabled={result.columns.length === 0} className="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+              <Copy size={16} /> Copiar respuesta
+            </button>
+          </div>
           {result.columns.length > 0 ? (
             <div className="overflow-x-auto border border-gray-200 rounded-lg">
               <table className="min-w-full text-sm">

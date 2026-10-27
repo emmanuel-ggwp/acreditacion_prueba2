@@ -215,7 +215,7 @@ export class ParticipantService {
       if (!schedule) throw new Error('Schedule not found for this event');
     }
 
-    const results = { created: 0, reused: 0, namesUpdated: 0, namesProtected: 0, guestsCreated: 0, guestsDiscarded: 0, errors: [] as { row: number; rut?: string; name?: string; error: string }[] };
+    const results = { created: 0, reused: 0, namesUpdated: 0, namesProtected: 0, guestsCreated: 0, guestsDiscarded: 0, warnings: [] as { row: number; rut?: string; name?: string; message: string }[], errors: [] as { row: number; rut?: string; name?: string; error: string }[] };
 
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i] || {};
@@ -242,6 +242,13 @@ export class ParticipantService {
         if (pdata.email) orConds.push({ email: pdata.email });
         let participant = orConds.length
           ? await Participant.findOne({ where: { eventId, [Op.or]: orConds }, transaction: tx })
+          : null;
+
+        // Diagnóstico únicamente: conservar la selección actual por RUT O correo.
+        // Publicar el aviso solo si la transacción termina correctamente.
+        const identityWarning = participant && rawRut &&
+          cleanRut(String(participant.documentNumber || '')) !== cleanRut(rawRut)
+          ? `El correo ${pdata.email} coincide con ${[participant.firstName, participant.lastName].filter(Boolean).join(' ') || 'un participante existente'} (RUT ${participant.documentNumber || 'sin RUT'}), pero la fila trae RUT ${rawRut}. El importador reutilizó ese participante por correo y no creó a la persona de esta fila.`
           : null;
 
         // RUT canónico para guardar (28088678-5: sin puntos, con guion), o null si no vino.
@@ -341,6 +348,14 @@ export class ParticipantService {
         }
 
         await tx.commit();
+        if (identityWarning) {
+          results.warnings.push({
+            row: i + 1,
+            rut: rawRut,
+            name: `${pdata.firstName || ''} ${pdata.lastName || ''}`.trim(),
+            message: identityWarning,
+          });
+        }
       } catch (e: any) {
         await tx.rollback();
         results.errors.push({

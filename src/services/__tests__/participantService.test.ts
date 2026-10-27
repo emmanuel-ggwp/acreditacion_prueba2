@@ -263,6 +263,37 @@ describe('ParticipantService', () => {
       expect(AuditLogMock.create).toHaveBeenCalled();
     });
 
+    it('avisa si se reutiliza por correo a otro RUT sin cambiar la importación', async () => {
+      (EventScheduleMock.findOne as jest.Mock).mockResolvedValue(scheduleObj);
+      const existing = { id: PARTICIPANT_ID, firstName: 'Otra', lastName: 'Persona', documentNumber: '13417351-3' };
+      (ParticipantMock.findOne as jest.Mock).mockResolvedValue(existing);
+      const result = await service.importParticipants(EVENT_ID, SCHEDULE_ID_1, [
+        { documentNumber: VALID_RUT, firstName: 'Nueva', email: 'compartido@example.com' },
+      ], USER_ID);
+
+      expect(result.reused).toBe(1);
+      expect(result.created).toBe(0);
+      expect(result.errors).toHaveLength(0);
+      expect(result.warnings).toEqual([expect.objectContaining({
+        row: 1, rut: VALID_RUT, name: 'Nueva', message: expect.stringContaining('13417351-3'),
+      })]);
+      expect(result.warnings[0].message).toContain('compartido@example.com');
+      expect(ParticipantMock.create).not.toHaveBeenCalled();
+      expect(ParticipantScheduleMock.findOrCreate).toHaveBeenCalledWith(expect.objectContaining({
+        where: { participantId: PARTICIPANT_ID, scheduleId: SCHEDULE_ID_1 },
+      }));
+    });
+
+    it('no avisa por un mismo RUT con otro formato ni por filas sin RUT', async () => {
+      (ParticipantMock.findOne as jest.Mock).mockResolvedValue({ id: PARTICIPANT_ID, documentNumber: '11.111.111-1' });
+      const result = await service.importParticipants(EVENT_ID, null, [
+        { documentNumber: VALID_RUT, email: 'compartido@example.com' },
+        { firstName: 'Sin RUT', email: 'compartido@example.com' },
+      ], USER_ID);
+      expect(result.reused).toBe(2);
+      expect(result.warnings).toEqual([]);
+    });
+
     it('rechaza una fila con RUT inválido', async () => {
       const rows = [{ documentNumber: INVALID_RUT, firstName: 'Bad', lastName: 'Rut' }];
       const result = await service.importParticipants(EVENT_ID, null, rows, USER_ID);

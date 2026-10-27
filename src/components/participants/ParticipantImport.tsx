@@ -241,8 +241,15 @@ const ParticipantImport: React.FC<ParticipantImportProps> = ({ eventId, guestMod
         overwriteNames,
         includeProtected: overwriteNames && includeProtected,
       });
-      setResult(res);
-      showToast.success(`Importados: ${res.created} · Reusados: ${res.reused}${res.namesUpdated ? ` · Nombres corregidos: ${res.namesUpdated}` : ''} · Invitados: ${res.guestsCreated}`);
+      // Los índices del servidor corresponden a las filas válidas enviadas.
+      const sourceRows = buildParticipants().map((p, index) => ({ p, row: index + 2 })).filter(({ p }) => rowOk(p));
+      const excelRows = (items: any[] = []) => items.map((item) => ({ ...item, row: sourceRows[item.row - 1]?.row ?? item.row }));
+      setResult({ ...res, errors: excelRows(res.errors), warnings: excelRows(res.warnings) });
+      if (res.errors?.length || res.warnings?.length) {
+        showToast.error(`Importación con ${res.errors?.length || 0} error(es) y ${res.warnings?.length || 0} conflicto(s) de identidad. Revisa el detalle por fila.`);
+      } else {
+        showToast.success(`Importados: ${res.created} · Reusados: ${res.reused}${res.namesUpdated ? ` · Nombres corregidos: ${res.namesUpdated}` : ''} · Invitados: ${res.guestsCreated}`);
+      }
       if (onImported) onImported();
     } catch (e: any) {
       showToast.error(e.message || 'Error al importar.');
@@ -524,19 +531,35 @@ const ParticipantImport: React.FC<ParticipantImportProps> = ({ eventId, guestMod
 
               {/* Resultado: éxito + errores detallados */}
               {result && !importing && (
-                <div className={`border rounded-lg p-4 text-sm ${result.errors?.length ? 'bg-amber-50 border-amber-200' : 'bg-green-50 border-green-200'}`}>
+                <div className={`border rounded-lg p-4 text-sm ${result.errors?.length || result.warnings?.length ? 'bg-amber-50 border-amber-200' : 'bg-green-50 border-green-200'}`}>
                   <div className="flex items-center gap-2 font-semibold mb-2">
-                    {result.errors?.length
-                      ? <><AlertTriangle className="h-5 w-5 text-amber-600" /> <span className="text-amber-800">Importación finalizada con {result.errors.length} error(es)</span></>
+                    {result.errors?.length || result.warnings?.length
+                      ? <><AlertTriangle className="h-5 w-5 text-amber-600" /> <span className="text-amber-800">Importación finalizada con {result.errors?.length || 0} error(es) y {result.warnings?.length || 0} conflicto(s) de identidad</span></>
                       : <><CheckCircle2 className="h-5 w-5 text-green-600" /> <span className="text-green-800">Importación completada</span></>}
                   </div>
                   <p className="text-gray-700 mb-1">
                     📅 {(() => { const sel = EventSchedules.find((s: any) => s.id === scheduleId); return sel ? <>Inscritos en: <b>{fmtSchedule(sel)}</b></> : <b>Precarga (sin fecha)</b>; })()}
                   </p>
                   <p className="text-gray-700">
-                    ✅ Creados: <b>{result.created}</b> · ♻️ Reusados (ya existían por RUT): <b>{result.reused}</b>{result.namesUpdated ? <> · ✏️ Nombres corregidos: <b>{result.namesUpdated}</b></> : null}{result.namesProtected ? <> · 🔒 Protegidos (acreditados/premiados): <b>{result.namesProtected}</b></> : null} · 👥 Invitados: <b>{result.guestsCreated}</b>{result.guestsDiscarded ? <> · 🗑️ Descartados (no eran nombres, ej. "Si"/"No llevo acompañante"): <b>{result.guestsDiscarded}</b></> : null}
+                    ✅ Creados: <b>{result.created}</b> · ♻️ Reusados (coincidencia por RUT o correo): <b>{result.reused}</b>{result.namesUpdated ? <> · ✏️ Nombres corregidos: <b>{result.namesUpdated}</b></> : null}{result.namesProtected ? <> · 🔒 Protegidos (acreditados/premiados): <b>{result.namesProtected}</b></> : null} · 👥 Invitados: <b>{result.guestsCreated}</b>{result.guestsDiscarded ? <> · 🗑️ Descartados (no eran nombres, ej. "Si"/"No llevo acompañante"): <b>{result.guestsDiscarded}</b></> : null}
                     {result.errors?.length ? <> · ❌ Con error: <b>{result.errors.length}</b></> : null}
                   </p>
+                  {result.warnings?.length > 0 && (
+                    <div className="mt-3">
+                      <p className="font-medium text-amber-800 mb-1">Conflictos de identidad detectados:</p>
+                      <p className="text-amber-800 mb-2">Estas filas reutilizaron a otro participante por correo. No se crearon como personas nuevas.</p>
+                      <div className="border border-amber-200 rounded-md bg-white max-h-40 overflow-y-auto divide-y">
+                        {result.warnings.map((warning: any, i: number) => (
+                          <div key={i} className="px-3 py-1.5 text-xs">
+                            <span className="font-semibold text-gray-800">Fila {warning.row}</span>
+                            {warning.rut ? <span className="text-gray-500"> · RUT {warning.rut}</span> : null}
+                            {warning.name ? <span className="text-gray-500"> · {warning.name}</span> : null}
+                            <span className="block text-red-600">{warning.message}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   {result.errors?.length > 0 && (
                     <div className="mt-3">
                       <p className="font-medium text-amber-800 mb-1">Filas que NO se cargaron y por qué:</p>
