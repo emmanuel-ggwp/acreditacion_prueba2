@@ -36,9 +36,11 @@ export async function exportParticipantsToExcel(eventId: string, eventName: stri
   const participants = await apiClient.get<any[]>(`/api/events/${eventId}/export`);
   // Preguntas configurables del evento (Sí/No + lista): una columna por pregunta.
   let customQuestions: ReturnType<typeof getCustomQuestions> = [];
+  let ticketsEnabled = participants.some((p) => !!p.ticketDelivery);
   try {
     const event = await apiClient.get<any>(`/api/events/${eventId}`);
     customQuestions = getCustomQuestions(event?.registrationConfig);
+    ticketsEnabled = ticketsEnabled || Number(event?.registrationConfig?.tickets?.maxPerParticipant) > 0;
   } catch { /* si no se puede leer la config, se exporta sin esas columnas */ }
 
   // Máximo de invitados con nombre entre todos los participantes: define cuántos
@@ -89,9 +91,15 @@ export async function exportParticipantsToExcel(eventId: string, eventName: stri
       'Premiado': p.isAwarded ? 'Sí' : 'No',
       'Motivo premio': p.awardReason || '',
       'Cant. invitados': guests.length + (Number(p.guestCount) || 0),
+      'Invitados acreditados (suma de fechas)': Number(p.accreditedGuestCount) || 0,
       'Acompañante': p.guestCompanion ? 'Sí' : (Number(p.guestLoads) > 0 ? 'No' : ''),
       'Cargas': Number(p.guestLoads) > 0 ? p.guestLoads : '',
       ...guestCols,
+      ...(ticketsEnabled ? {
+        'Tickets entregados': p.ticketDelivery?.quantity ?? 0,
+        'Fecha y hora entrega tickets': fmtDateTime(p.ticketDelivery?.deliveredAt),
+        'ID usuario entrega tickets': p.ticketDelivery?.deliveredBy || '',
+      } : {}),
       ...customCols,
     };
   });

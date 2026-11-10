@@ -1,4 +1,6 @@
 'use client';
+import TicketDeliveryControl from './TicketDeliveryControl';
+import AttendanceHistoryAlert from './AttendanceHistoryAlert';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Participant from '@/models/Participant';
@@ -265,6 +267,8 @@ const ParticipantCard: React.FC<ParticipantCardProps> = ({ person, type, schedul
         </div>
       </div>
       
+      <AttendanceHistoryAlert key={`history:${type}:${person.id}:${scheduleId}`} type={type} personId={person.id} scheduleId={scheduleId} refreshKey={refreshKey} accredited={accreditationStatus.isAccredited} />
+
       {showOtherDateWarning && !accreditationStatus.isAccredited && (
         <div className="mx-4 sm:mx-6 mt-4 p-3 sm:p-4 bg-amber-50 border border-amber-200 rounded-lg flex items-start gap-3">
           <CalendarClock className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
@@ -324,7 +328,7 @@ const ParticipantCard: React.FC<ParticipantCardProps> = ({ person, type, schedul
             {isParticipant && accreditationFields.numeroSap && (participant as any)?.numeroSap && (
               <p className="flex items-center"><Hash size={16} className="mr-2" /> <span className="text-gray-500 mr-1">SAP:</span> {(participant as any).numeroSap}</p>
             )}
-            {isParticipant && describeStoredAnswers((participant as any)?.customData).map((a) => (
+            {isParticipant && describeStoredAnswers((participant as any)?.customData).filter((a) => a.key !== 'historial_asistencia_informativo').map((a) => (
               <p key={a.key} className="text-sm"><span className="text-gray-500">{a.label}:</span> <span className="font-medium">{a.text}</span></p>
             ))}
           </div>
@@ -482,6 +486,10 @@ const ParticipantCard: React.FC<ParticipantCardProps> = ({ person, type, schedul
             )}
           </div>
         </div>
+      )}
+
+      {isParticipant && (
+        <TicketDeliveryControl key={`${person.id}:${scheduleId}`} participantId={person.id} scheduleId={scheduleId} accredited={accreditationStatus.isAccredited} refreshKey={refreshKey} />
       )}
 
       {!accreditationStatus.isAccredited && (

@@ -228,3 +228,23 @@ Todas sin `withAuth`. Las de escritura y el lookup tienen rate-limit dedicado po
 - **Awards**: `POST /api/awards/{awardId}/assign` y `GET /api/participants/{participantId}/awards` permiten GUARDIA; `DELETE /api/awards/{awardId}` se restringe a ADMIN, MANAGER.
 - **`withAuth` por defecto**: la firma es `withAuth(handler, allowedRoles = [ADMIN])`, pero todas las rutas pasan su lista de roles de forma explícita, así que el valor por defecto nunca aplica.
 - **Validación en servicios**: varias rutas (users, gifts, algunas de participants/guests) no llaman al esquema Zod en el handler sino dentro del servicio; en esos casos la columna Body/Query nombra el esquema/servicio responsable.
+# Entrega de tickets
+
+`registrationConfig.tickets.maxPerParticipant` es un entero de 0 a 10000. Ausente o 0 desactiva la entrega. El máximo incluye al grupo del titular y permite una sola entrega por participante en todo el evento, aunque tenga varias fechas.
+
+- `GET /api/participants/:participantId/tickets?scheduleId=:scheduleId`: máximo, acreditación actual y entrega anterior.
+- `POST /api/participants/:participantId/tickets`: cuerpo `{ scheduleId, quantity }`. Requiere acreditación del titular en esa fecha, evento y fecha activos, cantidad positiva dentro del máximo y ninguna entrega anterior. Roles: ADMIN, MANAGER, OPERATOR y GUARDIA.
+- Devuelve 201 al registrar, 400 ante validación, 404 si no existe el participante/fecha del evento y 409 si ya hubo entrega.
+
+La entrega guarda cantidad, fecha, usuario y fecha del evento en `ticket_deliveries`. Se bloquean las filas del horario y participante durante la transacción y un índice único por participante impide duplicados entre puestos o fechas. Corregir la acreditación no borra la entrega. No se admiten entregas parciales sucesivas ni anulaciones desde esta pantalla.
+
+El Excel de participantes incorpora cantidad, fecha/hora e ID del usuario de entrega cuando el evento tiene tickets habilitados o existen entregas anteriores. Los eventos sin tickets mantienen sus columnas anteriores.
+
+**Despliegue:** aplicar `0009-create-ticket-deliveries` con `npm run db:migrate:prod` después del build y antes de reiniciar con el código nuevo. La migración agrega una tabla sin transformar datos existentes. En desarrollo usar `npm run db:migrate`. No usar `db:sync` en producción.
+# Aviso automático de asistencias anteriores
+
+`GET /api/accreditations/history?type=participant|guest&id=:id&scheduleId=:scheduleId` requiere una sesión ADMIN, MANAGER, OPERATOR o GUARDIA. Devuelve `{ history: [{ id, scheduleId, scheduleName, startDateTime, checkInTime }] }` con todas las acreditaciones de la persona en otras fechas del mismo evento, ordenadas del ingreso más reciente al más antiguo. No usa las inscripciones como prueba de asistencia.
+
+La tarjeta muestra cada fecha y hora en America/Santiago. La consulta se renueva al buscar a la persona, cambiar de fecha, actualizar la ficha o cambiar su estado de acreditación. El historial es informativo y no participa en la validación del check-in. Si la consulta falla, se muestra un aviso con reintento y se permite continuar. La protección existente contra una acreditación duplicada en la misma fecha se conserva.
+
+No requiere migraciones nuevas. El campo temporal `historial_asistencia_informativo`, creado por el workaround SQL, queda guardado pero ya no se muestra para evitar duplicar un historial desactualizado.

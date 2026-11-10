@@ -112,6 +112,7 @@ const EventForm: React.FC<EventFormProps> = ({ event, onClose, onSuccess }) => {
       registrationConfig: {
         ...(event?.registrationConfig || {}),
         mode: event?.registrationConfig?.mode || 'open',
+        tickets: { maxPerParticipant: event?.registrationConfig?.tickets?.maxPerParticipant ?? 0 },
         theme: {
           // Fuente única de los defaults del tema (compartida con el editor en vivo).
           ...THEME_DEFAULTS,
@@ -401,6 +402,14 @@ const EventForm: React.FC<EventFormProps> = ({ event, onClose, onSuccess }) => {
                 </div>
                 <p className="mt-1 text-xs text-gray-500">Déjalo vacío (o en 0) para <b>capacidad ilimitada</b>.</p>
                 {errors.maxCapacity && <p className="mt-2 text-sm text-red-500">{errors.maxCapacity.message}</p>}
+              </div>
+
+              <div className="sm:col-span-2 rounded-xl border border-indigo-100 bg-indigo-50/50 p-4">
+                <label htmlFor="maxTicketsPerParticipant" className="block text-sm font-semibold text-gray-700 mb-1">Máximo de tickets por participante</label>
+                <input id="maxTicketsPerParticipant" type="number" min={0} max={10000} step={1}
+                  {...register('registrationConfig.tickets.maxPerParticipant' as any, { setValueAs: (v) => v === '' ? 0 : Number(v) })}
+                  className="block w-40 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm" />
+                <p className="mt-2 text-xs text-gray-600">0 = entrega desactivada. Permite registrar una sola entrega de hasta esta cantidad por participante en todo el evento, después de acreditarlo. Incluye los tickets de su grupo; no se multiplica por invitados o cargas.</p>
               </div>
 
               {/* Checkbox */}

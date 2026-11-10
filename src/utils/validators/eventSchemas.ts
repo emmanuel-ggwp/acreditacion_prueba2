@@ -155,6 +155,8 @@ export const registrationConfigSchema = z.object({
   // Opciones de preferencia alimenticia personalizadas por evento (etiquetas).
   dietaryOptions: z.array(z.string()).optional(),
   guests: guestsConfigSchema.optional(),
+  // 0 o ausente: desactivado. Tope único por titular en todo el evento.
+  tickets: z.object({ maxPerParticipant: z.number().int().min(0).max(10000) }).optional(),
   // Preguntas "Sí/No + lista" configurables por evento (ej. transporte + recorrido).
   customQuestions: z.array(customQuestionSchema).optional(),
 });

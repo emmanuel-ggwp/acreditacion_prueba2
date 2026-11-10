@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { withAuth } from '@/middleware/auth';
 import { AuthenticatedRequest } from '@/types/auth';
 import { ROLES } from '@/utils/constants';
-import { Participant, Guest, EventSchedule, Accreditation } from '@/models/index';
+import { Participant, Guest, EventSchedule, Accreditation, TicketDelivery } from '@/models/index';
 
 const { ADMIN, OPERATOR, MANAGER } = ROLES;
 
@@ -16,6 +16,7 @@ export const GET = withAuth(async (req: AuthenticatedRequest, { params }: { para
     const participants = await Participant.findAll({
       where: { eventId },
       include: [
+        { model: TicketDelivery, as: 'ticketDelivery', attributes: ['quantity', 'deliveredAt', 'deliveredBy'], required: false },
         {
           model: Guest,
           as: 'guests',
@@ -27,7 +28,7 @@ export const GET = withAuth(async (req: AuthenticatedRequest, { params }: { para
           ],
         },
         { model: EventSchedule, as: 'schedules', through: { attributes: [] } },
-        { model: Accreditation, attributes: ['id', 'checkInTime'], required: false },
+        { model: Accreditation, attributes: ['id', 'checkInTime', 'guestCount'], required: false },
       ],
       order: [['lastName', 'ASC'], ['firstName', 'ASC']],
     });
@@ -48,6 +49,15 @@ export const GET = withAuth(async (req: AuthenticatedRequest, { params }: { para
         isAccredited: (g.Accreditations || []).length > 0,
         accreditedAt: earliestCheckIn(g.Accreditations),
       }));
+      // Fuente real de asistencia: los invitados declarados NO cambian al acreditar.
+      // Sumar cada check-in, también cuando hay varias fechas, como hace la web.
+      const numericArrivals = (plain.Accreditations || []).reduce(
+        (total: number, a: any) => total + (Number(a.guestCount) || 0), 0
+      );
+      const namedArrivals = plain.guests.reduce(
+        (total: number, g: any) => total + (g.Accreditations || []).length, 0
+      );
+      plain.accreditedGuestCount = numericArrivals + namedArrivals;
       return plain;
     });
 

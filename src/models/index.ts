@@ -17,8 +17,11 @@ import GiftCampaign from './GiftCampaign';
 import GiftType from './GiftType';
 import GiftEmployee from './GiftEmployee';
 import GiftDelivery from './GiftDelivery';
+import TicketDelivery from './TicketDelivery';
 
 // Define associations here to avoid circular dependencies
+Participant.hasOne(TicketDelivery, { foreignKey: 'participantId', as: 'ticketDelivery' });
+TicketDelivery.belongsTo(Participant, { foreignKey: 'participantId', as: 'participant' });
 Participant.belongsToMany(EventSchedule, { through: ParticipantSchedule, foreignKey: 'participantId', as: 'schedules' });
 EventSchedule.belongsToMany(Participant, { through: ParticipantSchedule, foreignKey: 'scheduleId', as: 'participants' });
 
@@ -54,5 +57,6 @@ export {
   GiftCampaign,
   GiftType,
   GiftEmployee,
-  GiftDelivery
+  GiftDelivery,
+  TicketDelivery
 };

@@ -40,7 +40,7 @@ const makeMockModel = () => {
 [
   'User', 'RefreshToken', 'Event', 'EventSchedule', 'Participant', 'ParticipantSchedule',
   'Guest', 'GuestSchedule', 'Award', 'ParticipantAward', 'Accreditation', 'AuditLog',
-  'EmailTemplate', 'GiftCampaign', 'GiftType', 'GiftEmployee', 'GiftDelivery',
+  'EmailTemplate', 'GiftCampaign', 'GiftType', 'GiftEmployee', 'GiftDelivery', 'TicketDelivery',
 ].forEach((name) => {
   jest.mock(`./src/models/${name}`, () => makeMockModel());
 });
