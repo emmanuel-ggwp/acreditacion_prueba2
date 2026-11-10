@@ -11,7 +11,7 @@ jest.mock('@/services/capacityService', () => ({
 
 import { NextResponse } from 'next/server';
 import { POST } from '../route';
-import { Event, Participant, EventSchedule, Guest } from '@/models/index';
+import { Event, Participant, EventSchedule, Guest, GuestSchedule } from '@/models/index';
 import { sequelize } from '@/lib/sequelize';
 import { limitPublicRegister } from '@/lib/rate-limit';
 import { getEventParticipantCount } from '@/services/capacityService';
@@ -81,6 +81,43 @@ describe('POST /api/public/events/[slug]/register', () => {
     limitMock.mockResolvedValue(null);
     eventCountMock.mockResolvedValue(0);
     GuestMock.count.mockResolvedValue(0);
+  });
+
+  it.each([undefined, false, true])('preloadedOnly=%s controla altas nuevas sin depender del cupo personal', async (preloadedOnly) => {
+    EventMock.findOne.mockResolvedValue(openEvent({ registrationConfig: { guests: { mode: 'named', preloadedOnly } } }));
+    EventScheduleMock.findAll.mockResolvedValue([{ id: SCH, maxCapacity: 0, scheduleName: 'S1' }]);
+    ParticipantMock.findOne.mockResolvedValue(null);
+    ParticipantMock.create.mockResolvedValue(makeParticipant());
+    GuestMock.count.mockResolvedValue(0);
+    GuestMock.create.mockResolvedValue({ id: 'new-guest' });
+    const res = await call(validOpenBody({ guests: [{ firstName: 'Invitado nuevo' }] }));
+    const body = await res.json();
+    expect(res.status).toBe(201);
+    expect(body.guestCap).toBe(preloadedOnly ? 0 : 5);
+    if (preloadedOnly) { expect(GuestMock.create).not.toHaveBeenCalled(); expect(body.guestsCreated).toBe(0); }
+    else { expect(GuestMock.create).toHaveBeenCalled(); }
+  });
+
+  it.each([false, true])('conserva la carga precargada y bloquea el invitado nuevo (por fecha=%s)', async (perDate) => {
+    EventMock.findOne.mockResolvedValue(openEvent({ maxGuestsPerParticipant: 0, registrationConfig: { guests: { mode: 'named', preloadedOnly: true } } }));
+    EventScheduleMock.findAll.mockResolvedValue([{ id: SCH, maxCapacity: 0, scheduleName: 'S1' }]);
+    ParticipantMock.findOne.mockResolvedValue(null);
+    ParticipantMock.create.mockResolvedValue(makeParticipant({ allowedGuests: 20 }));
+    GuestMock.count.mockResolvedValue(0);
+    const id = '77777777-7777-4777-a777-777777777777';
+    const guest = { id, update: jest.fn().mockResolvedValue(undefined) };
+    GuestMock.findOne.mockResolvedValue(guest);
+    (GuestSchedule as any).findOrCreate = jest.fn().mockResolvedValue([{}, true]);
+    const guests = [{ id }, { firstName: 'Nuevo bloqueado' }];
+    const res = await call(validOpenBody(perDate ? { guestsBySchedule: { [SCH]: guests } } : { guests }));
+    const body = await res.json();
+    expect(res.status).toBe(201);
+    expect(body.guestCap).toBe(0);
+    expect(body.guestsCreated).toBe(0);
+    expect(body.guestsSkipped).toBe(1);
+    expect(GuestMock.create).not.toHaveBeenCalled();
+    expect(guest.update).toHaveBeenCalledWith(expect.objectContaining({ confirmed: true, scheduleId: SCH }), expect.anything());
+    expect(GuestSchedule.findOrCreate).toHaveBeenCalledWith(expect.objectContaining({ where: { guestId: id, scheduleId: SCH } }));
   });
 
   it('registra un participante nuevo en modo abierto (201) y hace commit', async () => {

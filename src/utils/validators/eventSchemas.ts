@@ -33,6 +33,7 @@ export const guestModeEnum = z.enum(['named', 'count', 'companion']);
 /** Configuración de invitados por evento. */
 export const guestsConfigSchema = z.object({
   allowed: z.boolean().default(false),
+  preloadedOnly: z.boolean().optional(),
   max: z.number().int().min(0).default(0),
   mode: guestModeEnum.default('named'),
   typesEnabled: z.boolean().default(false),

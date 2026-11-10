@@ -125,6 +125,7 @@ const EventForm: React.FC<EventFormProps> = ({ event, onClose, onSuccess }) => {
         guests: {
           ...(event?.registrationConfig?.guests || {}),
           mode: event?.registrationConfig?.guests?.mode || 'named',
+          preloadedOnly: event?.registrationConfig?.guests?.preloadedOnly === true,
           dietary: !!event?.registrationConfig?.guests?.dietary,
           dietaryRequired: !!event?.registrationConfig?.guests?.dietaryRequired,
           termSingular: event?.registrationConfig?.guests?.termSingular || 'Invitado',
@@ -466,6 +467,12 @@ const EventForm: React.FC<EventFormProps> = ({ event, onClose, onSuccess }) => {
                 </div>
               )}
 
+              {watch('allowGuests') && watch('registrationConfig.guests.mode' as any) === 'named' && (
+                <label className="sm:col-span-2 flex items-center gap-2 text-sm text-gray-700">
+                  <input type="checkbox" {...register('registrationConfig.guests.preloadedOnly' as any)} className="h-4 w-4 rounded border-gray-300" />
+                  Solo cargas precargadas: marcar asistencia sin agregar invitados nuevos
+                </label>
+              )}
               {/* Qué datos pedir de cada invitado con nombre (apellido / RUT / edad). */}
               {watch('allowGuests') && watch('registrationConfig.guests.mode' as any) === 'named' && (
                 <div className="sm:col-span-2">

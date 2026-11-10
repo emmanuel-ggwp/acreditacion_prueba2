@@ -158,6 +158,7 @@ export default function GalaTemplate({ event, slug, preview = false }: TemplateP
   const capOf = (v: any) => { const n = Number(v); return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0; };
   const maxGuests = capOf(event.registrationConfig?.guests?.max) || capOf(event.maxGuestsPerParticipant);
   const guestMode = getGuestMode(event.registrationConfig);
+  const preloadedOnly = guestMode === 'named' && (event as any).registrationConfig?.guests?.preloadedOnly === true;
   // Campos por invitado configurables por evento (apellido / RUT / edad). El nombre siempre se pide.
   const guestFields = getGuestFields(event.registrationConfig);
   // Cómo se nombra a los invitados en la landing (configurable por evento). Default: Invitado/Invitados.
@@ -180,7 +181,7 @@ export default function GalaTemplate({ event, slug, preview = false }: TemplateP
   });
   const addGuestFor = (sid: string) => setDateState((st) => {
     const cur = st[sid] || { cargas: [], news: [] };
-    if (cur.news.length >= maxGuests) return st;
+    if (preloadedOnly || cur.news.length >= maxGuests) return st;
     // Si la dieta es OBLIGATORIA, el invitado nuevo arranca SIN elección ('') para forzar
     // que la persona escoja una opción; si no, se deja "Ninguna" (NONE) por defecto.
     return { ...st, [sid]: { ...cur, news: [...cur.news, { firstName: '', lastName: '', documentNumber: '', age: '', dietaryPreference: guestDietReq ? '' : 'NONE', dietaryComments: '' }] } };
@@ -330,7 +331,7 @@ export default function GalaTemplate({ event, slug, preview = false }: TemplateP
           const stt = stateFor(sid);
           guestsBySchedule[sid] = [
             ...stt.cargas.map((id) => ({ id })),
-            ...stt.news.filter((g) => g.firstName.trim()).map((g) => {
+            ...(preloadedOnly ? [] : stt.news).filter((g) => g.firstName.trim()).map((g) => {
               const gd: any = {};
               if (guestDiet) {
                 gd.dietaryPreference = isFreeTextDiet(g.dietaryPreference) && (g.dietaryComments || '').trim()
@@ -387,7 +388,7 @@ export default function GalaTemplate({ event, slug, preview = false }: TemplateP
       // Invitados según el modo del evento.
       let openGuestsBySchedule: Record<string, any[]> | undefined;
       const guestData: any = {};
-      if (event.allowGuests && maxGuests > 0) {
+      if (event.allowGuests && (maxGuests > 0 || preloadedOnly)) {
         if (guestMode === 'count') {
           guestData.guestCount = Math.max(0, Math.min(countGuests, maxGuests));
         } else if (guestMode === 'companion') {
@@ -400,7 +401,7 @@ export default function GalaTemplate({ event, slug, preview = false }: TemplateP
           openGuestsBySchedule = {};
           for (const sid of selectedScheduleIds) {
             const stt = stateFor(sid);
-            openGuestsBySchedule[sid] = stt.news
+            openGuestsBySchedule[sid] = (preloadedOnly ? [] : stt.news)
               .filter((g) => g.firstName.trim())
               .map((g) => {
                 const gd: any = {};
@@ -482,7 +483,7 @@ export default function GalaTemplate({ event, slug, preview = false }: TemplateP
             const stt = stateFor(sid);
             return [
               ...stt.cargas.map(cargaName).filter(Boolean),
-              ...stt.news.filter((g) => g.firstName.trim()).map((g) => `${g.firstName} ${g.lastName || ''}`.trim()),
+              ...(preloadedOnly ? [] : stt.news).filter((g) => g.firstName.trim()).map((g) => `${g.firstName} ${g.lastName || ''}`.trim()),
             ];
           };
           // Resumen compat (correo antiguo): invitados de la 1ª fecha o números.
@@ -576,7 +577,7 @@ export default function GalaTemplate({ event, slug, preview = false }: TemplateP
         )}
         <div className="mt-3">
           <p className="text-white/60 text-xs uppercase tracking-wide mb-1">{guestTermPlural} <span className="text-white/40 normal-case">(hasta {maxGuests})</span></p>
-          {stt.news.map((g, i) => (
+          {(preloadedOnly ? [] : stt.news).map((g, i) => (
             <div key={i} className="mb-3 rounded-xl p-2" style={{ border: '1px solid rgba(255,255,255,0.18)' }}>
               <div className="flex flex-col sm:flex-row gap-2">
                 <input className={`${inputClass} flex-1`} style={inputStyle} placeholder={`Nombre del ${guestTermSingular.toLowerCase()} ${i + 1} *`} value={g.firstName} onChange={(e) => updateGuestFor(sid, i, 'firstName', e.target.value)} />
@@ -613,7 +614,7 @@ export default function GalaTemplate({ event, slug, preview = false }: TemplateP
               )}
             </div>
           ))}
-          {stt.news.length < maxGuests && (
+          {!preloadedOnly && stt.news.length < maxGuests && (
             <button
               type="button"
               onClick={() => addGuestFor(sid)}
@@ -1088,7 +1089,7 @@ export default function GalaTemplate({ event, slug, preview = false }: TemplateP
 
               {/* Invitados nuevos que agrega la persona (modo con nombre): hasta el máximo.
                   Antes el flujo RUT solo permitía UN acompañante; ahora deja agregar varios. */}
-              {event.allowGuests && maxGuests > 0 && guestMode === 'named' && perDateNamedSection}
+              {event.allowGuests && (maxGuests > 0 || preloadedOnly) && guestMode === 'named' && perDateNamedSection}
 
               {/* Modos numéricos (count/companion): se conserva el acompañante simple. */}
               {event.allowGuests && maxGuests > 0 && guestMode !== 'named' && (
@@ -1180,7 +1181,7 @@ export default function GalaTemplate({ event, slug, preview = false }: TemplateP
                 </div>
               )}
 
-              {event.allowGuests && maxGuests > 0 && guestMode === 'named' && perDateNamedSection}
+              {event.allowGuests && (maxGuests > 0 || preloadedOnly) && guestMode === 'named' && perDateNamedSection}
 
               {/* Modo 'count': solo el número de invitados. */}
               {event.allowGuests && maxGuests > 0 && guestMode === 'count' && (

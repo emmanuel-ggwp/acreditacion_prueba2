@@ -338,7 +338,9 @@ export async function POST(
     const eventGuestCap = toCap((event as any).registrationConfig?.guests?.max)
       || toCap((event as any).maxGuestsPerParticipant);
     const participantCap = toCap((participant as any).allowedGuests);
-    const effectiveGuestCap = (event as any).allowGuests === false
+    const preloadedOnly = getGuestMode((event as any).registrationConfig) === 'named'
+      && (event as any).registrationConfig?.guests?.preloadedOnly === true;
+    const effectiveGuestCap = preloadedOnly || (event as any).allowGuests === false
       ? 0
       : participantCap > 0
         ? (eventGuestCap > 0 ? Math.min(participantCap, eventGuestCap) : participantCap)

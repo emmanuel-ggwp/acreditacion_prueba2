@@ -89,6 +89,7 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
   const maxGuests = capOf((event as any).registrationConfig?.guests?.max) || capOf((event as any).maxGuestsPerParticipant);
   const allowGuests = (event as any).allowGuests !== false;
   const guestMode = getGuestMode((event as any).registrationConfig);
+  const preloadedOnly = guestMode === 'named' && (event as any).registrationConfig?.guests?.preloadedOnly === true;
   // Modo 'count': solo un número. Modo 'companion': acompañante (sí/no) + cargas.
   const [countGuests, setCountGuests] = useState(0);
   const [companion, setCompanion] = useState(false);
@@ -119,7 +120,7 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
   });
   const addDateGuest = (sid: string) => setDateState((st) => {
     const cur = st[sid] || { cargas: [], news: [] };
-    if (cur.news.length >= maxGuests) return st;
+    if (preloadedOnly || cur.news.length >= maxGuests) return st;
     // Si la dieta es OBLIGATORIA, el invitado nuevo arranca SIN elección (''), para forzar
     // que la persona escoja una opción; si no, se deja "Ninguna" (NONE) por defecto.
     return { ...st, [sid]: { ...cur, news: [...cur.news, { firstName: '', lastName: '', documentNumber: '', age: '', dietaryPreference: guestDietReq ? '' : 'NONE', dietaryComments: '' }] } };
@@ -294,7 +295,7 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
       }
       let guestsBySchedule: Record<string, any[]> | undefined;
       const guestData: any = {};
-      if (allowGuests && maxGuests > 0) {
+      if (allowGuests && (maxGuests > 0 || preloadedOnly)) {
         if (guestMode === 'count') {
           guestData.guestCount = Math.max(0, Math.min(countGuests, maxGuests));
         } else if (guestMode === 'companion') {
@@ -311,7 +312,7 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
             guestsBySchedule[sid] = [
               // Carga precargada: se confirma por id. El servidor la liga a esta fecha.
               ...stt.cargas.map((id) => ({ id })),
-              ...stt.news.filter((g) => g.firstName.trim()).map((g) => {
+              ...(preloadedOnly ? [] : stt.news).filter((g) => g.firstName.trim()).map((g) => {
                 const gd: any = {};
                 if (guestDiet) {
                   // El invitado no tiene columna de comentarios: si eligió Alergia/Otro y escribió,
@@ -368,7 +369,7 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
             const stt = stateFor(sid);
             return [
               ...stt.cargas.map((cid) => { const c = cargaById(cid); return c ? `${c.firstName} ${c.lastName || ''}`.trim() : ''; }).filter(Boolean),
-              ...stt.news.filter((g) => g.firstName.trim()).map((g) => `${g.firstName} ${g.lastName || ''}`.trim()),
+              ...(preloadedOnly ? [] : stt.news).filter((g) => g.firstName.trim()).map((g) => `${g.firstName} ${g.lastName || ''}`.trim()),
             ];
           };
           // Resumen compatible (correo antiguo): invitados de la PRIMERA fecha o números.
@@ -741,11 +742,11 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
         </div>
       )}
 
-      {allowGuests && maxGuests > 0 && guestMode === 'named' && (
+      {allowGuests && (maxGuests > 0 || preloadedOnly) && guestMode === 'named' && (
         <div className="border-t border-gray-200 pt-5 space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700">Invitados por fecha</label>
-            <p className="text-xs text-gray-500 mt-0.5">Marca las cargas registradas y agrega invitados nuevos para <strong>cada fecha</strong>. Puedes llevar personas distintas en cada una (hasta {maxGuests} invitados nuevos por fecha).</p>
+            <p className="text-xs text-gray-500 mt-0.5">{preloadedOnly ? 'Marca las cargas registradas que asistirán a cada fecha.' : <>Marca las cargas registradas y agrega invitados nuevos para <strong>cada fecha</strong>. Puedes llevar personas distintas en cada una (hasta {maxGuests} invitados nuevos por fecha).</>}</p>
           </div>
 
           {/* Fechas ya inscritas: solo lectura (para cambiarlas se contacta al organizador). */}
@@ -803,7 +804,7 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
                 <div>
                   <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-1">Invitados <span className="font-normal normal-case text-gray-400">(hasta {maxGuests})</span></p>
                   <div className="space-y-2">
-                    {stt.news.map((g, i) => (
+                    {(preloadedOnly ? [] : stt.news).map((g, i) => (
                       <div key={i} className="border border-gray-200 rounded-md p-2 space-y-2">
                         <div className="flex gap-2">
                           <input value={g.firstName} onChange={(e) => updateDateGuest(sid, i, 'firstName', e.target.value)} placeholder={`Nombre del invitado ${i + 1} *`} className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" />
@@ -835,7 +836,7 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
                     ))}
                   </div>
                   {/* El cupo lo consumen los invitados NUEVOS; las cargas del organizador no (D1.2). */}
-                  {stt.news.length < maxGuests && (
+                  {!preloadedOnly && stt.news.length < maxGuests && (
                     <button
                       type="button"
                       onClick={() => addDateGuest(sid)}
