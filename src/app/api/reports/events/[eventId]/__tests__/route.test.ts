@@ -6,6 +6,7 @@ jest.mock('@/services/reportService', () => ({
     getGeneralReport: jest.fn(),
     getGuestsReport: jest.fn(),
     generateXlsx: jest.fn(),
+    generateAttendanceXlsx: jest.fn(),
   },
 }));
 jest.mock('@/lib/jwt', () => ({ verifyAccessToken: jest.fn() }));
@@ -20,6 +21,7 @@ const mockedReportService = reportService as unknown as {
   getGeneralReport: jest.Mock;
   getGuestsReport: jest.Mock;
   generateXlsx: jest.Mock;
+  generateAttendanceXlsx: jest.Mock;
 };
 const mockedVerify = verifyAccessToken as jest.Mock;
 const UserMock = User as unknown as { findByPk: jest.Mock };
@@ -51,16 +53,22 @@ describe('GET /api/reports/events/[eventId]', () => {
   });
 
   it('type=general devuelve un Excel (.xlsx) descargable', async () => {
-    mockedReportService.getGeneralReport.mockResolvedValue([{ a: 1 }]);
-    mockedReportService.generateXlsx.mockResolvedValue(Buffer.from('xlsx-bytes'));
+    mockedReportService.generateAttendanceXlsx.mockResolvedValue(Buffer.from('xlsx-bytes'));
 
     const res = await (GET as any)(makeRequest('http://localhost/api/reports/events/e1?type=general'), ctx('e1'));
 
     expect(res.status).toBe(200);
     expect(res.headers.get('content-type')).toContain('spreadsheetml.sheet');
     expect(res.headers.get('content-disposition')).toContain('event_report_e1.xlsx');
-    expect(mockedReportService.getGeneralReport).toHaveBeenCalledWith('e1');
-    expect(mockedReportService.generateXlsx).toHaveBeenCalledWith([{ a: 1 }], 'Reporte General');
+    expect(mockedReportService.generateAttendanceXlsx).toHaveBeenCalledWith('e1',false);
+  });
+
+  it('type=accredited descarga un Excel actualizado de solo grupos con ingresos', async () => {
+    mockedReportService.generateAttendanceXlsx.mockResolvedValue(Buffer.from('xlsx-bytes'));
+    const res = await (GET as any)(makeRequest('http://localhost/api/reports/events/e1?type=accredited'),ctx('e1'));
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-disposition')).toContain('acreditados_e1.xlsx');
+    expect(mockedReportService.generateAttendanceXlsx).toHaveBeenCalledWith('e1',true);
   });
 
   it('type=guests devuelve un Excel (.xlsx) de invitados', async () => {

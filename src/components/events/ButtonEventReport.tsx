@@ -49,7 +49,7 @@ export const ButtonEventReport: React.FC<ButtonEventReportProps> = ({ eventId, e
             <button
                 onClick={handleGuests}
                 className={`p-${pad} text-gray-400 hover:text-teal-600 hover:bg-teal-50 rounded-md transition-colors`}
-                title="Descargar Reporte de Invitados (con RUT y edad)"
+                title="Descargar invitados con nombre (con RUT y edad; no incluye cantidades sin nombre)"
             >
                 <Users size={16} />
             </button>

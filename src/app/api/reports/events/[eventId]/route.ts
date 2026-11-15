@@ -24,15 +24,14 @@ export const GET = withAuth(async (req: AuthenticatedRequest, { params }: Params
     // Tipo MIME del .xlsx (Office Open XML). Se descarga como Excel, no CSV.
     const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
-    if (type === 'general') {
-        const reportData = await reportService.getGeneralReport(eventId);
-        const xlsx = await reportService.generateXlsx(reportData, 'Reporte General');
+    if (type === 'general' || type === 'accredited') {
+        const xlsx = await reportService.generateAttendanceXlsx(eventId, type === 'accredited');
 
         return new NextResponse(xlsx, {
             status: 200,
             headers: {
                 'Content-Type': XLSX_MIME,
-                'Content-Disposition': `attachment; filename="event_report_${eventId}.xlsx"`,
+                'Content-Disposition': `attachment; filename="${type === 'accredited' ? 'acreditados' : 'event_report'}_${eventId}.xlsx"`,
             },
         });
     }

@@ -258,7 +258,7 @@ describe('ReportService', () => {
   describe('getDashboardStats', () => {
     it('devuelve estadísticas del evento cuando se pasa un eventId', async () => {
       (EventMock.findByPk as jest.Mock).mockResolvedValue({ id: 'evt-5', name: 'Evento X' });
-      (AccreditationMock.count as jest.Mock).mockResolvedValue(40);
+      (AccreditationMock.findAll as jest.Mock).mockResolvedValue([{ records: 40, numericGuests: 0 }]);
       (ParticipantAwardMock.count as jest.Mock).mockResolvedValue(7);
       (ParticipantMock.count as jest.Mock).mockResolvedValue(120);
 
@@ -284,7 +284,7 @@ describe('ReportService', () => {
         .mockResolvedValueOnce(10) // totalEvents
         .mockResolvedValueOnce(6); // activeEvents
       (ParticipantMock.count as jest.Mock).mockResolvedValue(200);
-      (AccreditationMock.count as jest.Mock).mockResolvedValue(15);
+      (AccreditationMock.findAll as jest.Mock).mockResolvedValue([{ records: 15, numericGuests: 0 }]);
 
       const result = await service.getDashboardStats();
 
@@ -309,8 +309,8 @@ describe('ReportService', () => {
         const s1 = { id: 'sch-1', scheduleName: 'Mañana', maxCapacity: 50, Event: { maxCapacity: 100 } };
         const s2 = { id: 'sch-2', scheduleName: 'Tarde', maxCapacity: null, Event: { maxCapacity: 100 } };
 
+        (AccreditationMock.findAll as jest.Mock).mockResolvedValue([{ records: 5, numericGuests: 0 }]);
         (AccreditationMock.count as jest.Mock)
-          .mockResolvedValueOnce(5) // últimos 30 min
           .mockResolvedValueOnce(20) // acreditados (participantes) sch-1
           .mockResolvedValueOnce(10); // acreditados (participantes) sch-2
         (EventScheduleMock.findAll as jest.Mock).mockResolvedValue([s1, s2]);
@@ -330,7 +330,7 @@ describe('ReportService', () => {
     });
 
     it('sin horarios en acreditación: capacidad vacía y ritmo = últimos 30 min / 30', async () => {
-      (AccreditationMock.count as jest.Mock).mockResolvedValue(3);
+      (AccreditationMock.findAll as jest.Mock).mockResolvedValue([{ records: 3, numericGuests: 0 }]);
       (EventScheduleMock.findAll as jest.Mock).mockResolvedValue([]);
 
       const result = await service.getRealTimeStats(eventId);
@@ -341,14 +341,13 @@ describe('ReportService', () => {
         accreditationRatePerMinute: 3 / 30,
       });
       // Solo se cuenta una vez (últimos 30 min); sin horarios en acreditación no hay más counts.
-      expect(AccreditationMock.count).toHaveBeenCalledTimes(1);
+      expect(AccreditationMock.findAll).toHaveBeenCalledTimes(1);
     });
 
     it('con capacidad 0 la disponibilidad es null (sin cupo definido)', async () => {
       const s = { id: 'sch-3', scheduleName: 'Noche', maxCapacity: null, Event: { maxCapacity: null } };
-      (AccreditationMock.count as jest.Mock)
-        .mockResolvedValueOnce(0) // últimos 30 min
-        .mockResolvedValueOnce(0); // acreditados sch-3
+      (AccreditationMock.findAll as jest.Mock).mockResolvedValue([{ records: 0, numericGuests: 0 }]);
+      (AccreditationMock.count as jest.Mock).mockResolvedValue(0);
       (EventScheduleMock.findAll as jest.Mock).mockResolvedValue([s]);
 
       const result = await service.getRealTimeStats(eventId);
@@ -362,102 +361,21 @@ describe('ReportService', () => {
   });
 
   describe('getGeneralReport', () => {
-    const eventId = 'event-1';
-
-    it('mapea y formatea las filas del reporte general', async () => {
-      const row = {
-        Nombre: 'Juan',
-        Apellido: 'Pérez',
-        Documento: '12345',
-        'Número SAP': 'SAP1',
-        Empresa: 'ACME',
-        Cargo: 'Dev',
-        Teléfono: '555',
-        Email: 'j@e.com',
-        Dieta: 'Veg',
-        'Comentarios Dieta': 'sin gluten',
-        // Instantes UTC explícitos: el servicio formatea en America/Santiago (UTC-3 en
-        // sept), así el test es determinista sin depender de la TZ del runner (CI = UTC).
-        registrationDate: new Date('2026-09-20T17:30:00Z'), // 14:30 Santiago
-        eventDate: new Date('2026-09-20T12:00:00Z'),        // 20/09/2026 Santiago
-        Asistencia: 'Sí',
-        checkInTime: new Date('2026-09-20T12:05:30Z'),      // 09:05:30 Santiago
-        'Cant. Invitados': 2,
-        'Cant. Invitados Asistentes': 1,
-        guestsDetail: 'Ana · 999 · 10 años',
-        awardName: 'Premio A',
-      };
-      queryMock.mockResolvedValue([row]);
-
-      const result = await service.getGeneralReport(eventId);
-
+    it('mapea por titular y fecha, separando inscritos y acreditados', async () => {
+      queryMock.mockResolvedValue([{ participantId: 'p1', scheduleId: 's1', scheduleName: 'Mañana', firstName: 'Juan', lastName: 'Pérez', registered: true, accredited: true, numericRegistered: 4, numericAccredited: 3, namedRegistered: 0, namedAccredited: 0, eventDate: new Date('2026-09-20T12:00:00Z'), checkInTime: new Date('2026-09-20T12:05:30Z') }]);
+      const rows = await service.getGeneralReport('event-1');
       expect(queryMock).toHaveBeenCalledTimes(1);
-      expect(queryMock).toHaveBeenCalledWith(
-        expect.stringContaining('FROM participants'),
-        expect.objectContaining({ replacements: { eventId } })
-      );
-      expect(result).toEqual([
-        {
-          Nombre: 'Juan',
-          Apellido: 'Pérez',
-          Documento: '12345',
-          'Número SAP': 'SAP1',
-          Empresa: 'ACME',
-          Cargo: 'Dev',
-          Teléfono: '555',
-          Email: 'j@e.com',
-          Dieta: 'Veg',
-          'Comentarios Dieta': 'sin gluten',
-          'Fecha Inscripción': '20/09/2026 14:30',
-          'Fecha Evento': '20/09/2026',
-          Asistencia: 'Sí',
-          'Hora Acreditación': '09:05:30',
-          'Cant. Invitados': 2,
-          'Cant. Invitados Asistentes': 1,
-          'Invitados (detalle)': 'Ana · 999 · 10 años',
-          Premio: 'Premio A',
-        },
-      ]);
+      expect(queryMock).toHaveBeenCalledWith(expect.stringContaining('actual_entries'),expect.objectContaining({replacements:{eventId:'event-1'}}));
+      expect(rows[0]).toMatchObject({Nombre:'Juan',Apellido:'Pérez','Titulares acreditados':1,'Invitados inscritos':4,'Invitados acreditados':3,'Total personas acreditadas':4,'Fecha Evento':'20/09/2026','Hora acreditación titular':'20/09/2026 09:05:30'});
     });
-
-    it('usa valores por defecto cuando faltan fechas, invitados y premio', async () => {
-      const row = {
-        Nombre: 'Sin',
-        Apellido: 'Datos',
-        Documento: null,
-        'Número SAP': null,
-        Empresa: null,
-        Cargo: null,
-        Teléfono: null,
-        Email: null,
-        Dieta: null,
-        'Comentarios Dieta': null,
-        registrationDate: null,
-        eventDate: null,
-        Asistencia: 'No',
-        checkInTime: null,
-        'Cant. Invitados': 0,
-        'Cant. Invitados Asistentes': 0,
-        guestsDetail: null,
-        awardName: null,
-      };
-      queryMock.mockResolvedValue([row]);
-
-      const result = await service.getGeneralReport(eventId);
-
-      expect(result[0]['Fecha Inscripción']).toBe('');
-      expect(result[0]['Fecha Evento']).toBe('');
-      expect(result[0]['Hora Acreditación']).toBe('');
-      expect(result[0]['Invitados (detalle)']).toBe('');
-      expect(result[0].Premio).toBe('No');
+    it('conserva grupos con invitados acreditados sin titular y datos históricos', async () => {
+      queryMock.mockResolvedValue([{participantId:'p1',scheduleId:'s1',registered:false,accredited:false,namedAccredited:2,loadsAccredited:2,deleted:true}]);
+      const rows = await service.getGeneralReport('event-1');
+      expect(rows[0]).toMatchObject({'Inscrito en esta fecha':'No','Titulares acreditados':0,'Invitados acreditados':2,'Total personas acreditadas':2,'Titular eliminado':'Sí'});
     });
-
-    it('devuelve arreglo vacío si no hay filas', async () => {
-      queryMock.mockResolvedValue([]);
-
-      const result = await service.getGeneralReport(eventId);
-
-      expect(result).toEqual([]);
+    it('no exporta una fila ficticia para una fecha sin participantes', async () => {
+      queryMock.mockResolvedValue([{participantId:null,scheduleId:'s1'}]);
+      expect(await service.getGeneralReport('event-1')).toEqual([]);
     });
   });
 
@@ -480,10 +398,10 @@ describe('ReportService', () => {
       const result = await service.getGuestsReport(eventId);
 
       expect(queryMock).toHaveBeenCalledWith(
-        expect.stringContaining('FROM guests'),
+        expect.stringContaining('guest_keys'),
         expect.objectContaining({ replacements: { eventId } })
       );
-      expect(result).toEqual([
+      expect(result).toMatchObject([
         {
           Participante: 'Juan Pérez',
           Invitado: 'Ana Pérez',
@@ -512,7 +430,7 @@ describe('ReportService', () => {
 
       const result = await service.getGuestsReport(eventId);
 
-      expect(result[0]).toEqual({
+      expect(result[0]).toMatchObject({
         Participante: 'Luis Soto',
         Invitado: 'Bebé Soto',
         RUT: '',

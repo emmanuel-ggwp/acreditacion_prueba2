@@ -6,7 +6,8 @@ import { dietaryLabel, dietaryFull } from '@/utils/dietary';
 import { formatDateCL, formatTimeCL, formatDateTimeCL } from '@/utils/formatters';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line } from 'recharts';
 import { Users, Award, CheckCircle, Download, Utensils, ChevronDown, CalendarDays } from 'lucide-react';
-import { utils, writeFile } from 'xlsx';
+import { downloadEventAccreditedReport } from '@/utils/generateReport';
+import { showToast } from '@/components/ui/Toast';
 
 
 interface EventReportProps {
@@ -50,19 +51,8 @@ interface ReportData {
 }
 
 // Fechas en hora de Chile (es-CL + America/Santiago), no la del navegador.
-const fmtCheckIn = (d?: string | null) => (d ? formatDateTimeCL(d) : '');
 const fmtDate = (d?: string | null) => (d ? formatDateCL(d, { weekday: 'short', day: '2-digit', month: 'short' }) : '');
 const fmtDateShort = (d?: string | null) => (d ? formatDateCL(d, { day: '2-digit', month: 'short' }) : '');
-// Etiqueta de una fecha del evento para la exportación: "Nombre (dd-mm-aaaa)".
-const scheduleLabel = (s: any) => `${s.label || s.scheduleName} (${formatDateCL(s.startDateTime)})`;
-const partFechas = (p: any) => (p?.schedules || []).map(scheduleLabel).join(' ; ');
-// Fechas elegidas de un invitado: las suyas ("invitados por fecha") o, si no está
-// ligado a ninguna, las del participante (donde efectivamente asiste).
-const guestFechas = (g: any, p: any) => {
-  const gs = Array.isArray(g?.schedules) && g.schedules.length ? g.schedules : (p?.schedules || []);
-  return gs.map(scheduleLabel).join(' ; ');
-};
-
 const EventReport: React.FC<EventReportProps> = ({ eventId }) => {
   const [data, setData] = useState<ReportData | null>(null);
   const [attendees, setAttendees] = useState<any[]>([]);
@@ -70,28 +60,38 @@ const EventReport: React.FC<EventReportProps> = ({ eventId }) => {
   const [error, setError] = useState<string | null>(null);
   // Restricción alimenticia desplegada (para mostrar quiénes la tienen).
   const [openDiet, setOpenDiet] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
   useEffect(() => {
+    let active = true;
+    let inFlight = false;
+    let attendeesLoaded = false;
     const fetchReport = async () => {
+      if (inFlight) return;
+      inFlight = true;
       try {
-        setLoading(true);
         const reportData = await apiClient.get<ReportData>(`/api/reports/events/${eventId}`);
-        setData(reportData);
-        try {
+        if (!active) return;
+        setData(reportData); setLastUpdated(new Date()); setError(null);
+        if (!attendeesLoaded) try {
           const att = await apiClient.get<any[]>(`/api/events/${eventId}/export`);
-          setAttendees(Array.isArray(att) ? att : []);
-        } catch { /* la dieta/exportación es opcional; no bloquea el reporte */ }
-      } catch (err) {
-        console.error(err);
-        setError('No se pudieron cargar los reportes del evento');
+          if (active) {
+            setAttendees(Array.isArray(att) ? att : []);
+            attendeesLoaded = true;
+          }
+        } catch { /* el padrón de dietas es opcional */ }
+      } catch {
+        if (active) setError('No se pudieron actualizar los reportes del evento');
       } finally {
-        setLoading(false);
+        inFlight = false;
+        if (active) setLoading(false);
       }
     };
-
-    if (eventId) {
-      fetchReport();
-    }
+    setLoading(true);
+    if (eventId) void fetchReport();
+    const timer = setInterval(() => { if (eventId) void fetchReport(); }, 20000);
+    return () => { active = false; clearInterval(timer); };
   }, [eventId]);
 
   if (loading) return <div className="p-8 text-center">Cargando reportes...</div>;
@@ -124,36 +124,14 @@ const EventReport: React.FC<EventReportProps> = ({ eventId }) => {
     Acreditados: s.accreditedTotal || 0,
   }));
 
-  // Exportar a Excel: una fila por persona (participante e invitado), con su preferencia alimenticia.
-  const exportAttendees = () => {
-    const rows: any[] = [];
-    for (const p of attendees) {
-      rows.push({
-        Tipo: 'Participante', Nombre: p.firstName || '', Apellido: p.lastName || '',
-        'RUT/Documento': p.documentNumber || '', Correo: p.email || '', 'Teléfono': p.phone || '',
-        Empresa: p.company || '', Cargo: p.position || '', 'Código SAP': p.numeroSap || '',
-        Estado: (p.schedules || []).length ? 'Inscrito' : 'Precargado',
-        'Fecha(s)': partFechas(p),
-        'Preferencia alimenticia': dietaryFull(p.dietaryPreference, p.dietaryComments),
-        Acreditado: p.isAccredited ? 'Sí' : 'No', 'Hora acreditación': fmtCheckIn(p.accreditedAt), 'Pertenece a': '',
-      });
-      for (const g of (p.guests || [])) {
-        rows.push({
-          Tipo: 'Invitado', Nombre: g.firstName || '', Apellido: g.lastName || '',
-          'RUT/Documento': g.documentNumber || '', Correo: g.email || '', 'Teléfono': g.phone || '',
-          Empresa: '', Cargo: '', 'Código SAP': '',
-          Estado: '',
-          'Fecha(s)': guestFechas(g, p),
-          'Preferencia alimenticia': dietaryFull(g.dietaryPreference, (g as any).dietaryComments),
-          Acreditado: g.isAccredited ? 'Sí' : 'No', 'Hora acreditación': fmtCheckIn(g.accreditedAt), 'Pertenece a': `${p.firstName || ''} ${p.lastName || ''}`.trim(),
-        });
-      }
-    }
-    if (!rows.length) return;
-    const ws = utils.json_to_sheet(rows);
-    const wb = utils.book_new();
-    utils.book_append_sheet(wb, ws, 'Asistentes');
-    writeFile(wb, `Asistentes_${(data?.eventInfo?.name || eventId).toString().replace(/[^a-z0-9]+/gi, '_')}.xlsx`);
+  // Reconsultar al descargar: resumen y detalle se generan desde el mismo snapshot.
+  const exportAttendees = async () => {
+    setExporting(true);
+    try {
+      await downloadEventAccreditedReport(eventId, data.eventInfo.name);
+    } catch {
+      showToast.error('No se pudo descargar el Excel de acreditados. Intenta nuevamente.');
+    } finally { setExporting(false); }
   };
 
   return (
@@ -162,12 +140,14 @@ const EventReport: React.FC<EventReportProps> = ({ eventId }) => {
         <h2 className="text-2xl font-bold text-gray-800">Reportes del evento: {data.eventInfo.name}</h2>
         <button
           onClick={exportAttendees}
-          disabled={!attendees.length}
+          disabled={exporting}
           className="inline-flex items-center gap-2 bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-emerald-700 disabled:opacity-50"
         >
-          <Download size={16} /> Exportar asistentes (Excel)
+          <Download size={16} /> {exporting ? 'Generando Excel…' : 'Descargar acreditados (Excel)'}
         </button>
       </div>
+
+      <p className="text-xs text-gray-500">Totales por fecha: si una persona asiste a dos fechas, cuenta dos asistencias. {lastUpdated ? `Actualizado: ${formatDateTimeCL(lastUpdated)}` : ''} · Actualización cada 20 segundos.</p>
 
       {/* Key Metrics Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

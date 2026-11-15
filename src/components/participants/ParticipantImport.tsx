@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
+import { mapParticipantImportRow } from '@/utils/participantImport';
 import * as XLSX from 'xlsx';
 import { UploadCloud, X, FileSpreadsheet, Download, Loader2, CheckCircle2, AlertTriangle } from 'lucide-react';
 import useEventStore from '@/store/eventStore';
@@ -153,27 +154,7 @@ const ParticipantImport: React.FC<ParticipantImportProps> = ({ eventId, guestMod
   };
 
   const buildParticipants = () => {
-    return rows.map((row) => {
-      const p: any = {};
-      const guests: Record<string, any> = {};
-      for (const h of headers) {
-        const t = mapping[h];
-        if (!t || t === 'ignore') continue;
-        const val = String(row[h] ?? '').trim();
-        if (!val) continue;
-        if (t.startsWith('guest')) {
-          const [g, field] = t.split('.');
-          guests[g] = guests[g] || {};
-          guests[g][field] = val;
-        } else if (t === 'allowedGuests') {
-          p[t] = parseInt(val, 10) || 0;
-        } else {
-          p[t] = val;
-        }
-      }
-      const guestArr = Object.values(guests).filter((g: any) => g.firstName);
-      return { ...p, guests: guestArr };
-    });
+    return rows.map(row => mapParticipantImportRow(row, headers, mapping));
   };
 
   // ¿La fila es importable? Con RUT: debe ser un RUT chileno válido. Sin RUT: al
@@ -334,7 +315,7 @@ const ParticipantImport: React.FC<ParticipantImportProps> = ({ eventId, guestMod
                     <p>Este evento pide <b>solo el número</b> de invitados. Usa la columna <b>N° de invitados</b> (ej. 2).</p>
                   )}
                   {guestMode === 'companion' && (
-                    <p>Este evento usa <b>acompañante + cargas</b>. Usa la columna <b>Acompañante (sí/no)</b> y la columna <b>N° de cargas</b> (ej. 2).</p>
+                    <p>Este evento usa <b>acompañante + cargas</b>. En <b>Acompañante (sí/no)</b> escribe Sí o No; en <b>N° de cargas</b>, la cantidad (ej. 2). Al reimportar se actualizan los valores indicados; las celdas vacías conservan lo existente y 0 permite dejar las cargas en cero.</p>
                   )}
                   {guestMode === 'named' && (
                     <p>

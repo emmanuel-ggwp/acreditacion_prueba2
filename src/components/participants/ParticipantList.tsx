@@ -123,7 +123,7 @@ const ParticipantList = ({ eventId }: { eventId: string }) => {
   // evento (por nombre, correo o RUT en cualquier formato), no solo la página cargada.
   const currentFilters = useMemo(() => {
     const f: Record<string, string> = {};
-    if (filter.trim()) f.name = filter.trim();
+    if (filter.trim()) f.name = filter.trim().replace(/\s+/g, ' ');
     if (showOnlyAwarded) f.awarded = 'true';
     if (statusFilter === 'registered') f.registered = 'true';
     else if (statusFilter === 'preloaded') f.registered = 'false';
@@ -525,7 +525,8 @@ const ParticipantList = ({ eventId }: { eventId: string }) => {
             type="text"
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
-            placeholder="Buscar por nombre, correo o RUT…"
+            placeholder="Buscar por nombre y apellido, correo o RUT…"
+            aria-label="Buscar participantes por nombre y apellido, correo o RUT"
             className="w-full pl-10 pr-9 py-2 border border-gray-300 rounded-lg text-sm focus:ring-indigo-500 focus:border-indigo-500"
           />
           {filter && (

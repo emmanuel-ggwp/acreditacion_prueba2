@@ -10,6 +10,7 @@ import useAuthStore from '@/store/authStore';
 import { Check, X, User, Users, Award, Mail, FileText, Loader2, CalendarClock, Utensils, RotateCcw, Phone, Building2, Briefcase, Hash } from 'lucide-react';
 import { dietaryFull, dietaryLabel } from '@/utils/dietary';
 import { describeStoredAnswers } from '@/utils/customQuestions';
+import { hasCentinelaAdultCompanion } from '@/utils/centinelaCompanion';
 import { showToast } from '@/components/ui/Toast';
 import { formatDateCL, formatDateTimeCL } from '@/utils/formatters';
 
@@ -124,7 +125,8 @@ const ParticipantCard: React.FC<ParticipantCardProps> = ({ person, type, schedul
   const gCompanion = isParticipant && !!(participant as any)?.guestCompanion;
   const gLoads = isParticipant ? (Number((participant as any)?.guestLoads) || 0) : 0;
   const declaredGuestCount = isParticipant ? (Number((participant as any)?.guestCount) || 0) : 0;
-  const hasNumericGuests = isParticipant && namedGuests.length === 0 && (declaredGuestCount > 0 || gCompanion || gLoads > 0);
+  const hasAdultCompanion = isParticipant && hasCentinelaAdultCompanion(participant);
+  const hasNumericGuests = isParticipant && (namedGuests.length === 0 || hasAdultCompanion) && (declaredGuestCount > 0 || gCompanion || gLoads > 0);
   const companionSummary = gCompanion || gLoads > 0
     ? `${gCompanion ? '1 acompañante' : 'Sin acompañante'}${gLoads > 0 ? ` + ${gLoads} carga${gLoads === 1 ? '' : 's'}` : ''}`
     : '';
@@ -434,7 +436,7 @@ const ParticipantCard: React.FC<ParticipantCardProps> = ({ person, type, schedul
                 <div className="h-9 w-9 rounded-lg bg-teal-100 flex items-center justify-center shrink-0">
                   <Users size={18} className="text-teal-700" />
                 </div>
-                <h3 className="font-semibold text-gray-900">Invitados</h3>
+                <h3 className="font-semibold text-gray-900">{hasAdultCompanion ? 'Acompañante adulto' : 'Invitados'}</h3>
               </div>
               <span className="inline-flex items-center text-sm font-medium text-teal-800 bg-teal-100 rounded-full px-3 py-1 whitespace-nowrap shrink-0">
                 Declarados: {declaredGuestCount}
@@ -449,8 +451,8 @@ const ParticipantCard: React.FC<ParticipantCardProps> = ({ person, type, schedul
                   <div className="flex items-center gap-2 flex-wrap">
                     <div className="inline-flex items-center rounded-lg border border-gray-300 bg-white overflow-hidden">
                       <button type="button" onClick={() => setArrivedGuests(Math.max(0, arrivedGuests - 1))} aria-label="Menos" className="px-3.5 py-2 text-gray-600 hover:bg-gray-100 text-xl leading-none font-semibold">−</button>
-                      <input type="number" min={0} value={arrivedGuests} onChange={(e) => setArrivedGuests(Math.max(0, parseInt(e.target.value, 10) || 0))} className="w-14 text-center border-x border-gray-300 py-2 text-lg font-bold focus:outline-none" />
-                      <button type="button" onClick={() => setArrivedGuests(arrivedGuests + 1)} aria-label="Más" className="px-3.5 py-2 text-gray-600 hover:bg-gray-100 text-xl leading-none font-semibold">+</button>
+                      <input type="number" min={0} max={hasAdultCompanion ? 1 : undefined} value={arrivedGuests} onChange={(e) => setArrivedGuests(Math.min(hasAdultCompanion ? 1 : Infinity, Math.max(0, parseInt(e.target.value, 10) || 0)))} className="w-14 text-center border-x border-gray-300 py-2 text-lg font-bold focus:outline-none" />
+                      <button type="button" onClick={() => setArrivedGuests(hasAdultCompanion ? Math.min(1, arrivedGuests + 1) : arrivedGuests + 1)} aria-label="Más" className="px-3.5 py-2 text-gray-600 hover:bg-gray-100 text-xl leading-none font-semibold">+</button>
                     </div>
                     <button onClick={handleSaveGuestCount} disabled={loading} className="px-3 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 disabled:opacity-50">Guardar</button>
                     <button onClick={() => { setEditingCount(false); setArrivedGuests(Number(accreditationStatus.accreditation?.guestCount ?? 0)); }} className="px-3 py-2 rounded-lg border border-gray-300 text-gray-700 text-sm hover:bg-gray-100">Cancelar</button>
@@ -469,12 +471,12 @@ const ParticipantCard: React.FC<ParticipantCardProps> = ({ person, type, schedul
               )
             ) : (
               <div className="mt-3">
-                <label className="block text-sm text-gray-700 mb-1.5">¿Cuántos invitados llegaron?</label>
+                <label className="block text-sm text-gray-700 mb-1.5">{hasAdultCompanion ? '¿Llegó el acompañante adulto? (0 o 1)' : '¿Cuántos invitados llegaron?'}</label>
                 <div className="flex items-center gap-2 flex-wrap">
                   <div className="inline-flex items-center rounded-lg border border-gray-300 bg-white overflow-hidden">
                     <button type="button" onClick={() => setArrivedGuests(Math.max(0, arrivedGuests - 1))} aria-label="Menos" className="px-4 py-2.5 text-gray-600 hover:bg-gray-100 text-2xl leading-none font-semibold">−</button>
-                    <input type="number" min={0} value={arrivedGuests} onChange={(e) => setArrivedGuests(Math.max(0, parseInt(e.target.value, 10) || 0))} className="w-16 text-center border-x border-gray-300 py-2.5 text-xl font-bold focus:outline-none" />
-                    <button type="button" onClick={() => setArrivedGuests(arrivedGuests + 1)} aria-label="Más" className="px-4 py-2.5 text-gray-600 hover:bg-gray-100 text-2xl leading-none font-semibold">+</button>
+                    <input type="number" min={0} max={hasAdultCompanion ? 1 : undefined} value={arrivedGuests} onChange={(e) => setArrivedGuests(Math.min(hasAdultCompanion ? 1 : Infinity, Math.max(0, parseInt(e.target.value, 10) || 0)))} className="w-16 text-center border-x border-gray-300 py-2.5 text-xl font-bold focus:outline-none" />
+                    <button type="button" onClick={() => setArrivedGuests(hasAdultCompanion ? Math.min(1, arrivedGuests + 1) : arrivedGuests + 1)} aria-label="Más" className="px-4 py-2.5 text-gray-600 hover:bg-gray-100 text-2xl leading-none font-semibold">+</button>
                   </div>
                   {declaredGuestCount > 0 && (
                     <button type="button" onClick={() => setArrivedGuests(declaredGuestCount)} className="px-3 py-2 rounded-lg bg-teal-100 text-teal-800 text-sm font-medium hover:bg-teal-200">

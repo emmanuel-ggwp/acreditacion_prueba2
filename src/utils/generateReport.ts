@@ -31,3 +31,9 @@ export async function downloadEventGuestsReport(eventId: string, eventName: stri
   });
   downloadBlob(response, `event_guests_${eventName.replace(/\s+/g, '_')}.xlsx`);
 }
+
+// Descargar un snapshot nuevo desde el servidor; no reutilizar la tabla cargada al abrir la pantalla.
+export async function downloadEventAccreditedReport(eventId: string, eventName: string) {
+  const response = await apiClient.get(`/api/reports/events/${eventId}?type=accredited`, { responseType: 'blob' });
+  downloadBlob(response, `acreditados_${eventName.replace(/\s+/g,'_')}.xlsx`);
+}

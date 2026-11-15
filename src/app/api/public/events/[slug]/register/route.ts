@@ -10,6 +10,7 @@ import {
 import { CONTACT_EMAIL } from '@/utils/contact';
 import { getCustomQuestions, sanitizeCustomAnswers } from '@/utils/customQuestions';
 import { getGuestMode } from '@/utils/formFields';
+import { centinelaCompanionAnswer } from '@/utils/centinelaCompanion';
 import { sequelize } from '@/lib/sequelize';
 import { Op, fn, col, where as sqlWhere } from 'sequelize';
 import { getScheduleParticipantCount, getEventParticipantCount } from '@/services/capacityService';
@@ -414,6 +415,15 @@ export async function POST(
         // los campos numéricos no aplican, se dejan en 0 (evita mezclar conteos).
         clamped.guestCount = 0;
         clamped.guestLoads = 0;
+      }
+      // Centinela: la pregunta existente declara UN adulto además de las cargas con nombre.
+      // Solo primera inscripción; nunca transformar la declaración en asistencia real.
+      if (guestMode === 'named') {
+        const companionAnswer = centinelaCompanionAnswer(event.id, participant.customData);
+        if (companionAnswer !== null) {
+          clamped.guestCompanion = companionAnswer;
+          clamped.guestCount = companionAnswer ? 1 : 0;
+        }
       }
       await participant.update(clamped, { transaction: t });
     }

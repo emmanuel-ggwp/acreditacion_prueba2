@@ -21,19 +21,26 @@ export function clParts(d: Date): { yyyy: string; MM: string; dd: string; HH: st
   return { yyyy: g('year'), MM: g('month'), dd: g('day'), HH, mm: g('minute'), ss: g('second') };
 }
 
-/**
- * Rango `[inicio, fin)` del día que contiene `ref` en America/Santiago, como instantes UTC.
- * Úselo con `{ [Op.gte]: inicio, [Op.lt]: fin }` para filtrar "ese día en Chile".
- *
- * (El offset se toma en `ref`; en los ~2 días de cambio de horario de verano podría
- * desviarse 1 h respecto del cambio exacto a las 00:00, lo que es tolerable para conteos.)
- */
+/** Primer instante real de un día local, incluso si el cambio de hora elimina las 00:00. */
+function startOfLocalDay(calendarDayUtc: number): Date {
+  // La fecha local es monótona a través de las transiciones de Chile. Buscar sus
+  // límites evita asumir días de 24 h y resuelve tanto horas omitidas como repetidas.
+  let low = Math.floor((calendarDayUtc - 2 * 86400000) / 1000);
+  let high = Math.floor((calendarDayUtc + 2 * 86400000) / 1000);
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2);
+    const parts = clParts(new Date(middle * 1000));
+    const localDay = Date.UTC(+parts.yyyy, +parts.MM - 1, +parts.dd);
+    if (localDay < calendarDayUtc) low = middle + 1;
+    else high = middle;
+  }
+  return new Date(low * 1000);
+}
+
+/** Rango [inicio, fin) del día de Chile: puede durar 23, 24 o 25 horas. */
 export function clDayRange(ref: Date = new Date()): { start: Date; end: Date } {
-  const t = clParts(ref);
-  // Hora de pared de Chile interpretada como UTC, menos el instante real = offset de Chile.
-  const wallAsUtc = Date.UTC(+t.yyyy, +t.MM - 1, +t.dd, +t.HH, +t.mm, +t.ss);
-  const offsetMs = wallAsUtc - ref.getTime();
-  // Inicio del día de Chile (00:00) como instante UTC = (00:00 de pared como UTC) − offset.
-  const startMs = Date.UTC(+t.yyyy, +t.MM - 1, +t.dd, 0, 0, 0) - offsetMs;
-  return { start: new Date(startMs), end: new Date(startMs + 86400000) };
+  const parts = clParts(ref);
+  const day = Date.UTC(+parts.yyyy, +parts.MM - 1, +parts.dd);
+  const nextDay = Date.UTC(+parts.yyyy, +parts.MM - 1, +parts.dd + 1);
+  return { start: startOfLocalDay(day), end: startOfLocalDay(nextDay) };
 }

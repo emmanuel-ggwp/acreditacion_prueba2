@@ -22,6 +22,8 @@ import { stringify } from 'csv-stringify/sync';
 import * as XLSX from 'xlsx';
 import { sequelize } from '@/lib/sequelize';
 import { clParts, clDayRange } from '@/utils/serverDate';
+import { ATTENDANCE_REPORT_SQL, attendanceExportRow, attendanceSummary } from '@/utils/attendanceReport';
+import { GUEST_ATTENDANCE_REPORT_SQL } from '@/utils/guestAttendanceReport';
 
 import { 
   Event, 
@@ -48,6 +50,42 @@ const clHourKey = (d: Date) => { const t = clParts(d); return `${t.yyyy}-${t.MM}
  * Encapsula la generación de reportes, estadísticas y exportaciones CSV del evento.
  */
 export class ReportService {
+
+  // Personas por asistencia/fecha: una fila de acreditación más sus invitados numéricos.
+  private async countAccreditedPeople(options: any = {}): Promise<number> {
+    const rows = await Accreditation.findAll({
+      ...options,
+      attributes: [
+        [fn('COUNT', col('Accreditation.id')), 'records'],
+        [fn('COALESCE', fn('SUM', col('Accreditation.guest_count')), 0), 'numericGuests'],
+      ], raw: true,
+    }) as unknown as Array<{ records: number; numericGuests: number }>;
+    return (Number(rows[0]?.records) || 0) + (Number(rows[0]?.numericGuests) || 0);
+  }
+
+  async getAttendanceRecords(eventId: string): Promise<any[]> {
+    return sequelize.query(ATTENDANCE_REPORT_SQL, { replacements: { eventId }, type: QueryTypes.SELECT });
+  }
+
+  async generateAttendanceXlsx(eventId: string, onlyAccredited = true): Promise<ArrayBuffer> {
+    const records = await this.getAttendanceRecords(eventId);
+    const rows = records.filter(row => row.participantId).map(attendanceExportRow);
+    const detail = onlyAccredited ? rows.filter(row => row['Total personas acreditadas'] > 0) : rows;
+    const wb = XLSX.utils.book_new();
+    const sheets: Array<[string, any[]]> = [
+      ['Resumen', attendanceSummary(records)],
+      [onlyAccredited ? 'Acreditados' : 'Inscritos e ingresos', detail],
+    ];
+    for (const [name, data] of sheets) {
+      const ws = XLSX.utils.json_to_sheet(data.length ? data : [{ 'Sin datos': 'No hay acreditaciones para este evento.' }]);
+      const headers = Object.keys(data[0] || { 'Sin datos': '' });
+      ws['!cols'] = headers.map(key => ({ wch: key.includes('detalle') ? 55 : key.startsWith('ID ') ? 38 : Math.max(16, Math.min(44,key.length + 2)) }));
+      if (ws['!ref']) ws['!autofilter'] = { ref: ws['!ref'] };
+      XLSX.utils.book_append_sheet(wb,ws,name);
+    }
+    const out = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
+    return out.buffer.slice(out.byteOffset,out.byteOffset + out.byteLength) as ArrayBuffer;
+  }
 
   /**
    * Construye el reporte completo de un evento: estadísticas globales, por fecha, de premios y línea de tiempo.
@@ -113,6 +151,7 @@ export class ReportService {
 
     // 3. Batch: Get Registered Participants per schedule 
     const registrationCounts = await ParticipantSchedule.findAll({
+        include: [{ model: Participant, required: true, attributes: [] }],
         attributes: [
             ['schedule_id', 'scheduleId'],
             [fn('COUNT', fn('DISTINCT', col('participant_id'))), 'count']
@@ -144,10 +183,12 @@ export class ReportService {
             SELECT gs.schedule_id AS sid, gs.guest_id AS gid
             FROM guest_schedules gs
             INNER JOIN guests g ON g.id = gs.guest_id AND g.deleted_at IS NULL
+            INNER JOIN participants p ON p.id = g.participant_id AND p.deleted_at IS NULL
             WHERE gs.schedule_id IN (:scheduleIds)
             UNION
             SELECT ps.schedule_id AS sid, g.id AS gid
             FROM guests g
+            INNER JOIN participants p ON p.id = g.participant_id AND p.deleted_at IS NULL
             INNER JOIN participant_schedules ps ON ps.participant_id = g.participant_id
             WHERE ps.schedule_id IN (:scheduleIds) AND g.deleted_at IS NULL
               AND NOT EXISTS (SELECT 1 FROM guest_schedules gs2 WHERE gs2.guest_id = g.id)
@@ -208,7 +249,7 @@ export class ReportService {
         // Acreditados = filas (participantes + invitados con nombre) + invitados numéricos.
         const accNumericGuests = Number(accData.numericGuests) || 0;
         const accreditedGuests = Number(accData.guests || 0) + accNumericGuests;
-        const accTotal = (Number(accData.total) || 0) + accNumericGuests;
+        const accTotal = (Number(accData.participants) || 0) + (Number(accData.guests) || 0) + accNumericGuests;
         const capacity = s.maxCapacity ?? event.maxCapacity ?? 0;
 
         return {
@@ -255,7 +296,7 @@ export class ReportService {
 
     // 7. Timeline
     const accreditations = await Accreditation.findAll({
-        attributes: ['checkInTime'],
+        attributes: ['checkInTime', 'guestCount'],
         include: [{ model: EventSchedule, where: { eventId }, attributes: [] }],
         order: [['checkInTime', 'ASC']],
         raw: true
@@ -276,7 +317,7 @@ export class ReportService {
         accreditations.forEach((acc) => {
             const key = clHourKey(acc.checkInTime);
             if (hourMap.has(key)) {
-                hourMap.set(key, (hourMap.get(key) || 0) + 1);
+                hourMap.set(key, (hourMap.get(key) || 0) + 1 + Math.max(0, Number((acc as any).guestCount) || 0));
             }
         });
 
@@ -323,7 +364,7 @@ export class ReportService {
     if (eventId) {
       const event = await Event.findByPk(eventId);
       if (!event) throw new Error('Event not found');
-      const accreditedCount = await Accreditation.count({ include: [{ model: EventSchedule, where: { eventId } }] });
+      const accreditedCount = await this.countAccreditedPeople({ include: [{ model: EventSchedule, where: { eventId }, attributes: [] }] });
       const awardsPending = await ParticipantAward.count({
         where: { deliveredAt: null },
         include: [{ model: Award, where: { eventId } }]
@@ -352,7 +393,7 @@ export class ReportService {
         // Eventos vigentes (no cancelados): es lo que el panel muestra arriba.
         activeEvents: await Event.count({ where: { isActive: true } }),
         totalParticipants: await Participant.count(),
-        accreditationsToday: await Accreditation.count({
+        accreditationsToday: await this.countAccreditedPeople({
           where: { checkInTime: { [Op.gte]: start, [Op.lt]: end } }
         }),
       };
@@ -373,8 +414,8 @@ export class ReportService {
     const now = new Date();
     const thirtyMinutesAgo = subMinutes(now, 30);
 
-    const accreditationsLast30Min = await Accreditation.count({
-      include: [{ model: EventSchedule, where: { eventId } }],
+    const accreditationsLast30Min = await this.countAccreditedPeople({
+      include: [{ model: EventSchedule, where: { eventId }, attributes: [] }],
       where: { checkInTime: { [Op.gte]: thirtyMinutesAgo } }
     });
 
@@ -415,98 +456,23 @@ export class ReportService {
   }
 
   /**
-   * Genera el reporte general por participante de un evento (una fila por inscripción).
+   * Genera el reporte por titular y fecha, incluyendo inscripciones e ingresos reales.
    *
-   * Ejecuta una consulta SQL cruda que une participantes, sus fechas y acreditaciones,
-   * e incluye subconsultas para cantidad de invitados, invitados asistentes, premios
-   * entregados y el detalle de invitados. Excluye participantes e invitados con borrado
-   * lógico. Mapea el resultado a claves en español y formatea fechas/horas para exportar.
+   * Una consulta combina las fechas inscritas con las acreditadas. Conserva ingresos
+   * sin inscripción y acreditaciones históricas de registros eliminados; distingue
+   * invitados con nombre, cantidades declaradas y personas efectivamente acreditadas.
    *
    * @param eventId - Identificador del evento a reportar.
-   * @returns Promesa que resuelve a un arreglo de objetos, uno por inscripción, con columnas en español (datos del participante, asistencia, invitados y premios) listas para CSV.
+   * @returns Una fila por titular y fecha, con cantidades numéricas sumables.
    */
   async getGeneralReport(eventId: string) {
-    const query = `
-        SELECT 
-            p.first_name as "Nombre",
-            p.last_name as "Apellido",
-            p.document_number as "Documento",
-            p.numero_sap as "Número SAP",
-            p.company as "Empresa",
-            p.position as "Cargo",
-            p.phone as "Teléfono",
-            p.email as "Email",
-            p.dietary_preference as "Dieta",
-            p.dietary_comments as "Comentarios Dieta",
-            ps.created_at as "registrationDate",
-            es.start_date_time as "eventDate",
-            CASE WHEN acc.id IS NOT NULL THEN 'Sí' ELSE 'No' END as "Asistencia",
-            acc.check_in_time as "checkInTime",
-            -- Invitados = con NOMBRE (filas guests ligadas a esta fecha, o sin fecha = fallback)
-            -- + NUMÉRICOS declarados (p.guest_count, modos count/companion; no crean fila).
-            ((SELECT COUNT(*) FROM guests g
-             WHERE g.participant_id = p.id AND g.deleted_at IS NULL
-               AND (EXISTS (SELECT 1 FROM guest_schedules gs WHERE gs.guest_id = g.id AND gs.schedule_id = es.id)
-                    OR NOT EXISTS (SELECT 1 FROM guest_schedules gs3 WHERE gs3.guest_id = g.id)))
-             + COALESCE(p.guest_count, 0))::int as "Cant. Invitados",
-            -- Asistentes = invitados con nombre acreditados en esta fecha + numéricos que
-            -- llegaron (acc.guest_count de la acreditación del participante en esta fecha).
-            ((SELECT COUNT(*) FROM accreditations acc_g
-             INNER JOIN guests g ON acc_g.guest_id = g.id
-             WHERE g.participant_id = p.id AND acc_g.event_schedule_id = es.id AND g.deleted_at IS NULL)
-             + COALESCE(acc.guest_count, 0))::int as "Cant. Invitados Asistentes",
-            (SELECT STRING_AGG(a.name, ', ')
-             FROM participant_awards pa
-             INNER JOIN awards a ON pa.award_id = a.id
-             WHERE pa.participant_id = p.id AND a.event_id = :eventId AND pa.delivered_at IS NOT NULL) as "awardName",
-            (SELECT STRING_AGG(
-                CONCAT_WS(' · ',
-                  NULLIF(TRIM(COALESCE(g2.first_name, '') || ' ' || COALESCE(g2.last_name, '')), ''),
-                  NULLIF(g2.document_number, ''),
-                  CASE WHEN g2.age IS NOT NULL THEN g2.age || ' años' END
-                ), '; ' ORDER BY g2.first_name)
-             FROM guests g2 WHERE g2.participant_id = p.id AND g2.deleted_at IS NULL
-               AND (EXISTS (SELECT 1 FROM guest_schedules gs4 WHERE gs4.guest_id = g2.id AND gs4.schedule_id = es.id)
-                    OR NOT EXISTS (SELECT 1 FROM guest_schedules gs5 WHERE gs5.guest_id = g2.id))) as "guestsDetail"
-        FROM participants p
-        INNER JOIN participant_schedules ps ON p.id = ps.participant_id
-        INNER JOIN event_schedules es ON ps.schedule_id = es.id
-        LEFT JOIN accreditations acc ON p.id = acc.participant_id AND es.id = acc.event_schedule_id
-        WHERE es.event_id = :eventId AND p.deleted_at IS NULL
-        ORDER BY p.last_name, p.first_name, es.start_date_time
-    `;
-
-    const results = await sequelize.query(query, {
-        replacements: { eventId },
-        type: QueryTypes.SELECT
-    });
-
-    return results.map((row: any) => ({
-        "Nombre": row["Nombre"],
-        "Apellido": row["Apellido"],
-        "Documento": row["Documento"],
-        "Número SAP": row["Número SAP"],
-        "Empresa": row["Empresa"],
-        "Cargo": row["Cargo"],
-        "Teléfono": row["Teléfono"],
-        "Email": row["Email"],
-        "Dieta": row["Dieta"],
-        "Comentarios Dieta": row["Comentarios Dieta"],
-        "Fecha Inscripción": row["registrationDate"] ? clDateTime(new Date(row["registrationDate"])) : '',
-        "Fecha Evento": row["eventDate"] ? clDate(new Date(row["eventDate"])) : '',
-        "Asistencia": row["Asistencia"],
-        "Hora Acreditación": row["checkInTime"] ? clTimeHms(new Date(row["checkInTime"])) : '',
-        "Cant. Invitados": row["Cant. Invitados"],
-        "Cant. Invitados Asistentes": row["Cant. Invitados Asistentes"],
-        "Invitados (detalle)": row["guestsDetail"] || '',
-        "Premio": row["awardName"] || 'No'
-    }));
+    return (await this.getAttendanceRecords(eventId)).filter(row => row.participantId).map(attendanceExportRow);
   }
 
   // Reporte de INVITADOS: una fila por invitado con nombre, RUT, edad, dieta y asistencia.
   // El reporte general es por participante (solo cuenta invitados); este da el detalle por carga.
   /**
-   * Genera el reporte detallado de invitados de un evento (una fila por invitado con nombre).
+   * Genera el reporte de invitados con nombre por fecha, conservando acreditaciones históricas.
    *
    * A diferencia del reporte general (por participante), este da el detalle por carga:
    * ejecuta SQL cruda uniendo invitados con su participante, marca la asistencia y la
@@ -517,21 +483,7 @@ export class ReportService {
    * @returns Promesa que resuelve a un arreglo de objetos, uno por invitado, con columnas en español (`Participante`, `Invitado`, `RUT`, `Edad`, `Tipo`, `Dieta`, `Asistió`, `Hora Acreditación`) listas para CSV.
    */
   async getGuestsReport(eventId: string) {
-    const query = `
-        SELECT
-            TRIM(COALESCE(p.first_name, '') || ' ' || COALESCE(p.last_name, '')) as "Participante",
-            TRIM(COALESCE(g.first_name, '') || ' ' || COALESCE(g.last_name, '')) as "Invitado",
-            g.document_number as "RUT",
-            g.age as "Edad",
-            g.guest_type as "Tipo",
-            g.dietary_preference as "Dieta",
-            CASE WHEN EXISTS (SELECT 1 FROM accreditations acc WHERE acc.guest_id = g.id) THEN 'Sí' ELSE 'No' END as "Asistió",
-            (SELECT MIN(acc.check_in_time) FROM accreditations acc WHERE acc.guest_id = g.id) as "checkInTime"
-        FROM guests g
-        INNER JOIN participants p ON p.id = g.participant_id
-        WHERE p.event_id = :eventId AND g.deleted_at IS NULL AND p.deleted_at IS NULL
-        ORDER BY p.last_name, p.first_name, g.first_name
-    `;
+    const query = GUEST_ATTENDANCE_REPORT_SQL;
 
     const results = await sequelize.query(query, {
         replacements: { eventId },
@@ -539,6 +491,11 @@ export class ReportService {
     });
 
     return results.map((row: any) => ({
+        "Fecha Evento": row.eventDate ? clDate(new Date(row.eventDate)) : '',
+        "Horario": row.scheduleName || 'Sin fecha asignada',
+        "ID fecha": row.scheduleId || '',
+        "Inscrito en esta fecha": row.registered ? 'Sí' : 'No',
+        "Registro eliminado": row.deleted ? 'Sí' : 'No',
         "Participante": row["Participante"],
         "Invitado": row["Invitado"],
         "RUT": row["RUT"] || '',

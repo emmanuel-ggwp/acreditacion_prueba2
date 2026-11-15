@@ -70,3 +70,8 @@ planes/resultados/
 # versionar un .sql legítimo, se añade aquí su excepción explícita (!fichero.sql).
 *.sql
 *.dump
+
+# Consultas operativas revisadas: solo instrucciones, nunca resultados ni volcados.
+!docs/sql/centinela/01_respaldo.sql
+!docs/sql/centinela/02_actualizar_declarados.sql
+!docs/sql/centinela/03_verificar.sql

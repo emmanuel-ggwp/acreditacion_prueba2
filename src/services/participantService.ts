@@ -9,6 +9,7 @@
  * Las operaciones que tocan varias tablas usan transacción; toda escritura registra auditoría.
  */
 import { z } from 'zod';
+import { numericGuestImport } from '@/utils/participantImport';
 import { Op, fn, col, where as sqlWhere } from 'sequelize';
 import { sequelize } from '@/lib/sequelize';
 import { cleanRut, isValidRut, normalizeRut } from '@/utils/validators/rut';
@@ -241,7 +242,7 @@ export class ParticipantService {
         if (rawRut) orConds.push(sqlWhere(normalizedRutCol(), cleanRut(rawRut)));
         if (pdata.email) orConds.push({ email: pdata.email });
         let participant = orConds.length
-          ? await Participant.findOne({ where: { eventId, [Op.or]: orConds }, transaction: tx })
+          ? await Participant.findOne({ where: { eventId, [Op.or]: orConds }, transaction: tx, lock: tx.LOCK.UPDATE })
           : null;
 
         // Diagnóstico únicamente: conservar la selección actual por RUT O correo.
@@ -254,13 +255,16 @@ export class ParticipantService {
         // RUT canónico para guardar (28088678-5: sin puntos, con guion), o null si no vino.
         const canonicalRut = rawRut ? normalizeRut(rawRut) : null;
 
-        if (!participant) {
-          // Invitados en modos numéricos (count / companion). "Acompañante" acepta sí/si/x/1.
-          const companionVal = /^(s[ií]|si|yes|y|true|1|x)$/i.test(String(pdata.guestCompanion ?? '').trim());
-          const loadsVal = Number(pdata.guestLoads) || 0;
-          const hasCompanionData = pdata.guestCompanion !== undefined || pdata.guestLoads !== undefined;
-          const countVal = hasCompanionData ? (companionVal ? 1 : 0) + loadsVal : (Number(pdata.guestCount) || 0);
+        const numericGuests = numericGuestImport(pdata, participant || {});
+        if (participant && Object.keys(numericGuests).length) {
+          if (identityWarning) throw new Error('No se actualizaron las cargas: el correo coincide con otro RUT.');
+          if (await Guest.count({ where: { participantId: participant.id }, transaction: tx })) {
+            throw new Error('No se actualizaron las cargas: el participante tiene invitados con nombre.');
+          }
+          await participant.update(numericGuests, { transaction: tx });
+        }
 
+        if (!participant) {
           participant = await Participant.create({
             firstName: pdata.firstName || '',
             lastName: pdata.lastName || '',
@@ -273,9 +277,10 @@ export class ParticipantService {
             dietaryPreference: (pdata.dietaryPreference && String(pdata.dietaryPreference).trim()) || 'NONE',
             dietaryComments: pdata.dietaryComments || null,
             allowedGuests: Number(pdata.allowedGuests) || (Array.isArray(guests) ? guests.length : 0),
-            guestCount: countVal,
-            guestCompanion: companionVal,
-            guestLoads: loadsVal,
+            guestCount: 0,
+            guestCompanion: false,
+            guestLoads: 0,
+            ...numericGuests,
             eventId,
             createdBy,
             registrationSource: 'IMPORT',
@@ -1024,10 +1029,15 @@ export class ParticipantService {
         }
     ];
 
-    if (filters.name) {
+    if (filters.name?.trim()) {
+      const nameQuery = normalizeForSearch(filters.name).replace(/\s+/g, ' ');
+      const fullNameExpr = fn('REGEXP_REPLACE',
+        unaccentLowerExpr(fn('CONCAT_WS', ' ', col('Participant.first_name'), col('Participant.last_name'))),
+        '[[:space:]]+', ' ', 'g');
       where[Op.or] = [
         { firstName: { [Op.iLike]: `%${filters.name}%` } },
         { lastName: { [Op.iLike]: `%${filters.name}%` } },
+        sqlWhere(fullNameExpr, { [Op.like]: `%${nameQuery}%` }),
         { documentNumber: { [Op.iLike]: `%${filters.name}%` } },
       ];
       // Si lo buscado parece un RUT (o un trozo de RUT), comparar además contra la
