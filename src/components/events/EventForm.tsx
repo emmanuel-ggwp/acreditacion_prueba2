@@ -425,10 +425,10 @@ const EventForm: React.FC<EventFormProps> = ({ event, onClose, onSuccess }) => {
                   </div>
                   <div className="ml-3">
                     <label htmlFor="allowGuests" className="font-medium text-gray-900 cursor-pointer">
-                      Permitir invitados
+                      Permitir agregar invitados desde el formulario
                     </label>
                     <p className="text-sm text-gray-500">
-                      Si se habilita, los participantes podrán registrar acompañantes.
+                      Controla las altas de invitados en el formulario; deshabilitarlo no elimina cargas precargadas ni asistencias. La opción de solo precargados limita las altas aunque esté habilitado.
                     </p>
                   </div>
                 </div>

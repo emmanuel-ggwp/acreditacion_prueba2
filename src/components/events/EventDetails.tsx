@@ -12,7 +12,7 @@ import EventAccreditationHistory from '@/components/events/EventAccreditationHis
 import toast from 'react-hot-toast';
 import { useRouter } from 'next/navigation';
 import { isToday, isYesterday, isTomorrow } from 'date-fns';
-import apiClient from '@/utils/apiClient';
+import { downloadEventGeneralReport } from '@/utils/generateReport';
 import EventForm from './EventForm';
 import EventAwardedList from './EventAwardedList';
 import useAuthStore from '@/store/authStore';
@@ -49,20 +49,7 @@ const EventDetails: React.FC<EventDetailsProps> = ({ eventId }) => {
   const handleDownloadReport = async () => {
     if (!eventId || !currentEvent) return;
     try {
-        const response = await apiClient.get(`/api/reports/events/${eventId}?type=general`, {
-            responseType: 'blob'
-        });
-        
-        // Create a blob from the response
-        const blob = new Blob([response as any], { type: 'text/csv' });
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `event_report_${currentEvent.name.replace(/\s+/g, '_')}.csv`;
-        document.body.appendChild(a);
-        a.click();
-        window.URL.revokeObjectURL(url);
-        document.body.removeChild(a);
+        await downloadEventGeneralReport(eventId, currentEvent.name);
         toast.success('Reporte descargado correctamente');
     } catch (error) {
         console.error('Error downloading report:', error);
@@ -157,15 +144,17 @@ const EventDetails: React.FC<EventDetailsProps> = ({ eventId }) => {
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Capacidad Máxima</label>
-                    <p className="text-gray-900">{currentEvent.maxCapacity ? `${currentEvent.maxCapacity} asistentes` : 'Capacidad ilimitada'}</p>
+                    <p className="text-gray-900">{currentEvent.maxCapacity ? `${currentEvent.maxCapacity} titulares` : 'Capacidad ilimitada'}</p>
                   </div>
 
                   <div className="flex items-center h-full md:pt-6">
                       <div className="flex items-center px-3 py-1 rounded-full bg-gray-100 w-fit">
                         <span className={`h-2.5 w-2.5 rounded-full mr-2 ${currentEvent.allowGuests ? 'bg-green-500' : 'bg-red-500'}`}></span>
-                        <span className="text-sm font-medium text-gray-700">Invitados {currentEvent.allowGuests ? 'Permitidos' : 'No Permitidos'}</span>
+                        <span className="text-sm font-medium text-gray-700">{(currentEvent as any).registrationConfig?.guests?.mode === 'named' && (currentEvent as any).registrationConfig?.guests?.preloadedOnly === true ? 'Solo invitados precargados' : currentEvent.allowGuests ? 'Agregar invitados nuevos: habilitado' : 'Agregar invitados nuevos: deshabilitado'}</span>
                       </div>
                   </div>
+
+                  <p className="text-xs text-gray-500 md:col-span-2">Esta opción regula las altas desde el formulario. Las cargas precargadas y las asistencias ya registradas se conservan.</p>
 
                   {currentEvent.allowGuests && (
                     <div>

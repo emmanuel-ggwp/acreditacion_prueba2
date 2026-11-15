@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { format } from 'date-fns';
+import { formatDateCL, formatTimeCL } from '@/utils/formatters';
 import { Plus, Edit, Trash2, Clock, Users, MapPin, DoorOpen, DoorClosed, Lock, Unlock, Eye, EyeOff } from 'lucide-react';
 import EventSchedule from '@/models/EventSchedule';
 import ScheduleForm from '@/components/events/ScheduleForm';
@@ -135,7 +135,7 @@ const ScheduleList: React.FC<ScheduleListProps> = ({ eventId }) => {
                   <div className="flex items-center">
                     <Clock size={16} className="mr-1.5 text-indigo-500" />
                     <span>
-                      {format(new Date(schedule.startDateTime), 'p')} - {format(new Date(schedule.endDateTime), 'p')}
+                      {formatDateCL(schedule.startDateTime, { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' })} · {formatTimeCL(schedule.startDateTime)} – {formatTimeCL(schedule.endDateTime)}
                     </span>
                   </div>
                   <div className="h-4 w-px bg-gray-300"></div>

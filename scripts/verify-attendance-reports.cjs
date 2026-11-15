@@ -17,6 +17,7 @@ function loadTs(file, overrides = {}) {
 const serverDate = loadTs(path.join(root,'src/utils/serverDate.ts'));
 const helpers = loadTs(root + '/src/utils/attendanceReport.ts', { './serverDate': serverDate });
 const guestHelpers = loadTs(path.join(root,'src/utils/guestAttendanceReport.ts'));
+const eventGuests = loadTs(path.join(root,'src/utils/eventGuestCounts.ts'));
 const env = req('dotenv').parse(fs.readFileSync(root + '/.env.local'));
 assert(['localhost','127.0.0.1','[::1]'].includes(new URL(env.DATABASE_URL).hostname));
 const client = new (req('pg').Client)({ connectionString: env.DATABASE_URL, connectionTimeoutMillis: 5000 });
@@ -99,5 +100,10 @@ async function main() {
   assert(guestReport.some(row=>row.Invitado==='Invitado 15 Prueba'&&!row.registered&&row['Asistió']==='Sí'));
   assert(guestReport.some(row=>row.Invitado==='Precargado Sin fecha'&&row.scheduleId===null&&row['Asistió']==='No'));
   console.log('PostgreSQL real: reporte de invitados por fecha conserva ingresos repetidos, borrados, invitados sin inscripción y precargados sin fecha.');
+  const eventCounts=(await client.query(eventGuests.EVENT_GUEST_COUNTS_SQL.replace(/:eventIds\b/g,'$1'),[E])).rows;
+  assert.equal(eventCounts.length,1);
+  assert.equal(eventCounts[0].registeredGuests,10);
+  assert.equal(eventCounts[0].accreditedGuests,13);
+  console.log('PostgreSQL real: tarjetas de evento concilian invitados registrados y acreditados, incluidos numéricos, fechas múltiples e ingresos históricos.');
 }
 main().catch(error=>{console.error(error);process.exitCode=1;}).finally(async()=>{await client.query('ROLLBACK').catch(()=>{});await client.end();});

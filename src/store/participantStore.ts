@@ -30,6 +30,8 @@ interface ParticipantState {
   setCurrentParticipant: (participant: ParticipantWithAccreditation | null) => void;
 }
 
+let participantListRequest = 0;
+
 const useParticipantStore = create<ParticipantState>()(
   devtools(
     (set) => ({
@@ -40,7 +42,8 @@ const useParticipantStore = create<ParticipantState>()(
       total: 0,
 
       fetchParticipantsByEvent: async (eventId, page = 1, limit = 10, filters = {}) => {
-        set({ loading: true, error: null });
+        const request = ++participantListRequest;
+        set({ participants: [], total: 0, loading: true, error: null });
         try {
           const queryParams = new URLSearchParams({
             page: page.toString(),
@@ -50,13 +53,15 @@ const useParticipantStore = create<ParticipantState>()(
           const response = await apiClient.get<{ participants: any[]; total: number }>(
             `/api/events/${eventId}/participants?${queryParams.toString()}`
           );
+          if (request !== participantListRequest) return;
           const participantsWithGuestCount = response.participants.map((p: any) => ({
             ...p,
             guestCount: p.guestCount || 0,
           }));
           set({ participants: participantsWithGuestCount, total: response.total, loading: false });
         } catch (error: any) {
-          set({ error: error.message, loading: false });
+          if (request !== participantListRequest) return;
+          set({ participants: [], total: 0, error: error.message, loading: false });
         }
       },
 
@@ -91,8 +96,7 @@ const useParticipantStore = create<ParticipantState>()(
           );
           return response.participants;
         } catch (error: any) {
-          console.error('Error searching participants:', error);
-          return [];
+          throw error; // no confundir una consulta fallida con una búsqueda sin coincidencias
         }
       },
 

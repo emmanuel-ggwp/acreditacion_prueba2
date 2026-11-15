@@ -8,7 +8,8 @@
  * operación de escritura registra auditoría.
  */
 import { z } from 'zod';
-import { Op, fn, col, literal } from 'sequelize';
+import { Op, fn, col, literal, QueryTypes } from 'sequelize';
+import { EVENT_GUEST_COUNTS_SQL } from '@/utils/eventGuestCounts';
 import { sequelize } from '@/lib/sequelize';
 import Event from '@/models/Event';
 import EventSchedule from '@/models/EventSchedule';
@@ -450,6 +451,11 @@ export class EventService {
         raw: true,
       });
 
+      const guestCounts = await sequelize.query<{eventId:string;registeredGuests:number;accreditedGuests:number}>(EVENT_GUEST_COUNTS_SQL, {
+        replacements: { eventIds }, type: QueryTypes.SELECT,
+      });
+      const guestMap = new Map(guestCounts.map(row => [row.eventId,row]));
+
       // 3. Map counts to events
       const countMap = new Map<string, number>();
       (participantCounts as any[]).forEach((p: any) => {
@@ -463,6 +469,8 @@ export class EventService {
       rows.forEach(event => {
         event.setDataValue('participantCount' as any, countMap.get(event.id) || 0);
         event.setDataValue('accreditedCount' as any, accMap.get(event.id) || 0);
+        event.setDataValue('registeredGuestCount' as any, Number(guestMap.get(event.id)?.registeredGuests) || 0);
+        event.setDataValue('accreditedGuestCount' as any, Number(guestMap.get(event.id)?.accreditedGuests) || 0);
       });
     }
 

@@ -76,7 +76,7 @@ const EventStatCard = React.memo(({ stat, viewMode }: { stat: EventStat, viewMod
   const badge = !stat.isActive
     ? { t: 'Cancelado', c: 'bg-red-100 text-red-700', I: Ban }
     : !stat.isPublic
-      ? { t: 'Borrador', c: 'bg-gray-100 text-gray-600', I: Lock }
+      ? { t: 'No publicado', c: 'bg-gray-100 text-gray-600', I: Lock }
       : stat.registrationOpen
         ? { t: 'Inscripción abierta', c: 'bg-green-100 text-green-700', I: Globe }
         : { t: 'Inscripción cerrada', c: 'bg-amber-100 text-amber-700', I: Lock };

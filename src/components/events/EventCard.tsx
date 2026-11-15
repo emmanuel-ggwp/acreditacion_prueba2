@@ -7,14 +7,14 @@ import Event from '@/models/Event';
 import RoleGuard from '../auth/RoleGuard';
 import { ROLES } from '@/utils/constants';
 import useEventStore, { EventDeletionSummary } from '@/store/eventStore';
-import { formatCapacity, formatEventDate } from '@/utils/formatters';
+import { formatEventDate } from '@/utils/formatters';
 import { EventStatusBadge } from './EventStatusBadge';
 import toast from 'react-hot-toast';
 import { ButtonEventReport } from '@/components/events/ButtonEventReport';
 import DeleteReasonModal from '@/components/ui/DeleteReasonModal';
 
 interface EventCardProps {
-  event: Event & { participantCount?: number; accreditedCount?: number };
+  event: Event & { participantCount?: number; accreditedCount?: number; registeredGuestCount?: number; accreditedGuestCount?: number };
 }
 
 const EventCard: React.FC<EventCardProps> = ({ event }) => {
@@ -69,11 +69,13 @@ const EventCard: React.FC<EventCardProps> = ({ event }) => {
   const stateBadge = !isActive
     ? { text: 'Cancelado', cls: 'bg-red-100 text-red-700' }
     : !isPublic
-      ? { text: 'Borrador', cls: 'bg-gray-100 text-gray-600' }
+      ? { text: 'No publicado', cls: 'bg-gray-100 text-gray-600' }
       : registrationOpen
         ? { text: 'Inscripción abierta', cls: 'bg-green-100 text-green-700' }
         : { text: 'Inscripción cerrada', cls: 'bg-amber-100 text-amber-700' };
 
+  const registeredGuests = Number(event.registeredGuestCount) || 0;
+  const accreditedGuests = Number(event.accreditedGuestCount) || 0;
   const startDate = event.schedules?.[0]?.startDateTime;
   const endDate = event.schedules?.[0]?.endDateTime;
 
@@ -199,20 +201,23 @@ const EventCard: React.FC<EventCardProps> = ({ event }) => {
 
         <div className="grid grid-cols-3 gap-2 py-4 border-t border-gray-100 bg-gray-50/50 -mx-6 px-6">
           <div className="text-center">
-            <p className="font-semibold text-gray-900">{event.participantCount || 0}</p>
-            <p className="text-xs text-gray-500 font-medium uppercase tracking-wide mt-0.5">Total</p>
+            <p className="font-semibold text-gray-900">{(event.participantCount || 0) + registeredGuests}</p>
+            <p className="text-xs text-gray-500 font-medium uppercase tracking-wide mt-0.5">Inscritos</p>
+            <p className="text-[10px] text-gray-500 mt-1">{event.participantCount || 0} titulares · {registeredGuests} invitados</p>
           </div>
           <div className="text-center border-l border-gray-200">
-            <p className="font-semibold text-indigo-600">{event.accreditedCount || 0}</p>
-            <p className="text-xs text-gray-500 font-medium uppercase tracking-wide mt-0.5">Check-in</p>
+            <p className="font-semibold text-indigo-600">{(event.accreditedCount || 0) + accreditedGuests}</p>
+            <p className="text-xs text-gray-500 font-medium uppercase tracking-wide mt-0.5">Acreditados</p>
+            <p className="text-[10px] text-gray-500 mt-1">{event.accreditedCount || 0} titulares · {accreditedGuests} invitados</p>
           </div>
           <div className="text-center border-l border-gray-200">
             <p className="font-semibold text-gray-900">
-              {formatCapacity(event.accreditedCount || 0, event.maxCapacity)}
+              {Number(event.maxCapacity) > 0 ? event.maxCapacity : 'Ilimitado'}
             </p>
-            <p className="text-xs text-gray-500 font-medium uppercase tracking-wide mt-0.5">Cap</p>
+            <p className="text-xs text-gray-500 font-medium uppercase tracking-wide mt-0.5">Cupo titulares</p>
           </div>
         </div>
+        <p className="text-[10px] text-gray-500">Inscritos y acreditados suman las fechas del evento.</p>
       </div>
 
       <div className="p-4 bg-gray-50 border-t border-gray-100">

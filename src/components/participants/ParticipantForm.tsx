@@ -97,17 +97,19 @@ const ParticipantForm: React.FC<ParticipantFormProps> = ({ eventId, participant,
   const isEffectiveEditMode = isEditMode || !!participantId;
 
   useEffect(() => {
+    let active = true;
     const search = async () => {
       if (documentNumberValue && documentNumberValue.length >= 3 && !isEditMode) {
         setIsSearching(true);
         try {
           const results = await searchParticipants(eventId, documentNumberValue);
+          if (!active) return;
           setSearchResults(results);
           setShowResults(true);
-        } catch (error) {
-          console.error(error);
+        } catch {
+          if (active) { setSearchResults([]); setShowResults(false); showToast.error('No se pudo consultar el RUT. Comprueba tu conexión o sesión.'); }
         } finally {
-          setIsSearching(false);
+          if (active) setIsSearching(false);
         }
       } else {
         setSearchResults([]);
@@ -116,7 +118,7 @@ const ParticipantForm: React.FC<ParticipantFormProps> = ({ eventId, participant,
     };
 
     const timer = setTimeout(search, 500);
-    return () => clearTimeout(timer);
+    return () => { active = false; clearTimeout(timer); };
   }, [documentNumberValue, eventId, searchParticipants, isEditMode]);
 
   const handleSelectParticipant = (p: Participant) => {

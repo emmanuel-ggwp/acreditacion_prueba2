@@ -489,13 +489,15 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
               <label htmlFor="rutGate" className="block text-sm font-medium text-gray-700 mb-1">RUT</label>
               <input
                 id="rutGate"
+                aria-invalid={!!lookupError}
+                aria-describedby={lookupError ? 'rutGate-error' : undefined}
                 value={rutInput}
                 onChange={(e) => setRutInput(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); doLookup(); } }}
                 placeholder="Ej. 12.345.678-9"
                 className="block w-full px-4 py-3 text-center text-lg tracking-wide border border-gray-300 rounded-lg shadow-sm placeholder-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-300 focus:border-gray-400"
               />
-              {lookupError && <p className="mt-2 text-sm text-red-600 text-center">{lookupError}</p>}
+              {lookupError && <p id="rutGate-error" role="alert" className="mt-2 text-sm text-red-600 text-center">{lookupError}</p>}
             </div>
 
             <button

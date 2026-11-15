@@ -37,6 +37,7 @@ describe('EventService', () => {
   beforeEach(() => {
     eventService = new EventService();
     jest.clearAllMocks();
+    (sequelize.query as jest.Mock).mockResolvedValue([]);
   });
 
   describe('createEvent', () => {

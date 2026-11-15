@@ -53,3 +53,14 @@ Usar el procedimiento habitual del proyecto para build y despliegue. Los cambios
 Verificar con una persona con cargas numéricas, una con cargas con nombre y adulto, una con entradas en dos fechas y una cuyos invitados hayan ingresado sin el titular. Los totales deben representar las entradas efectivamente guardadas.
 
 Las pruebas unitarias se ejecutan con npm test. La comprobación opcional con PostgreSQL local usa node scripts/verify-attendance-reports.cjs: requiere las dependencias de desarrollo y .env.local con DATABASE_URL de localhost. Trabaja solo con tablas temporales dentro de una transacción y revierte al terminar. No debe apuntarse a producción.
+
+## Búsquedas y claridad de las pantallas
+
+- La tabla de Participantes ignora respuestas antiguas cuando ya se lanzó otra consulta, incluso si se cambia de evento. Un error antiguo tampoco cancela el indicador de carga de la búsqueda vigente.
+- En acreditación, una consulta fallida se muestra como error con Reintentar búsqueda. Solo una consulta correcta sin coincidencias muestra Sin resultados. Cambiar o limpiar el texto invalida inmediatamente respuestas anteriores.
+- Los resultados se pueden seleccionar mediante botones accesibles con teclado. El acceso por RUT tiene una etiqueta asociada y anuncia sus errores.
+- Las tarjetas de Eventos muestran inscritos y acreditados incluyendo invitados, con el desglose de titulares e invitados. Los totales suman fechas; no equivalen a personas únicas. El cupo de titulares se presenta separado, sin dividir la suma de asistencias de varias fechas por un cupo único.
+- Horarios muestra día, mes, año y horas en America/Santiago.
+- No publicado reemplaza la etiqueta Borrador: un evento privado puede tener inscripciones y acreditaciones válidas.
+- El estado de invitados distingue agregar nuevos desde el formulario de conservar invitados precargados. Cambiar el texto no altera ninguna regla de admisión ni asistencia.
+- El botón Reporte de Información del evento descarga XLSX con el mismo mecanismo que los otros botones; no guarda bytes Excel con extensión CSV.

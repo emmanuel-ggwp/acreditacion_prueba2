@@ -918,14 +918,19 @@ export default function GalaTemplate({ event, slug, preview = false }: TemplateP
           )}
           <h1 className="text-xl font-bold text-white mb-2">Identifícate con tu RUT</h1>
           <p className="text-white/70 text-sm mb-5">Ingresa tu RUT sin puntos y con guión para continuar.</p>
+          <label htmlFor="gala-rut" className="block text-sm text-white mb-2">RUT</label>
           <input
+            id="gala-rut"
+            autoComplete="off"
+            aria-invalid={!!lookupError}
+            aria-describedby={lookupError ? 'gala-rut-error' : undefined}
             value={rutInput}
             onChange={(e) => setRutInput(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') doLookup(); }}
             placeholder="Ej: 12345678-9"
             className="w-full rounded-full px-5 py-3 text-center text-gray-900 bg-white placeholder-gray-400 border border-white/60 focus:outline-none"
           />
-          {lookupError && <p className="mt-3 text-sm text-red-300">{lookupError}</p>}
+          {lookupError && <p id="gala-rut-error" role="alert" className="mt-3 text-sm text-red-300">{lookupError}</p>}
           <button onClick={doLookup} disabled={lookupLoading} className="mt-5 w-full inline-flex items-center justify-center gap-2 rounded-full px-6 py-3 text-white font-semibold shadow-lg hover:brightness-110 transition disabled:opacity-60" style={{ backgroundColor: buttonColor, color: buttonTextColor }}>
             {lookupLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <ArrowRight className="h-5 w-5" />}
             {lookupLoading ? 'Validando…' : 'Continuar'}
