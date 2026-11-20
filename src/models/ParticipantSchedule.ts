@@ -71,4 +71,7 @@ ParticipantSchedule.init(
   }
 );
 
+// El reporte incluye al titular desde la inscripción para excluir eliminados.
+ParticipantSchedule.belongsTo(Participant, { foreignKey: 'participantId' });
+
 export default ParticipantSchedule;
