@@ -71,3 +71,11 @@ Las pruebas unitarias se ejecutan con npm test. La comprobación opcional con Po
 - El endpoint por lotes devuelve error si fallan todos los reportes. Si la respuesta es parcial, el panel conserva los reportes disponibles y avisa qué eventos faltan. El aviso permite reintentar y las respuestas antiguas no reemplazan la página actual.
 - Las dietas se consultan al abrir y cada minuto, junto al ciclo de actualización de reportes. Un fallo conserva la última consulta y muestra aviso hasta recuperarse. Los contadores mantienen su actualización cada 20 segundos.
 - Requiere build y despliegue. No requiere migraciones ni cambia respuestas, invitados guardados o acreditaciones. Si un dato histórico no tiene ni enlace por fecha ni confirmación, no se infiere que esté inscrito: deberá revisarse y asignarse desde administración.
+
+## Invitados: título, ayuda y adulto nativo por fecha
+
+En Editar evento → General → Mensaje de invitados se puede escribir un título y un texto de ayuda. Se muestran como texto, sin HTML, en el formulario normal, Gala y administración. En modo con nombres, la opción «Permitir un acompañante adulto adicional…» habilita una respuesta Sí/No para cada fecha. Es un adulto adicional al cupo de invitados con nombre y puede coexistir con cargas precargadas.
+
+La respuesta se guarda en customData._adultCompanionsBySchedule, un mapa de fecha a booleano, sin migraciones. El servidor solo incorpora fechas nuevas del evento y conserva respuestas anteriores. Los registros existentes no se convierten automáticamente. La consulta por RUT devuelve únicamente las respuestas de las fechas inscritas. Los reportes y Excel cuentan 0 o 1 según cada fecha; el ingreso real sigue guardándose solo cuando el operador lo marca. Se mantiene el parche de Centinela sin activar esta opción ni trasladar sus datos automáticamente.
+
+Para usarlo: desplegar el nuevo build, editar un evento, elegir invitados con nombre, activar el adulto adicional, escribir el mensaje y guardar. Los eventos que no activen la opción conservan su comportamiento. No crear además una pregunta personalizada para registrar el mismo adulto.

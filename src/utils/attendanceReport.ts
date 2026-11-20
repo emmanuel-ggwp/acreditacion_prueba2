@@ -1,3 +1,4 @@
+import { numericGuestsForDateSql } from './adultCompanion';
 import { clParts } from './serverDate';
 
 /** Una sola consulta/snapshot: inscripciones y entradas reales, incluso fuera de la fecha inscrita. */
@@ -68,9 +69,9 @@ SELECT p.id AS "participantId", d.id AS "scheduleId",
   COALESCE(at.titular,false) AS "accredited", at.titular_time AS "checkInTime", at.first_time AS "firstCheckIn",
   COALESCE(nd.named_count,0) AS "namedRegistered", COALESCE(nd.loads,0) AS "loadsRegistered",
   COALESCE(nd.companions,0) AS "companionsRegistered", COALESCE(nd.others,0) AS "othersRegistered",
-  CASE WHEN rp.participant_id IS NOT NULL THEN COALESCE(p.guest_count,0) ELSE 0 END AS "numericRegistered",
+  CASE WHEN rp.participant_id IS NOT NULL THEN ${numericGuestsForDateSql('p', 'k.schedule_id')} ELSE 0 END AS "numericRegistered",
   CASE WHEN rp.participant_id IS NOT NULL THEN COALESCE(p.guest_loads,0) ELSE 0 END AS "numericLoadsDeclared",
-  CASE WHEN rp.participant_id IS NOT NULL THEN COALESCE(p.guest_companion,false) ELSE false END AS "companionDeclared",
+  CASE WHEN rp.participant_id IS NOT NULL THEN (${numericGuestsForDateSql('p', 'k.schedule_id')} > 0 AND (p.custom_data::jsonb -> '_adultCompanionsBySchedule' -> k.schedule_id::text IS NOT NULL OR COALESCE(p.guest_companion,false))) ELSE false END AS "companionDeclared",
   COALESCE(at.named_count,0) AS "namedAccredited", COALESCE(at.loads,0) AS "loadsAccredited",
   COALESCE(at.companions,0) AS "companionsAccredited", COALESCE(at.others,0) AS "othersAccredited",
   COALESCE(at.numeric_count,0) AS "numericAccredited",

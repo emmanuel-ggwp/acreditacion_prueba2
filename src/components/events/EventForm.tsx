@@ -127,6 +127,9 @@ const EventForm: React.FC<EventFormProps> = ({ event, onClose, onSuccess }) => {
           ...(event?.registrationConfig?.guests || {}),
           mode: event?.registrationConfig?.guests?.mode || 'named',
           preloadedOnly: event?.registrationConfig?.guests?.preloadedOnly === true,
+          title: event?.registrationConfig?.guests?.title || '',
+          helpText: event?.registrationConfig?.guests?.helpText || '',
+          adultCompanionEnabled: event?.registrationConfig?.guests?.adultCompanionEnabled === true,
           dietary: !!event?.registrationConfig?.guests?.dietary,
           dietaryRequired: !!event?.registrationConfig?.guests?.dietaryRequired,
           termSingular: event?.registrationConfig?.guests?.termSingular || 'Invitado',
@@ -482,6 +485,20 @@ const EventForm: React.FC<EventFormProps> = ({ event, onClose, onSuccess }) => {
                   Solo cargas precargadas: marcar asistencia sin agregar invitados nuevos
                 </label>
               )}
+              <div className="sm:col-span-2 space-y-3 rounded-xl border border-gray-200 p-4">
+                <h3 className="text-sm font-semibold text-gray-800">Mensaje de invitados</h3>
+                <label className="block text-sm text-gray-700">Título o pregunta (opcional)
+                  <input {...register('registrationConfig.guests.title' as any)} maxLength={160} placeholder="¿Asiste con acompañante adulto?" className="mt-1 block w-full rounded-lg border border-gray-300 p-2" />
+                </label>
+                <label className="block text-sm text-gray-700">Texto de ayuda (opcional)
+                  <textarea {...register('registrationConfig.guests.helpText' as any)} maxLength={1500} rows={3} placeholder="Explica aquí quién puede asistir y cómo evitar duplicar entradas." className="mt-1 block w-full rounded-lg border border-gray-300 p-2" />
+                </label>
+                {(watch('registrationConfig.guests.mode' as any) || 'named') === 'named' && <label className="flex items-start gap-2 text-sm text-gray-700">
+                  <input type="checkbox" {...register('registrationConfig.guests.adultCompanionEnabled' as any)} className="mt-1 h-4 w-4" />
+                  Permitir un acompañante adulto adicional a los invitados con nombre, por fecha
+                </label>}
+                <p className="text-xs text-gray-500">El adulto se declara con Sí/No y se marca al llegar en acreditación. Es adicional al cupo de invitados con nombre. No crees una pregunta personalizada para contarlo.</p>
+              </div>
               {/* Qué datos pedir de cada invitado con nombre (apellido / RUT / edad). */}
               {watch('allowGuests') && watch('registrationConfig.guests.mode' as any) === 'named' && (
                 <div className="sm:col-span-2">

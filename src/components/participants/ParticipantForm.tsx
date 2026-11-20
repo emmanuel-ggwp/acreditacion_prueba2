@@ -16,6 +16,8 @@ import { formatDateTimeCL } from '@/utils/formatters';
 import GuestList from './GuestList';
 import { getFormFields, guestDietaryEnabled, getGuestMode } from '@/utils/formFields';
 import { getDietaryOptions } from '@/utils/dietary';
+import GuestCompanionFields, { GuestInstructions } from '@/components/public/GuestCompanionFields';
+import { adultCompanionEnabled, adultCompanionAnswers, ADULT_COMPANIONS_KEY } from '@/utils/adultCompanion';
 import CustomQuestionFields from '@/components/public/CustomQuestionFields';
 import { getCustomQuestions, initCustomAnswers, type CustomAnswers } from '@/utils/customQuestions';
 
@@ -48,6 +50,9 @@ const ParticipantForm: React.FC<ParticipantFormProps> = ({ eventId, participant,
   const dietOpts = getDietaryOptions(eventForCfg?.registrationConfig);
   const guestDiet = guestDietaryEnabled(eventForCfg?.registrationConfig);
   const guestMode = getGuestMode(eventForCfg?.registrationConfig);
+  const nativeCompanion = adultCompanionEnabled(eventForCfg?.registrationConfig);
+  const [selectedCustomData, setSelectedCustomData] = useState<any>(null);
+  const [adultAnswers, setAdultAnswers] = useState<Record<string, boolean>>({});
   // Nota: el máximo de invitados del evento (maxGuestsPerParticipant) NO se aplica en el
   // admin; es un tope solo de la inscripción pública. Aquí el operador asigna los que necesite.
   const allowGuests = eventForCfg?.allowGuests !== false;
@@ -122,6 +127,7 @@ const ParticipantForm: React.FC<ParticipantFormProps> = ({ eventId, participant,
   }, [documentNumberValue, eventId, searchParticipants, isEditMode]);
 
   const handleSelectParticipant = (p: Participant) => {
+    setSelectedCustomData((p as any).customData);
     reset({
       id: p.id,
       firstName: p.firstName,
@@ -180,10 +186,11 @@ const ParticipantForm: React.FC<ParticipantFormProps> = ({ eventId, participant,
   useEffect(() => {
     const src = (currentParticipant && participant && currentParticipant.id === participant.id)
       ? (currentParticipant as any).customData
-      : (participant as any)?.customData;
+      : ((participant as any)?.customData || selectedCustomData);
+    setAdultAnswers(adultCompanionAnswers(src));
     setCustomAnswers(initCustomAnswers(customQuestions, src));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentParticipant, participant, customQuestionsKey]);
+  }, [currentParticipant, participant, customQuestionsKey, selectedCustomData]);
 
   const onSubmit: SubmitHandler<ParticipantFormData> = async (data) => {
     try {
@@ -214,7 +221,12 @@ const ParticipantForm: React.FC<ParticipantFormProps> = ({ eventId, participant,
       // Remove eventId injection
       const participantData: any = { ...data };
       // Respuestas a las preguntas configurables (Sí/No + lista).
-      if (customQuestions.length) participantData.customData = customAnswers;
+      const src = (currentParticipant && currentParticipant.id === (participant?.id || data.id)) ? (currentParticipant as any).customData : ((participant as any)?.customData || selectedCustomData);
+      if (customQuestions.length) participantData.customData = { ...(src || {}), ...customAnswers };
+      if (nativeCompanion) participantData.customData = {
+        ...(participantData.customData || src || {}),
+        [ADULT_COMPANIONS_KEY]: { ...adultCompanionAnswers(src), ...Object.fromEntries(((data as any).scheduleIds || []).map((id: string) => [id, adultAnswers[id] === true])) },
+      };
 
       // Invitados numéricos: desde el ADMIN no se topa por el máximo del evento (ese
       // límite es solo para la inscripción pública). Solo se normaliza: no negativos y,
@@ -258,7 +270,7 @@ const ParticipantForm: React.FC<ParticipantFormProps> = ({ eventId, participant,
   const gCompanion = !!watch('guestCompanion' as any);
   const gLoads = Number(watch('guestLoads' as any)) || 0;
   const numericByData: 'count' | 'companion' | null = (gCompanion || gLoads > 0) ? 'companion' : (gCount > 0 ? 'count' : null);
-  const numericEditor: 'count' | 'companion' | null = !allowGuests ? numericByData
+  const numericEditor: 'count' | 'companion' | null = nativeCompanion ? null : !allowGuests ? numericByData
     : guestMode === 'count' ? 'count'
     : guestMode === 'companion' ? 'companion'
     : numericByData; // modo 'named': solo si hay datos numéricos que mostrar/editar

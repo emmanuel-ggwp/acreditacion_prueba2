@@ -10,6 +10,7 @@ import useAuthStore from '@/store/authStore';
 import { Check, X, User, Users, Award, Mail, FileText, Loader2, CalendarClock, Utensils, RotateCcw, Phone, Building2, Briefcase, Hash } from 'lucide-react';
 import { dietaryFull, dietaryLabel } from '@/utils/dietary';
 import { describeStoredAnswers } from '@/utils/customQuestions';
+import { adultCompanionForDate } from '@/utils/adultCompanion';
 import { hasCentinelaAdultCompanion } from '@/utils/centinelaCompanion';
 import { showToast } from '@/components/ui/Toast';
 import { formatDateCL, formatDateTimeCL } from '@/utils/formatters';
@@ -122,10 +123,11 @@ const ParticipantCard: React.FC<ParticipantCardProps> = ({ person, type, schedul
 
   // Invitados en modos numéricos (count/companion): cantidades, no filas individuales.
   const namedGuests: any[] = isParticipant ? ((participant as any)?.guests || []) : [];
-  const gCompanion = isParticipant && !!(participant as any)?.guestCompanion;
-  const gLoads = isParticipant ? (Number((participant as any)?.guestLoads) || 0) : 0;
-  const declaredGuestCount = isParticipant ? (Number((participant as any)?.guestCount) || 0) : 0;
-  const hasAdultCompanion = isParticipant && hasCentinelaAdultCompanion(participant);
+  const nativeAdult = isParticipant ? adultCompanionForDate((participant as any)?.customData, scheduleId) : null;
+  const gCompanion = nativeAdult !== null ? nativeAdult : isParticipant && !!(participant as any)?.guestCompanion;
+  const gLoads = nativeAdult !== null ? 0 : isParticipant ? (Number((participant as any)?.guestLoads) || 0) : 0;
+  const declaredGuestCount = nativeAdult !== null ? (nativeAdult ? 1 : 0) : isParticipant ? (Number((participant as any)?.guestCount) || 0) : 0;
+  const hasAdultCompanion = isParticipant && (nativeAdult === true || hasCentinelaAdultCompanion(participant));
   const hasNumericGuests = isParticipant && (namedGuests.length === 0 || hasAdultCompanion) && (declaredGuestCount > 0 || gCompanion || gLoads > 0);
   const companionSummary = gCompanion || gLoads > 0
     ? `${gCompanion ? '1 acompañante' : 'Sin acompañante'}${gLoads > 0 ? ` + ${gLoads} carga${gLoads === 1 ? '' : 's'}` : ''}`

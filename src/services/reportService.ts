@@ -1,3 +1,4 @@
+import { numericGuestsForDateSql } from '@/utils/adultCompanion';
 /**
  * Servicio de reportes y estadísticas (ReportService).
  *
@@ -208,7 +209,7 @@ export class ReportService {
     // count/companion; no crean fila Guest). Se suma el declarado de cada participante
     // inscrito en la fecha, para que "registrados" sea comparable con "acreditados".
     const numericRegQuery = `
-        SELECT ps.schedule_id as "scheduleId", COALESCE(SUM(p.guest_count), 0)::int as count
+        SELECT ps.schedule_id as "scheduleId", COALESCE(SUM(${numericGuestsForDateSql('p', 'ps.schedule_id')}), 0)::int as count
         FROM participant_schedules ps
         INNER JOIN participants p ON p.id = ps.participant_id
         WHERE ps.schedule_id IN (:scheduleIds) AND p.deleted_at IS NULL

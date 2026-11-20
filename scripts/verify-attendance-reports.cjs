@@ -15,9 +15,10 @@ function loadTs(file, overrides = {}) {
   return mod.exports;
 }
 const serverDate = loadTs(path.join(root,'src/utils/serverDate.ts'));
-const helpers = loadTs(root + '/src/utils/attendanceReport.ts', { './serverDate': serverDate });
+const adultHelpers = loadTs(path.join(root,'src/utils/adultCompanion.ts'));
+const helpers = loadTs(root + '/src/utils/attendanceReport.ts', { './serverDate': serverDate, './adultCompanion': adultHelpers });
 const guestHelpers = loadTs(path.join(root,'src/utils/guestAttendanceReport.ts'));
-const eventGuests = loadTs(path.join(root,'src/utils/eventGuestCounts.ts'));
+const eventGuests = loadTs(path.join(root,'src/utils/eventGuestCounts.ts'), { './adultCompanion': adultHelpers });
 const env = req('dotenv').parse(fs.readFileSync(root + '/.env.local'));
 assert(['localhost','127.0.0.1','[::1]'].includes(new URL(env.DATABASE_URL).hostname));
 const client = new (req('pg').Client)({ connectionString: env.DATABASE_URL, connectionTimeoutMillis: 5000 });
@@ -30,7 +31,7 @@ async function main() {
   await client.query("SET LOCAL statement_timeout = '15s'");
   await client.query(`
     CREATE TEMP TABLE event_schedules(id uuid PRIMARY KEY,event_id uuid,schedule_name text,label text,start_date_time timestamptz) ON COMMIT DROP;
-    CREATE TEMP TABLE participants(id uuid PRIMARY KEY,first_name text,last_name text,document_number text,email text,phone text,company text,position text,numero_sap text,dietary_preference text,dietary_comments text,deleted_at timestamptz,guest_count int DEFAULT 0,guest_loads int DEFAULT 0,guest_companion boolean DEFAULT false) ON COMMIT DROP;
+    CREATE TEMP TABLE participants(id uuid PRIMARY KEY,first_name text,last_name text,document_number text,email text,phone text,company text,position text,numero_sap text,dietary_preference text,dietary_comments text,deleted_at timestamptz,guest_count int DEFAULT 0,guest_loads int DEFAULT 0,guest_companion boolean DEFAULT false,custom_data jsonb) ON COMMIT DROP;
     CREATE TEMP TABLE participant_schedules(participant_id uuid,schedule_id uuid,created_at timestamptz DEFAULT CURRENT_TIMESTAMP) ON COMMIT DROP;
     CREATE TEMP TABLE guests(id uuid PRIMARY KEY,participant_id uuid,first_name text,last_name text,guest_type text,deleted_at timestamptz,confirmed boolean DEFAULT true) ON COMMIT DROP;
     CREATE TEMP TABLE guest_schedules(guest_id uuid,schedule_id uuid) ON COMMIT DROP;
@@ -73,6 +74,7 @@ async function main() {
   assert(records.every(r=>r.snapshotAt.getTime()===records[0].snapshotAt.getTime()));
   console.log('PostgreSQL real: 15 asistencias conciliadas; cargas, adulto mixto, ingreso sin inscripción, invitado sin titular, borrados, fechas múltiples y fecha vacía comprobados.');
   const serviceModule = loadTs(path.join(root,'src/services/reportService.ts'), {
+    '@/utils/adultCompanion': adultHelpers,
     '@/lib/sequelize': { sequelize: { query: async()=>records } }, '@/utils/serverDate': serverDate,
     '@/utils/attendanceReport': helpers, '@/utils/guestAttendanceReport': guestHelpers, '@/models/index': {},
   });
@@ -117,6 +119,16 @@ async function main() {
   assert.equal(unselectedHistory.namedRegistered,0);
   assert.equal(unselectedHistory.namedAccredited,1);
   console.log('Precargados no seleccionados excluidos; asignación explícita incluida y acreditación histórica conservada.');
+  await client.query('UPDATE participants SET custom_data=$1 WHERE id=$2',[JSON.stringify({[adultHelpers.ADULT_COMPANIONS_KEY]:{[D1]:true,[D2]:false}}),id(2)]);
+  const nativeRows=(await client.query(helpers.ATTENDANCE_REPORT_SQL.replace(/:eventId\b/g,'$1'),[E])).rows;
+  const nativeA=nativeRows.find(r=>r.participantId===id(2)&&r.scheduleId===D1);
+  const nativeB=nativeRows.find(r=>r.participantId===id(2)&&r.scheduleId===D2);
+  assert.equal(nativeA.numericRegistered,1);assert.equal(nativeB.numericRegistered,0);
+  assert.equal(nativeA.companionDeclared,true);assert.equal(nativeB.companionDeclared,false);
+  assert.equal(nativeB.numericAccredited,1);
+  const nativeCounts=(await client.query(eventGuests.EVENT_GUEST_COUNTS_SQL.replace(/:eventIds\b/g,'$1'),[E])).rows;
+  assert.equal(nativeCounts[0].registeredGuests,9);
+  console.log('Acompañante nativo por fecha: Sí/No separados y conteos conciliados; asistencia histórica conservada.');
   console.log('PostgreSQL real: tarjetas de evento concilian invitados registrados y acreditados, incluidos numéricos, fechas múltiples e ingresos históricos.');
 }
 main().catch(error=>{console.error(error);process.exitCode=1;}).finally(async()=>{await client.query('ROLLBACK').catch(()=>{});await client.end();});

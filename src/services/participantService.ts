@@ -8,6 +8,7 @@
  * compara siempre normalizado (sin puntos, guion ni espacios) para no depender del formato guardado.
  * Las operaciones que tocan varias tablas usan transacción; toda escritura registra auditoría.
  */
+import { adultCompanionForDate } from '@/utils/adultCompanion';
 import { z } from 'zod';
 import { numericGuestImport } from '@/utils/participantImport';
 import { Op, fn, col, where as sqlWhere } from 'sequelize';
@@ -1175,6 +1176,8 @@ export class ParticipantService {
     const plain = participants.map((p: any) => p.get({ plain: true }));
     if (scheduleId) {
       for (const p of plain) {
+        const adult = adultCompanionForDate(p.customData, scheduleId);
+        if (adult !== null) { p.guestCount = adult ? 1 : 0; p.guestCompanion = adult; p.guestLoads = 0; }
         p.guests = (p.guests || []).filter((g: any) => {
           const links = g.schedules || [];
           return links.length > 0

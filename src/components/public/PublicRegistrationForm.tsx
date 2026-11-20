@@ -12,6 +12,8 @@ import { buildGuestSummary, buildAttendanceDetail } from '@/utils/guests';
 import { formatDateCL, formatTimeCL } from '@/utils/formatters';
 import { hexToRgba } from '@/utils/color';
 import DateSelectModal from '@/components/public/DateSelectModal';
+import GuestCompanionFields, { GuestInstructions } from '@/components/public/GuestCompanionFields';
+import { adultCompanionEnabled } from '@/utils/adultCompanion';
 import CustomQuestionFields from '@/components/public/CustomQuestionFields';
 import { getCustomQuestions, initCustomAnswers, missingRequiredCustom, type CustomAnswers } from '@/utils/customQuestions';
 import { CONTACT_EMAIL } from '@/utils/contact';
@@ -88,8 +90,10 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
   const capOf = (v: any) => { const n = Number(v); return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0; };
   const maxGuests = capOf((event as any).registrationConfig?.guests?.max) || capOf((event as any).maxGuestsPerParticipant);
   const allowGuests = (event as any).allowGuests !== false;
+  const nativeCompanion = adultCompanionEnabled((event as any).registrationConfig);
+  const [adultAnswers, setAdultAnswers] = useState<Record<string, boolean>>({});
   const guestMode = getGuestMode((event as any).registrationConfig);
-  const preloadedOnly = guestMode === 'named' && (event as any).registrationConfig?.guests?.preloadedOnly === true;
+  const preloadedOnly = guestMode === 'named' && (((event as any).registrationConfig?.guests?.preloadedOnly === true) || (nativeCompanion && (event as any).allowGuests === false));
   // Modo 'count': solo un número. Modo 'companion': acompañante (sí/no) + cargas.
   const [countGuests, setCountGuests] = useState(0);
   const [companion, setCompanion] = useState(false);
@@ -219,6 +223,7 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
       setLockedGuests(data.registeredGuestsBySchedule || {});
       // Invitados en modos numéricos (count / companion).
       if (p.guestCount != null) setCountGuests(Number(p.guestCount) || 0);
+      setAdultAnswers(data.adultCompanionsBySchedule || {});
       if (p.guestCompanion != null) setCompanion(!!p.guestCompanion);
       if (p.guestLoads != null) setLoads(Number(p.guestLoads) || 0);
       // Respuestas previas a las preguntas configurables (si el precargado ya las traía).
@@ -295,7 +300,7 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
       }
       let guestsBySchedule: Record<string, any[]> | undefined;
       const guestData: any = {};
-      if (allowGuests && (maxGuests > 0 || preloadedOnly)) {
+      if ((allowGuests && (maxGuests > 0 || preloadedOnly)) || nativeCompanion) {
         if (guestMode === 'count') {
           guestData.guestCount = Math.max(0, Math.min(countGuests, maxGuests));
         } else if (guestMode === 'companion') {
@@ -337,7 +342,7 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
         // Correo vacío → undefined: el esquema del modo RUT valida formato de email y
         // rechaza "" (optional/nullable no eximen a la cadena vacía), lo que bloqueaba a
         // un precargado sin correo. Enviar undefined es válido en ambos modos.
-        body: JSON.stringify({ ...data, scheduleIds: selectedIds, email: String((data as any).email ?? '').trim() || undefined, ...guestData, ...(guestsBySchedule ? { guestsBySchedule } : {}), customData: customAnswers, ...(registrationMode === 'rut' && rutParticipantId ? { participantId: rutParticipantId } : {}) }),
+        body: JSON.stringify({ ...data, scheduleIds: selectedIds, email: String((data as any).email ?? '').trim() || undefined, ...guestData, ...(nativeCompanion ? { adultCompanionsBySchedule: Object.fromEntries(selectedIds.filter(id => !lockedIds.includes(id)).map(id => [id, adultAnswers[id] === true])) } : {}), ...(guestsBySchedule ? { guestsBySchedule } : {}), customData: customAnswers, ...(registrationMode === 'rut' && rutParticipantId ? { participantId: rutParticipantId } : {}) }),
       });
 
       const result = await response.json();
@@ -368,6 +373,7 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
           const namesForDate = (sid: string) => {
             const stt = stateFor(sid);
             return [
+              ...(nativeCompanion && adultAnswers[sid] === true ? ['1 acompañante adulto'] : []),
               ...stt.cargas.map((cid) => { const c = cargaById(cid); return c ? `${c.firstName} ${c.lastName || ''}`.trim() : ''; }).filter(Boolean),
               ...(preloadedOnly ? [] : stt.news).filter((g) => g.firstName.trim()).map((g) => `${g.firstName} ${g.lastName || ''}`.trim()),
             ];
@@ -744,7 +750,9 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
         </div>
       )}
 
-      {allowGuests && (maxGuests > 0 || preloadedOnly) && guestMode === 'named' && (
+      {(allowGuests || nativeCompanion) && <GuestInstructions config={(event as any).registrationConfig} />}
+      {nativeCompanion && <GuestCompanionFields config={(event as any).registrationConfig} schedules={allSchedules.filter(s => selIds.includes(s.id) || lockedIds.includes(s.id))} answers={adultAnswers} onChange={setAdultAnswers} lockedIds={lockedIds} />}
+      {(allowGuests || nativeCompanion) && (maxGuests > 0 || preloadedOnly || nativeCompanion) && guestMode === 'named' && (
         <div className="border-t border-gray-200 pt-5 space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700">Invitados por fecha</label>

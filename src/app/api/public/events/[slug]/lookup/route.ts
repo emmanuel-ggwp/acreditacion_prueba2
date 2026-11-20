@@ -1,3 +1,4 @@
+import { adultCompanionAnswers } from '@/utils/adultCompanion';
 import { NextRequest, NextResponse } from 'next/server';
 import { Op } from 'sequelize';
 import { Event, Participant, Guest, EventSchedule, GuestSchedule } from '@/models/index';
@@ -105,6 +106,7 @@ export async function GET(
       allowMultiple,
       registeredScheduleIds,
       registeredGuestsBySchedule,
+      adultCompanionsBySchedule: Object.fromEntries(Object.entries(adultCompanionAnswers(p.customData)).filter(([id]) => registeredScheduleIds.includes(id))),
       participant: participantOut,
       // Pool de cargas que se OFRECE para marcar en cada fecha: solo las precargadas por
       // el organizador (IMPORT) o agregadas por admin (MANUAL). Se excluyen las que el

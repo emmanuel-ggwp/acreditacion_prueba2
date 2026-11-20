@@ -10,6 +10,7 @@ import {
 import { CONTACT_EMAIL } from '@/utils/contact';
 import { getCustomQuestions, sanitizeCustomAnswers } from '@/utils/customQuestions';
 import { getGuestMode } from '@/utils/formFields';
+import { adultCompanionEnabled, addAdultCompanionDates } from '@/utils/adultCompanion';
 import { centinelaCompanionAnswer } from '@/utils/centinelaCompanion';
 import { sequelize } from '@/lib/sequelize';
 import { Op, fn, col, where as sqlWhere } from 'sequelize';
@@ -116,11 +117,11 @@ export async function POST(
     // de clave foránea (FOR KEY SHARE) sobre la fila del evento; si el FOR UPDATE se pidiera
     // DESPUÉS, dos transacciones entrarían en DEADLOCK (cada una con su lock de FK esperando
     // el FOR UPDATE de la otra). Tomando el FOR UPDATE primero, se serializan limpiamente.
-    // Los eventos SIN cupo (ilimitados) no pagan esta serialización.
+    // Los eventos sin cupo solo se serializan si usan respuestas de adulto por fecha, para evitar perder respuestas concurrentes.
     const anyCapacityLimit =
       (Number((event as any).maxCapacity) || 0) > 0 ||
       schedules.some((s: any) => (Number((s as any).maxCapacity) || 0) > 0);
-    if (anyCapacityLimit) {
+    if (anyCapacityLimit || adultCompanionEnabled(event.registrationConfig)) {
       await Event.findByPk(event.id, { lock: t.LOCK.UPDATE, transaction: t });
     }
 
@@ -426,6 +427,19 @@ export async function POST(
         }
       }
       await participant.update(clamped, { transaction: t });
+    }
+
+    // El acompañante nativo se guarda POR FECHA y solo para las inscripciones nuevas.
+    if (adultCompanionEnabled(event.registrationConfig)) {
+      const answers = (validation.data as any).adultCompanionsBySchedule || {};
+      const newIds = schedulesToAdd.map((schedule: any) => schedule.id);
+      if (Object.keys(answers).some(id => !newIds.includes(id))) {
+        await t.rollback();
+        return NextResponse.json({ error: 'La respuesta de acompañante corresponde a una fecha no disponible.' }, { status: 400 });
+      }
+      if (newIds.length) await participant.update({
+        customData: addAdultCompanionDates(participant.customData, newIds, answers),
+      }, { transaction: t });
     }
 
     if (guestsBySchedule) {

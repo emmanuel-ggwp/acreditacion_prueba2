@@ -1,9 +1,10 @@
+import { numericGuestsForDateSql } from './adultCompanion';
 /** Invitados por evento, sumando cada fecha como las estadísticas de acreditación. */
 export const EVENT_GUEST_COUNTS_SQL = `
 WITH dates AS (
   SELECT id,event_id FROM event_schedules WHERE event_id IN (:eventIds)
 ), registered_people AS (
-  SELECT ps.participant_id,ps.schedule_id,p.guest_count
+  SELECT ps.participant_id,ps.schedule_id,${numericGuestsForDateSql('p', 'ps.schedule_id')} AS guest_count
   FROM participant_schedules ps JOIN dates d ON d.id = ps.schedule_id
   JOIN participants p ON p.id = ps.participant_id AND p.deleted_at IS NULL
 ), named_registered AS (

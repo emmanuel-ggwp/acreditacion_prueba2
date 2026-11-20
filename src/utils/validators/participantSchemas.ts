@@ -182,6 +182,7 @@ export const publicRegistrationSchema = participantSchema.omit({
   // de esa fecha. El handler valida que cada clave sea una fecha nueva del evento. Si
   // viene, manda sobre `guests` (que queda como compatibilidad con clientes antiguos).
   guestsBySchedule: z.record(z.string(), z.array(publicGuestSchema).max(MAX_GUESTS_PER_REQUEST)).optional(),
+  adultCompanionsBySchedule: z.record(z.string().uuid(), z.boolean()).optional(),
 });
 
 export type PublicGuestInput = z.infer<typeof publicGuestSchema>;
@@ -252,6 +253,7 @@ export const rutRegistrationSchema = z.object({
   // Invitados POR FECHA: mapa scheduleId → invitados de esa fecha (invitados distintos en
   // cada fecha). Si viene, manda sobre `guests`. El handler valida las claves.
   guestsBySchedule: z.record(z.string(), z.array(publicGuestSchema).max(MAX_GUESTS_PER_REQUEST)).optional(),
+  adultCompanionsBySchedule: z.record(z.string().uuid(), z.boolean()).optional(),
 
   // Respuestas a las preguntas configurables del evento (Sí/No + lista). El servidor
   // las normaliza contra la config antes de guardar, así que aquí basta con aceptarlas.

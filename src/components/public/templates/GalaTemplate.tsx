@@ -6,6 +6,8 @@ import { isValidRut } from '@/utils/validators/rut';
 import { sendConfirmationEmail } from '@/lib/emailjs';
 import { buildGuestSummary, buildAttendanceDetail } from '@/utils/guests';
 import { getFormFields, guestDietaryEnabled, guestDietaryRequired, getGuestMode, getGuestFields } from '@/utils/formFields';
+import GuestCompanionFields, { GuestInstructions } from '@/components/public/GuestCompanionFields';
+import { adultCompanionEnabled } from '@/utils/adultCompanion';
 import CustomQuestionFields from '@/components/public/CustomQuestionFields';
 import { getCustomQuestions, initCustomAnswers, missingRequiredCustom, type CustomAnswers } from '@/utils/customQuestions';
 import { getDietaryOptions, isFreeTextDiet, dietaryFull, dietaryLabel, ensureDietOption, DIET_COMMENTS_MAX, GUEST_DIET_DETAIL_MAX } from '@/utils/dietary';
@@ -157,8 +159,10 @@ export default function GalaTemplate({ event, slug, preview = false }: TemplateP
   // ofrecía acompañante mirando solo `allowGuests` y el servidor lo descartaba (R1-01).
   const capOf = (v: any) => { const n = Number(v); return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0; };
   const maxGuests = capOf(event.registrationConfig?.guests?.max) || capOf(event.maxGuestsPerParticipant);
+  const nativeCompanion = adultCompanionEnabled(event.registrationConfig);
+  const [adultAnswers, setAdultAnswers] = useState<Record<string, boolean>>({});
   const guestMode = getGuestMode(event.registrationConfig);
-  const preloadedOnly = guestMode === 'named' && (event as any).registrationConfig?.guests?.preloadedOnly === true;
+  const preloadedOnly = guestMode === 'named' && (((event as any).registrationConfig?.guests?.preloadedOnly === true) || (nativeCompanion && event.allowGuests === false));
   // Campos por invitado configurables por evento (apellido / RUT / edad). El nombre siempre se pide.
   const guestFields = getGuestFields(event.registrationConfig);
   // Cómo se nombra a los invitados en la landing (configurable por evento). Default: Invitado/Invitados.
@@ -265,6 +269,7 @@ export default function GalaTemplate({ event, slug, preview = false }: TemplateP
       // Cargas precargadas por el organizador: vienen MARCADAS por defecto (el
       // asistente puede desmarcar las que no asistirán).
       setCargas((data.guests || []).map((g: any) => ({ id: g.id, firstName: g.firstName, lastName: g.lastName, guestType: g.guestType, dietaryPreference: g.dietaryPreference || null, selected: true })));
+      setAdultAnswers(data.adultCompanionsBySchedule || {});
       setCustomAnswers(initCustomAnswers(customQuestions, p.customData));
       setDietChosen((p.dietaryPreference || 'NONE') !== 'NONE');
       const regIds: string[] = data.registeredScheduleIds || [];
@@ -388,7 +393,7 @@ export default function GalaTemplate({ event, slug, preview = false }: TemplateP
       // Invitados según el modo del evento.
       let openGuestsBySchedule: Record<string, any[]> | undefined;
       const guestData: any = {};
-      if (event.allowGuests && (maxGuests > 0 || preloadedOnly)) {
+      if ((event.allowGuests && (maxGuests > 0 || preloadedOnly)) || nativeCompanion) {
         if (guestMode === 'count') {
           guestData.guestCount = Math.max(0, Math.min(countGuests, maxGuests));
         } else if (guestMode === 'companion') {
@@ -430,6 +435,7 @@ export default function GalaTemplate({ event, slug, preview = false }: TemplateP
       };
     }
 
+    if (nativeCompanion) payload.adultCompanionsBySchedule = Object.fromEntries(selectedScheduleIds.filter(id => !registeredScheduleIds.includes(id)).map(id => [id, adultAnswers[id] === true]));
     setSubmitting(true);
     try {
       const res = await fetch(`/api/public/events/${slug}/register`, {
@@ -482,6 +488,7 @@ export default function GalaTemplate({ event, slug, preview = false }: TemplateP
           const namesForDate = (sid: string) => {
             const stt = stateFor(sid);
             return [
+              ...(nativeCompanion && adultAnswers[sid] === true ? ['1 acompañante adulto'] : []),
               ...stt.cargas.map(cargaName).filter(Boolean),
               ...(preloadedOnly ? [] : stt.news).filter((g) => g.firstName.trim()).map((g) => `${g.firstName} ${g.lastName || ''}`.trim()),
             ];
@@ -1094,7 +1101,9 @@ export default function GalaTemplate({ event, slug, preview = false }: TemplateP
 
               {/* Invitados nuevos que agrega la persona (modo con nombre): hasta el máximo.
                   Antes el flujo RUT solo permitía UN acompañante; ahora deja agregar varios. */}
-              {event.allowGuests && (maxGuests > 0 || preloadedOnly) && guestMode === 'named' && perDateNamedSection}
+              {(event.allowGuests || nativeCompanion) && <GuestInstructions config={event.registrationConfig} dark />}
+              {nativeCompanion && <GuestCompanionFields config={event.registrationConfig} schedules={schedules.filter(s => selectedScheduleIds.includes(s.id) || registeredScheduleIds.includes(s.id))} answers={adultAnswers} onChange={setAdultAnswers} lockedIds={registeredScheduleIds} dark />}
+              {(event.allowGuests || nativeCompanion) && (maxGuests > 0 || preloadedOnly || nativeCompanion) && guestMode === 'named' && perDateNamedSection}
 
               {/* Modos numéricos (count/companion): se conserva el acompañante simple. */}
               {event.allowGuests && maxGuests > 0 && guestMode !== 'named' && (
@@ -1186,7 +1195,9 @@ export default function GalaTemplate({ event, slug, preview = false }: TemplateP
                 </div>
               )}
 
-              {event.allowGuests && (maxGuests > 0 || preloadedOnly) && guestMode === 'named' && perDateNamedSection}
+              {(event.allowGuests || nativeCompanion) && <GuestInstructions config={event.registrationConfig} dark />}
+              {nativeCompanion && <GuestCompanionFields config={event.registrationConfig} schedules={schedules.filter(s => selectedScheduleIds.includes(s.id) || registeredScheduleIds.includes(s.id))} answers={adultAnswers} onChange={setAdultAnswers} lockedIds={registeredScheduleIds} dark />}
+              {(event.allowGuests || nativeCompanion) && (maxGuests > 0 || preloadedOnly || nativeCompanion) && guestMode === 'named' && perDateNamedSection}
 
               {/* Modo 'count': solo el número de invitados. */}
               {event.allowGuests && maxGuests > 0 && guestMode === 'count' && (

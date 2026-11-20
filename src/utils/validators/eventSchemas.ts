@@ -34,6 +34,9 @@ export const guestModeEnum = z.enum(['named', 'count', 'companion']);
 export const guestsConfigSchema = z.object({
   allowed: z.boolean().default(false),
   preloadedOnly: z.boolean().optional(),
+  title: z.string().trim().max(160).optional(),
+  helpText: z.string().trim().max(1500).optional(),
+  adultCompanionEnabled: z.boolean().optional(),
   max: z.number().int().min(0).default(0),
   mode: guestModeEnum.default('named'),
   typesEnabled: z.boolean().default(false),
@@ -65,7 +68,7 @@ export const fieldToggleSchema = z.object({
  * Reutilizable por evento; se guarda en Participant.customData bajo `key`.
  */
 export const customQuestionSchema = z.object({
-  key: z.string(),                 // id estable (ej. 'q_transporte')
+  key: z.string().refine(key => key !== '_adultCompanionsBySchedule', 'Clave reservada'),                 // id estable (ej. 'q_transporte')
   label: z.string(),               // título visible (ej. "¿Necesitas transporte?")
   selectLabel: z.string().optional(), // etiqueta del desplegable (ej. "Recorrido")
   selectHelp: z.string().optional(),  // mensaje aclaratorio al elegir "Sí" (ej. "Selecciona la ruta que necesitas")
