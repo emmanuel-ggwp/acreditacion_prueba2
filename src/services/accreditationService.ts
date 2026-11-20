@@ -14,6 +14,7 @@ import Accreditation from '@/models/Accreditation';
 import Participant from '@/models/Participant';
 import Guest from '@/models/Guest';
 import GuestSchedule from '@/models/GuestSchedule';
+import ParticipantSchedule from '@/models/ParticipantSchedule';
 import EventSchedule from '@/models/EventSchedule';
 import Event from '@/models/Event';
 import { bulkAccreditationSchema } from '@/utils/validators/accreditationSchemas';
@@ -43,7 +44,7 @@ export class AccreditationService {
   /**
    * (Privado) Bloquea la fila del horario (`LOCK.UPDATE`) y valida las precondiciones para acreditar:
    * que el horario y su evento existan y estén activos; que la persona (participante o invitado)
-   * pertenezca al evento; que un invitado ligado a fechas concretas solo se acredite en una de ellas
+   * pertenezca al evento; que un invitado ligado a fechas concretas se acredite en una de ellas o acompañe a su titular en otra fecha
    * (un invitado sin fechas ligadas se permite en cualquiera, como fallback seguro); y que no exista
    * acreditación previa. Si el horario está `published`, lo pasa a `accrediting`. No aplica tope de aforo/cupo.
    *
@@ -85,6 +86,7 @@ export class AccreditationService {
 
     // Validate that the person belongs to the event
     let person;
+    let sourceScheduleIds: string[] = [];
     if (participantId) {
         person = await Participant.findByPk(participantId, { transaction });
         if (!person || person.eventId !== schedule.eventId) {
@@ -97,7 +99,7 @@ export class AccreditationService {
             throw new Error('Guest not found or does not belong to this event.');
         }
         // Invitados POR FECHA: si el invitado está ligado a fechas concretas (GuestSchedule),
-        // solo se puede acreditar en una de ESAS fechas. Fallback seguro: un invitado SIN
+        // normalmente se acredita en una de ESAS fechas; se permite llegar con el titular en otra fecha no inscrita. Fallback seguro: un invitado SIN
         // ninguna fecha ligada (cargas antiguas, agregadas por admin) se acredita en cualquier
         // fecha, como antes. Así el check-in respeta "invitados distintos por fecha" sin
         // bloquear datos previos a la funcionalidad.
@@ -105,7 +107,14 @@ export class AccreditationService {
         if (totalLinks > 0) {
             const forThisDate = await GuestSchedule.count({ where: { guestId, scheduleId: eventScheduleId }, transaction });
             if (!forThisDate) {
-                throw new Error('Este invitado no está registrado para esta fecha.');
+                const ownerId = (person as any).participantId || guestParticipant?.id;
+                const registrations = ownerId ? await ParticipantSchedule.findAll({ where: { participantId: ownerId }, attributes: ['scheduleId'], transaction }) : [];
+                const originalIds = (registrations || []).map((r: any) => r.scheduleId);
+                const eligible = originalIds.length > 0 && !originalIds.includes(eventScheduleId)
+                  ? await GuestSchedule.count({ where: { guestId, scheduleId: { [Op.in]: originalIds } }, transaction })
+                  : 0;
+                if (!eligible) throw new Error('Este invitado no está registrado para esta fecha.');
+                sourceScheduleIds = originalIds;
             }
         }
     } else {
@@ -130,7 +139,7 @@ export class AccreditationService {
       await schedule.update({ status: 'accrediting' }, { transaction });
     }
     
-    return { schedule, person };
+    return { schedule, person, sourceScheduleIds };
   }
 
   /**
@@ -205,7 +214,7 @@ export class AccreditationService {
 
     const transaction = await sequelize.transaction();
     try {
-      const { schedule, person } = await this._verifyAndLock({ guestId, eventScheduleId }, transaction);
+      const { schedule, person, sourceScheduleIds } = await this._verifyAndLock({ guestId, eventScheduleId }, transaction);
 
       const accreditation = await Accreditation.create({
         guestId,
@@ -224,6 +233,7 @@ export class AccreditationService {
         entityId: accreditation.id,
         eventId: (schedule as any).eventId,
         details: {
+          ...(sourceScheduleIds.length ? { arrivalOutsideRegistration: true, titularRegisteredScheduleIds: sourceScheduleIds } : {}),
           name: personName(person),
           summary: `Invitado · ${scheduleText(schedule)}${guestParticipant ? ` · de ${personName(guestParticipant)}` : ''}`,
           fecha: scheduleText(schedule),

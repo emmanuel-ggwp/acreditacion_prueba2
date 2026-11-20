@@ -59,6 +59,14 @@ describe('Acreditación de Centinela: cargas y adulto juntos', () => {
     person.customData._adultCompanionsBySchedule.date = false;
     expect(text(render())).not.toContain('¿Llegó el acompañante adulto?');
   });
+  test('muestra invitados y adulto de la fecha original sin acreditar nada automáticamente', () => {
+    person.eventId = 'evento-generico'; person.schedules = [{id:'original',scheduleName:'Fecha original'}];
+    person.customData = { _adultCompanionsBySchedule: {original:true} };
+    person.accreditationAdultCompanion = true; person.guestCount = 1; person.guestCompanion = true;
+    person.guests[0].accreditationSourceSchedules = person.schedules;
+    const output=text(render());expect(output).toContain('Se inscribió en otra fecha');expect(output).toContain('Inscrito para: Fecha original');expect(output).toContain('¿Llegó el acompañante adulto?');
+    expect(store.accreditParticipant).not.toHaveBeenCalled();expect(store.accreditGuest).not.toHaveBeenCalled();
+  });
   test('no transforma la respuesta Sí en una acreditación al abrir la ficha', () => {
     render();
     expect(store.accreditParticipant).not.toHaveBeenCalled();

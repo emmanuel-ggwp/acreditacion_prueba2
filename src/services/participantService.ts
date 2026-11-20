@@ -1127,7 +1127,7 @@ export class ParticipantService {
   /**
    * Busca hasta 10 participantes de un evento por nombre, apellido, correo o RUT (en cualquier formato,
    * vía columna normalizada). Requiere al menos 3 caracteres. Si se pasa `scheduleId`, filtra los
-   * invitados de cada resultado a los ligados a esa fecha (los invitados sin fechas se muestran siempre).
+   * invitados de cada resultado según la fecha; si el titular llega fuera de inscripción, ofrece los de sus fechas originales.
    *
    * @param eventId - ID del evento en el que se busca.
    * @param query - Texto a buscar (debe tener al menos 3 caracteres tras recortar espacios).
@@ -1171,18 +1171,28 @@ export class ParticipantService {
     });
 
     // Acreditación POR FECHA: si se acredita una fecha concreta, solo se muestran los
-    // invitados ligados a ESA fecha. Fallback: un invitado CONFIRMADO sin ninguna fecha ligada
+    // invitados ligados a ESA fecha. Si el titular viene en otra fecha, se ofrecen los inscritos en sus fechas originales.
+    // Fallback: un invitado CONFIRMADO sin ninguna fecha ligada
     // se muestra solo en las fechas inscritas del titular.
     const plain = participants.map((p: any) => p.get({ plain: true }));
     if (scheduleId) {
       for (const p of plain) {
-        const adult = adultCompanionForDate(p.customData, scheduleId);
+        const registeredSchedules = p.schedules || [];
+        const registeredIds = registeredSchedules.map((s: any) => s.id);
+        const otherDate = registeredIds.length > 0 && !registeredIds.includes(scheduleId);
+        const sourceAdults = otherDate ? registeredIds.map((id: string) => adultCompanionForDate(p.customData, id)).filter((answer: any) => answer !== null) : [];
+        const adult = otherDate && sourceAdults.length ? sourceAdults.some((answer: boolean) => answer) : adultCompanionForDate(p.customData, scheduleId);
+        if (otherDate && adult !== null) p.accreditationAdultCompanion = adult;
         if (adult !== null) { p.guestCount = adult ? 1 : 0; p.guestCompanion = adult; p.guestLoads = 0; }
         p.guests = (p.guests || []).filter((g: any) => {
           const links = g.schedules || [];
-          return links.length > 0
-            ? links.some((s: any) => s.id === scheduleId)
-            : g.confirmed === true && (p.schedules || []).some((s: any) => s.id === scheduleId);
+          const forCurrent = links.some((s: any) => s.id === scheduleId);
+          const forOriginal = links.some((s: any) => registeredIds.includes(s.id));
+          const eligible = links.length > 0
+            ? forCurrent || (otherDate && forOriginal)
+            : g.confirmed === true && (registeredIds.includes(scheduleId) || otherDate);
+          if (eligible && otherDate) g.accreditationSourceSchedules = registeredSchedules.filter((s: any) => links.length === 0 || links.some((link: any) => link.id === s.id));
+          return eligible;
         });
       }
     }

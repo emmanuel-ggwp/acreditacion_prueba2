@@ -123,7 +123,9 @@ const ParticipantCard: React.FC<ParticipantCardProps> = ({ person, type, schedul
 
   // Invitados en modos numéricos (count/companion): cantidades, no filas individuales.
   const namedGuests: any[] = isParticipant ? ((participant as any)?.guests || []) : [];
-  const nativeAdult = isParticipant ? adultCompanionForDate((participant as any)?.customData, scheduleId) : null;
+  const nativeAdult = showOtherDateWarning && typeof (participant as any)?.accreditationAdultCompanion === 'boolean'
+    ? (participant as any).accreditationAdultCompanion
+    : isParticipant ? adultCompanionForDate((participant as any)?.customData, scheduleId) : null;
   const gCompanion = nativeAdult !== null ? nativeAdult : isParticipant && !!(participant as any)?.guestCompanion;
   const gLoads = nativeAdult !== null ? 0 : isParticipant ? (Number((participant as any)?.guestLoads) || 0) : 0;
   const declaredGuestCount = nativeAdult !== null ? (nativeAdult ? 1 : 0) : isParticipant ? (Number((participant as any)?.guestCount) || 0) : 0;
@@ -281,7 +283,7 @@ const ParticipantCard: React.FC<ParticipantCardProps> = ({ person, type, schedul
             <p className="mt-0.5">
               {name.trim()} se inscribió para <span className="font-medium">{otherDatesText}</span>
               {scheduleLabel ? <>, no para <span className="font-medium">{scheduleLabel}</span></> : null}.
-              ¿Deseas acreditarla en esta fecha de todos modos?
+              ¿Deseas acreditarla en esta fecha de todos modos? Se muestran sus invitados inscritos en otras fechas; marca únicamente a quienes llegaron hoy.
             </p>
           </div>
         </div>
@@ -406,6 +408,7 @@ const ParticipantCard: React.FC<ParticipantCardProps> = ({ person, type, schedul
                       </span>
                     )}
                   </span>
+                  {showOtherDateWarning && (g as any).accreditationSourceSchedules?.length > 0 && <span className="block text-xs text-amber-800 mt-1">Inscrito para: {(g as any).accreditationSourceSchedules.map((s: any) => (s.label || s.scheduleName || 'Otra fecha') + (s.startDateTime ? ' (' + fmtScheduleDate(s.startDateTime) + ')' : '')).join(', ')}</span>}
                   {(g as any).documentNumber && (
                     <span className="block text-xs text-gray-600 truncate">RUT: {(g as any).documentNumber}</span>
                   )}
