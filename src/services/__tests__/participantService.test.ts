@@ -986,9 +986,11 @@ describe('ParticipantService', () => {
     it('filtra los invitados por la fecha del check-in cuando se pasa scheduleId', async () => {
       const plain = {
         id: 'p1',
+        schedules: [{ id: SCHEDULE_ID_1 }],
         guests: [
           { id: 'g1', schedules: [{ id: SCHEDULE_ID_1 }] }, // coincide
-          { id: 'g2', schedules: [] }, // sin fecha: se muestra siempre
+          { id: 'g2', schedules: [], confirmed: true }, // legado confirmado
+          { id: 'g4', schedules: [], confirmed: false }, // precargado no seleccionado
           { id: 'g3', schedules: [{ id: SCHEDULE_ID_2 }] }, // otra fecha: se descarta
         ],
       };

@@ -64,6 +64,13 @@ describe('GET /api/reports/events', () => {
     expect(body).toEqual([{ eventId: '1', ok: true }]);
   });
 
+  it('devuelve error si todos los reportes fallan, sin fingir una lista vacía', async () => {
+    mockedReportService.getEventReport.mockRejectedValue(new Error('asociación incorrecta'));
+    const res = await (GET as any)(makeRequest('http://localhost/api/reports/events?ids=1,2'), { params: {} });
+    expect(res.status).toBe(500);
+    expect((await res.json()).message).toContain('No se pudieron cargar');
+  });
+
   it('devuelve 400 si no se pasan ids', async () => {
     const res = await (GET as any)(makeRequest('http://localhost/api/reports/events'), { params: {} });
     const body = await res.json();

@@ -1170,14 +1170,16 @@ export class ParticipantService {
     });
 
     // Acreditación POR FECHA: si se acredita una fecha concreta, solo se muestran los
-    // invitados ligados a ESA fecha. Fallback: un invitado SIN ninguna fecha ligada
-    // (cargas antiguas / agregadas por admin) se muestra en todas, como antes.
+    // invitados ligados a ESA fecha. Fallback: un invitado CONFIRMADO sin ninguna fecha ligada
+    // se muestra solo en las fechas inscritas del titular.
     const plain = participants.map((p: any) => p.get({ plain: true }));
     if (scheduleId) {
       for (const p of plain) {
         p.guests = (p.guests || []).filter((g: any) => {
           const links = g.schedules || [];
-          return links.length === 0 || links.some((s: any) => s.id === scheduleId);
+          return links.length > 0
+            ? links.some((s: any) => s.id === scheduleId)
+            : g.confirmed === true && (p.schedules || []).some((s: any) => s.id === scheduleId);
         });
       }
     }

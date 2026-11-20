@@ -17,7 +17,7 @@ WITH dates AS (
   SELECT g.participant_id, rp.schedule_id, g.id AS guest_id
   FROM guests g JOIN registered_people rp ON rp.participant_id = g.participant_id
   WHERE g.deleted_at IS NULL
-    AND NOT EXISTS (SELECT 1 FROM guest_schedules gs WHERE gs.guest_id = g.id)
+    AND g.confirmed IS TRUE AND NOT EXISTS (SELECT 1 FROM guest_schedules gs WHERE gs.guest_id = g.id)
 ), named_declarations AS (
   SELECT rn.participant_id, rn.schedule_id,
     count(*)::int AS named_count,

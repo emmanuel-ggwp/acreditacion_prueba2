@@ -191,6 +191,7 @@ export class ReportService {
             INNER JOIN participants p ON p.id = g.participant_id AND p.deleted_at IS NULL
             INNER JOIN participant_schedules ps ON ps.participant_id = g.participant_id
             WHERE ps.schedule_id IN (:scheduleIds) AND g.deleted_at IS NULL
+              AND g.confirmed IS TRUE
               AND NOT EXISTS (SELECT 1 FROM guest_schedules gs2 WHERE gs2.guest_id = g.id)
         ) sub
         GROUP BY sub.sid

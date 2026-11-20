@@ -12,7 +12,7 @@ WITH dates AS (
   FROM guests g JOIN participants p ON p.id = g.participant_id AND p.deleted_at IS NULL
   JOIN participant_schedules ps ON ps.participant_id = p.id
   JOIN dates d ON d.id = ps.schedule_id
-  WHERE g.deleted_at IS NULL AND NOT EXISTS (SELECT 1 FROM guest_schedules gs WHERE gs.guest_id = g.id)
+  WHERE g.deleted_at IS NULL AND g.confirmed IS TRUE AND NOT EXISTS (SELECT 1 FROM guest_schedules gs WHERE gs.guest_id = g.id)
 ), actual_guests AS (
   SELECT a.guest_id, a.event_schedule_id AS schedule_id, min(a.check_in_time) AS check_in_time
   FROM accreditations a JOIN dates d ON d.id = a.event_schedule_id

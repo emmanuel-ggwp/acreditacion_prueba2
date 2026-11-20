@@ -182,9 +182,11 @@ const StatCard = React.memo(({ title, value, icon: Icon, trend, trendUp }: { tit
 ));
 
 const DashboardStats: React.FC = () => {
-  const { events, fetchEvents, total, loading: eventsLoading } = useEventStore();
+  const { events, fetchEvents, total, loading: eventsLoading, error: eventsError } = useEventStore();
   const [eventStats, setEventStats] = useState<EventStat[]>([]);
   const [loadingStats, setLoadingStats] = useState(true);
+  const [statsError, setStatsError] = useState<string | null>(null);
+  const [retry, setRetry] = useState(0);
   const [viewMode, setViewMode] = useState<'event' | 'date'>('date');
   const [currentPage, setCurrentPage] = useState(1);
   const [kpis, setKpis] = useState<{ totalEvents?: number; activeEvents?: number; totalParticipants?: number; accreditationsToday?: number } | null>(null);
@@ -203,13 +205,15 @@ const DashboardStats: React.FC = () => {
 
   useEffect(() => {
     fetchEvents({ page: currentPage, limit: itemsPerPage });
-  }, [fetchEvents, currentPage]);
+  }, [fetchEvents, currentPage, retry]);
 
   useEffect(() => {
+    let active = true;
     const fetchStats = async () => {
       if (eventsLoading) return;
 
       setLoadingStats(true);
+      setStatsError(null);
       
       if (events.length === 0) {
           setEventStats([]);
@@ -223,6 +227,9 @@ const DashboardStats: React.FC = () => {
         const reports = await apiClient.get<any[]>(`/api/reports/events?ids=${idsParam}`);
 
         // Map reports by eventId for quick lookup
+        if (!active) return;
+        const missing = events.filter(event => !reports.some(report => report.eventInfo?.id === event.id));
+        if (missing.length) setStatsError('No se pudieron cargar las estadísticas de: ' + missing.map(event => event.name).join(', ') + '.');
         const reportMap = new Map<string, any>(
           reports.map((report: any) => [report.eventInfo.id, report])
         );
@@ -284,13 +291,15 @@ const DashboardStats: React.FC = () => {
         setEventStats(results.filter(r => r !== null) as EventStat[]);
       } catch (error) {
         console.error(error);
+        if (active) { setEventStats([]); setStatsError('No se pudieron cargar las estadísticas. Reintenta; los eventos no se han eliminado.'); }
       } finally {
-        setLoadingStats(false);
+        if (active) setLoadingStats(false);
       }
     };
 
     fetchStats();
-  }, [events, eventsLoading]);
+    return () => { active = false; };
+  }, [events, eventsLoading, retry]);
 
   return (
     <div className="space-y-6 sm:space-y-8">
@@ -336,6 +345,10 @@ const DashboardStats: React.FC = () => {
           </div>
         </div>
 
+        {(eventsError || statsError) && <div role="alert" className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">
+          <p>{eventsError ? 'No se pudo cargar el listado de eventos.' : statsError}</p>
+          <button type="button" onClick={() => setRetry(value => value + 1)} className="mt-2 font-semibold underline">Reintentar</button>
+        </div>}
         {loadingStats || eventsLoading ? (
             <div className="text-center py-10">Cargando estadísticas...</div>
         ) : (
@@ -344,7 +357,7 @@ const DashboardStats: React.FC = () => {
                   {eventStats.map(stat => (
                       <EventStatCard key={stat.id} stat={stat} viewMode={viewMode} />
                   ))}
-                  {eventStats.length === 0 && <div className="text-gray-500">No se encontraron eventos.</div>}
+                  {eventStats.length === 0 && !eventsError && !statsError && <div className="text-gray-500">No se encontraron eventos.</div>}
               </div>
               
               {total > 0 && (

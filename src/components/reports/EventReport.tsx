@@ -62,11 +62,12 @@ const EventReport: React.FC<EventReportProps> = ({ eventId }) => {
   const [openDiet, setOpenDiet] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+  const [dietError, setDietError] = useState(false);
 
   useEffect(() => {
     let active = true;
     let inFlight = false;
-    let attendeesLoaded = false;
+    let lastDietRefresh: number | null = null;
     const fetchReport = async () => {
       if (inFlight) return;
       inFlight = true;
@@ -74,13 +75,14 @@ const EventReport: React.FC<EventReportProps> = ({ eventId }) => {
         const reportData = await apiClient.get<ReportData>(`/api/reports/events/${eventId}`);
         if (!active) return;
         setData(reportData); setLastUpdated(new Date()); setError(null);
-        if (!attendeesLoaded) try {
+        if (lastDietRefresh === null || Date.now() - lastDietRefresh >= 60000) try {
           const att = await apiClient.get<any[]>(`/api/events/${eventId}/export`);
           if (active) {
             setAttendees(Array.isArray(att) ? att : []);
-            attendeesLoaded = true;
+            lastDietRefresh = Date.now();
+            setDietError(false);
           }
-        } catch { /* el padrón de dietas es opcional */ }
+        } catch { if (active) setDietError(true); }
       } catch {
         if (active) setError('No se pudieron actualizar los reportes del evento');
       } finally {
@@ -89,6 +91,7 @@ const EventReport: React.FC<EventReportProps> = ({ eventId }) => {
       }
     };
     setLoading(true);
+    setAttendees([]); setDietError(false);
     if (eventId) void fetchReport();
     const timer = setInterval(() => { if (eventId) void fetchReport(); }, 20000);
     return () => { active = false; clearInterval(timer); };
@@ -225,6 +228,8 @@ const EventReport: React.FC<EventReportProps> = ({ eventId }) => {
       </div>
 
       {/* Preferencias alimenticias */}
+      <p className="text-xs text-gray-500">Las preferencias alimenticias se consultan al abrir y se actualizan cada minuto.</p>
+      {dietError && <p role="alert" className="text-sm text-amber-700">No se pudieron actualizar las preferencias alimenticias. Se conserva la última consulta y se reintentará automáticamente.</p>}
       <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100">
         <div className="flex items-center gap-2 mb-4">
           <div className="p-2 bg-emerald-50 rounded-lg"><Utensils className="w-5 h-5 text-emerald-600" /></div>

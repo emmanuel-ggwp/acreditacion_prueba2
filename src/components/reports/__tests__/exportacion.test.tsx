@@ -14,7 +14,7 @@ describe('Pantalla Reportes: descarga nueva y actualización',()=>{
   const data={eventInfo:{name:'Escondida'},participantStats:{totalRegistered:5,totalAccredited:5,registered:1,registeredGuests:4,accredited:1,accreditedGuests:4},scheduleStats:[],awardStats:{assigned:0,delivered:0},accreditationTimeline:[]};
   const render=()=>{cursor=0;return EventReport({eventId:'e'});};
   beforeEach(()=>{
-    jest.clearAllMocks();state=[data,[],false,null,null,false,null];effects=[];
+    jest.clearAllMocks();state=[data,[],false,null,null,false,null,false];effects=[];
     jest.spyOn(React,'useState').mockImplementation((()=>{const index=cursor++;return [state[index],(next:any)=>state[index]=typeof next==='function'?next(state[index]):next];}) as any);
     jest.spyOn(React,'useEffect').mockImplementation(effect=>{effects.push(effect);});
     (apiClient.get as jest.Mock).mockImplementation(async url=>url.includes('/export')?[]:data);
@@ -39,7 +39,24 @@ describe('Pantalla Reportes: descarga nueva y actualización',()=>{
     await jest.advanceTimersByTimeAsync(20000);
     expect((apiClient.get as jest.Mock).mock.calls.filter(([url])=>url.includes('/api/reports/'))).toHaveLength(2);
     expect((apiClient.get as jest.Mock).mock.calls.filter(([url])=>url.includes('/export'))).toHaveLength(1);
+    await jest.advanceTimersByTimeAsync(40000);
+    expect((apiClient.get as jest.Mock).mock.calls.filter(([url])=>url.includes('/export'))).toHaveLength(2);
+    expect((apiClient.get as jest.Mock).mock.calls.filter(([url])=>url.includes('/api/reports/'))).toHaveLength(4);
     cleanup();await jest.advanceTimersByTimeAsync(20000);
-    expect((apiClient.get as jest.Mock).mock.calls.filter(([url])=>url.includes('/api/reports/'))).toHaveLength(2);
+    expect((apiClient.get as jest.Mock).mock.calls.filter(([url])=>url.includes('/api/reports/'))).toHaveLength(4);
+  });
+  test('un fallo del padrón avisa y conserva la última dieta cargada',async()=>{
+    jest.useFakeTimers();
+    const people=[{firstName:'Ana',dietaryPreference:'VEGETARIAN'}];
+    (apiClient.get as jest.Mock).mockImplementation(async url=>url.includes('/export')?people:data);
+    render();const cleanup=effects[0]();await jest.advanceTimersByTimeAsync(0);
+    expect(state[1]).toEqual(people);
+    (apiClient.get as jest.Mock).mockImplementation(async url=>{if(url.includes('/export'))throw Error('red');return data;});
+    await jest.advanceTimersByTimeAsync(60000);
+    expect(state[1]).toEqual(people);expect(state[7]).toBe(true);
+    expect(text(render())).toContain('No se pudieron actualizar las preferencias');
+    (apiClient.get as jest.Mock).mockImplementation(async url=>url.includes('/export')?[]:data);
+    await jest.advanceTimersByTimeAsync(20000);expect(state[7]).toBe(false);
+    cleanup();
   });
 });

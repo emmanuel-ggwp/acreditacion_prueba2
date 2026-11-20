@@ -64,3 +64,10 @@ Las pruebas unitarias se ejecutan con npm test. La comprobación opcional con Po
 - No publicado reemplaza la etiqueta Borrador: un evento privado puede tener inscripciones y acreditaciones válidas.
 - El estado de invitados distingue agregar nuevos desde el formulario de conservar invitados precargados. Cambiar el texto no altera ninguna regla de admisión ni asistencia.
 - El botón Reporte de Información del evento descarga XLSX con el mismo mecanismo que los otros botones; no guarda bytes Excel con extensión CSV.
+
+## Revisión del 20 de noviembre: invitados, errores del panel y dietas
+
+- Un enlace guest_schedules asigna al invitado a esa fecha. Sin enlaces, el fallback histórico requiere confirmed=true y una inscripción del titular en esa fecha. Los precargados sin confirmar no se suman como inscritos ni aparecen automáticamente para marcar. Los ingresos históricos se conservan aunque el invitado no figure inscrito.
+- El endpoint por lotes devuelve error si fallan todos los reportes. Si la respuesta es parcial, el panel conserva los reportes disponibles y avisa qué eventos faltan. El aviso permite reintentar y las respuestas antiguas no reemplazan la página actual.
+- Las dietas se consultan al abrir y cada minuto, junto al ciclo de actualización de reportes. Un fallo conserva la última consulta y muestra aviso hasta recuperarse. Los contadores mantienen su actualización cada 20 segundos.
+- Requiere build y despliegue. No requiere migraciones ni cambia respuestas, invitados guardados o acreditaciones. Si un dato histórico no tiene ni enlace por fecha ni confirmación, no se infiere que esté inscrito: deberá revisarse y asignarse desde administración.

@@ -44,6 +44,9 @@ export const GET = withAuth(async (req: AuthenticatedRequest) => {
 
     const filteredReports = reports.filter((r) => r !== null);
 
+    if (filteredReports.length === 0) {
+      return NextResponse.json({ message: 'No se pudieron cargar los reportes de los eventos. Reintenta o revisa el registro del servidor.' }, { status: 500 });
+    }
     return NextResponse.json(filteredReports);
   } catch (error: any) {
     console.error('Error generating batch event reports:', error);

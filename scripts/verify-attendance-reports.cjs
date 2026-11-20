@@ -32,7 +32,7 @@ async function main() {
     CREATE TEMP TABLE event_schedules(id uuid PRIMARY KEY,event_id uuid,schedule_name text,label text,start_date_time timestamptz) ON COMMIT DROP;
     CREATE TEMP TABLE participants(id uuid PRIMARY KEY,first_name text,last_name text,document_number text,email text,phone text,company text,position text,numero_sap text,dietary_preference text,dietary_comments text,deleted_at timestamptz,guest_count int DEFAULT 0,guest_loads int DEFAULT 0,guest_companion boolean DEFAULT false) ON COMMIT DROP;
     CREATE TEMP TABLE participant_schedules(participant_id uuid,schedule_id uuid,created_at timestamptz DEFAULT CURRENT_TIMESTAMP) ON COMMIT DROP;
-    CREATE TEMP TABLE guests(id uuid PRIMARY KEY,participant_id uuid,first_name text,last_name text,guest_type text,deleted_at timestamptz) ON COMMIT DROP;
+    CREATE TEMP TABLE guests(id uuid PRIMARY KEY,participant_id uuid,first_name text,last_name text,guest_type text,deleted_at timestamptz,confirmed boolean DEFAULT true) ON COMMIT DROP;
     CREATE TEMP TABLE guest_schedules(guest_id uuid,schedule_id uuid) ON COMMIT DROP;
     CREATE TEMP TABLE accreditations(id uuid PRIMARY KEY,participant_id uuid,guest_id uuid,event_schedule_id uuid,guest_count int DEFAULT 0,check_in_time timestamptz DEFAULT CURRENT_TIMESTAMP) ON COMMIT DROP;
     CREATE TEMP TABLE awards(id uuid,event_id uuid,name text) ON COMMIT DROP;
@@ -42,10 +42,11 @@ async function main() {
   for (const [date,label] of [[D1,'Mañana'],[D2,'Tarde'],[D3,'Sin ingresos']]) await client.query('INSERT INTO event_schedules VALUES($1,$2,$3,NULL,$4)',[date,E,label,'2026-11-14T15:00:00Z']);
   for (let n=1;n<=5;n++) await client.query('INSERT INTO participants(id,first_name,last_name,guest_count,guest_loads,guest_companion,deleted_at) VALUES($1,$2,$3,$4,$5,$6,$7)',[id(n),'Titular '+n,'Prueba',n===1?4:n===2?1:0,n===1?4:0,n===2,n===3?'2026-11-15T00:00:00Z':null]);
   for (const [p,d] of [[1,D1],[2,D1],[2,D2],[3,D1],[4,D1]]) await client.query('INSERT INTO participant_schedules(participant_id,schedule_id) VALUES($1,$2)',[id(p),d]);
-  for (const [g,p,type,deleted] of [[11,2,'CARGA',false],[12,2,'ACOMPANANTE',false],[13,2,'OTRO',false],[14,2,'CARGA',true],[15,5,null,false]]) await client.query('INSERT INTO guests VALUES($1,$2,$3,$4,$5,$6)',[id(g),id(p),'Invitado '+g,'Prueba',type,deleted?'2026-11-15T00:00:00Z':null]);
+  for (const [g,p,type,deleted] of [[11,2,'CARGA',false],[12,2,'ACOMPANANTE',false],[13,2,'OTRO',false],[14,2,'CARGA',true],[15,5,null,false]]) await client.query('INSERT INTO guests(id,participant_id,first_name,last_name,guest_type,deleted_at) VALUES($1,$2,$3,$4,$5,$6)',[id(g),id(p),'Invitado '+g,'Prueba',type,deleted?'2026-11-15T00:00:00Z':null]);
   for (const [g,d] of [[11,D1],[12,D2]]) await client.query('INSERT INTO guest_schedules VALUES($1,$2)',[id(g),d]);
   let a=200;
   for (const [p,g,d,num] of [[1,null,D1,3],[1,null,D2,2],[null,11,D1,0],[null,14,D1,0],[2,null,D2,1],[null,12,D2,0],[3,null,D1,1],[null,15,D2,0]]) await client.query('INSERT INTO accreditations(id,participant_id,guest_id,event_schedule_id,guest_count) VALUES($1,$2,$3,$4,$5)',[id(a++),p?id(p):null,g?id(g):null,d,num]);
+  await client.query('INSERT INTO guests(id,participant_id,first_name,confirmed) VALUES($1,$2,$3,false)',[id(17),id(1),'Precargado no seleccionado']);
   const records = (await client.query(helpers.ATTENDANCE_REPORT_SQL.replace(/:eventId\b/g,'$1'),[E])).rows;
   const rows = records.filter(r=>r.participantId).map(helpers.attendanceExportRow);
   const credited = rows.filter(r=>r['Total personas acreditadas']>0);
@@ -104,6 +105,18 @@ async function main() {
   assert.equal(eventCounts.length,1);
   assert.equal(eventCounts[0].registeredGuests,10);
   assert.equal(eventCounts[0].accreditedGuests,13);
+  assert(guestReport.some(row=>row.Invitado==='Precargado no seleccionado'&&!row.registered&&row.scheduleId===null));
+  assert.equal(find(1,D1).namedRegistered,0);
+  await client.query('INSERT INTO guest_schedules VALUES($1,$2)',[id(17),D1]);
+  const linked=(await client.query(eventGuests.EVENT_GUEST_COUNTS_SQL.replace(/:eventIds\b/g,'$1'),[E])).rows;
+  assert.equal(linked[0].registeredGuests,11);
+  await client.query('DELETE FROM guest_schedules WHERE guest_id=$1',[id(17)]);
+  await client.query('INSERT INTO accreditations(id,guest_id,event_schedule_id) VALUES($1,$2,$3)',[id(a++),id(17),D1]);
+  const history=(await client.query(helpers.ATTENDANCE_REPORT_SQL.replace(/:eventId\b/g,'$1'),[E])).rows;
+  const unselectedHistory=history.find(r=>r.participantId===id(1)&&r.scheduleId===D1);
+  assert.equal(unselectedHistory.namedRegistered,0);
+  assert.equal(unselectedHistory.namedAccredited,1);
+  console.log('Precargados no seleccionados excluidos; asignación explícita incluida y acreditación histórica conservada.');
   console.log('PostgreSQL real: tarjetas de evento concilian invitados registrados y acreditados, incluidos numéricos, fechas múltiples e ingresos históricos.');
 }
 main().catch(error=>{console.error(error);process.exitCode=1;}).finally(async()=>{await client.query('ROLLBACK').catch(()=>{});await client.end();});

@@ -14,7 +14,7 @@ WITH dates AS (
   UNION
   SELECT g.id,rp.schedule_id FROM guests g
   JOIN registered_people rp ON rp.participant_id = g.participant_id
-  WHERE g.deleted_at IS NULL AND NOT EXISTS (SELECT 1 FROM guest_schedules gs WHERE gs.guest_id = g.id)
+  WHERE g.deleted_at IS NULL AND g.confirmed IS TRUE AND NOT EXISTS (SELECT 1 FROM guest_schedules gs WHERE gs.guest_id = g.id)
 )
 SELECT totals.event_id AS "eventId",sum(totals.registered)::int AS "registeredGuests",
   sum(totals.accredited)::int AS "accreditedGuests"
