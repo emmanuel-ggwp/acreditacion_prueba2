@@ -47,6 +47,15 @@ describe('Registro de acompañante nativo sin parche por evento',()=>{
   const res=await call({adultCompanionsBySchedule:{[A]:true},customData:{[KEY]:{[A]:true}}});
   expect(res.status).toBe(201);expect(person.customData?.[KEY]).toBeUndefined();
  });
+ test('Ya estás inscrito devuelve las respuestas guardadas sin actualizarlas',async()=>{
+  event.allowMultipleSchedules=false;event.registrationConfig.customQuestions=[{key:'q',label:'Transporte'}];
+  const saved={id:PID,firstName:'Nombre guardado',customData:{q:{enabled:true,value:'Bus Norte'},[KEY]:{[A]:true}},guestCount:0};
+  person={...saved,get:()=>saved,getSchedules:jest.fn().mockResolvedValue([{id:A,scheduleName:'Mañana'}]),update:jest.fn()};
+  (Participant.findOne as jest.Mock).mockResolvedValue(person);(Guest.findAll as jest.Mock).mockResolvedValue([]);
+  const res=await call({customData:{q:{enabled:false}},adultCompanionsBySchedule:{[A]:false}});const result=await res.json();
+  expect(res.status).toBe(409);expect(result.registrationSummary.participantName).toBe('Nombre guardado');
+  expect(result.registrationSummary.answers[0].text).toBe('Bus Norte');expect(person.update).not.toHaveBeenCalled();
+ });
  test('por RUT solo guarda las fechas nuevas',async()=>{
   event.registrationConfig.mode='rut';person={id:PID,customData:{},guestCount:0,getSchedules:jest.fn().mockResolvedValue([]),addSchedules:jest.fn(),update:jest.fn().mockImplementation(async patch=>Object.assign(person,patch))};
   (Participant.findOne as jest.Mock).mockResolvedValue(person);

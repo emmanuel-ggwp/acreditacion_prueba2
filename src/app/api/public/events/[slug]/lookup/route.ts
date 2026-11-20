@@ -1,3 +1,4 @@
+import { buildPublicRegistrationSummary } from '@/utils/publicRegistrationSummary';
 import { adultCompanionAnswers } from '@/utils/adultCompanion';
 import { NextRequest, NextResponse } from 'next/server';
 import { Op } from 'sequelize';
@@ -57,20 +58,12 @@ export async function GET(
 
     // Invitados YA confirmados en cada fecha inscrita (para mostrar en modo solo lectura las
     // fechas bloqueadas). Solo nombres, que ya se exponen en `guests`; nada de PII nueva.
-    const registeredGuestsBySchedule: Record<string, string[]> = {};
-    if (registeredScheduleIds.length && (p.guests || []).length) {
-      const nameById = new Map<string, string>(
-        (p.guests || []).map((g: any) => [g.id, `${g.firstName} ${g.lastName || ''}`.trim()])
-      );
-      const links = await GuestSchedule.findAll({
-        where: { guestId: { [Op.in]: Array.from(nameById.keys()) }, scheduleId: { [Op.in]: registeredScheduleIds } },
-      });
-      for (const l of links as any[]) {
-        const nm = nameById.get(l.guestId);
-        if (!nm) continue;
-        (registeredGuestsBySchedule[l.scheduleId] ||= []).push(nm);
-      }
-    }
+    const guestIds = (p.guests || []).map((guest: any) => guest.id);
+    const links = registeredScheduleIds.length && guestIds.length ? await GuestSchedule.findAll({
+      where: { guestId: { [Op.in]: guestIds } }, attributes: ['guestId','scheduleId'],
+    }) : [];
+    const registrationSummary = buildPublicRegistrationSummary(event, p, links);
+    const registeredGuestsBySchedule = Object.fromEntries(registrationSummary.dates.map(date => [date.id, date.guests.map(guest => guest.name)]));
 
     // PII MÍNIMA (F3-02): este endpoint es PÚBLICO y los RUT son enumerables, así que
     // solo se devuelve lo que el formulario de ESTE evento realmente autocompleta.
@@ -106,6 +99,7 @@ export async function GET(
       allowMultiple,
       registeredScheduleIds,
       registeredGuestsBySchedule,
+      registrationSummary,
       adultCompanionsBySchedule: Object.fromEntries(Object.entries(adultCompanionAnswers(p.customData)).filter(([id]) => registeredScheduleIds.includes(id))),
       participant: participantOut,
       // Pool de cargas que se OFRECE para marcar en cada fecha: solo las precargadas por

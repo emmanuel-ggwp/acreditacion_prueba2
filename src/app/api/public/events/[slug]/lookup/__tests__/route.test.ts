@@ -71,6 +71,16 @@ describe('GET /api/public/events/[slug]/lookup', () => {
     expect(body.registeredGuestsBySchedule).toEqual({ sch1: ['Hijo Pérez'] });
   });
 
+  it('incluye respuestas e invitados seleccionados sin exponer el pool como si estuviera inscrito', async () => {
+    EventMock.findOne.mockResolvedValue({id:'ev1',registrationConfig:{mode:'rut',customQuestions:[{key:'q',label:'Transporte'}]}});
+    ParticipantMock.findOne.mockResolvedValue({get:()=>({id:'p1',firstName:'Ana',customData:{q:{enabled:true,value:'Bus Norte'}},schedules:[{id:'s',scheduleName:'Mañana'}],guests:[{id:'yes',firstName:'Hijo elegido'},{id:'no',firstName:'Hijo sin elegir',confirmed:false}]})});
+    GuestScheduleMock.findAll.mockResolvedValue([{guestId:'yes',scheduleId:'s'}]);
+    const body=await (await call()).json();
+    expect(body.registrationSummary.answers).toEqual([{label:'Transporte',text:'Bus Norte'}]);
+    expect(body.registrationSummary.dates[0].guests.map((g:any)=>g.name)).toEqual(['Hijo elegido']);
+    expect(body.registeredGuestsBySchedule).toEqual({s:['Hijo elegido']});
+  });
+
   it('devuelve found:false cuando el RUT no está en el padrón', async () => {
     EventMock.findOne.mockResolvedValue({ id: 'ev1', registrationConfig: { mode: 'rut' } });
     ParticipantMock.findOne.mockResolvedValue(null);

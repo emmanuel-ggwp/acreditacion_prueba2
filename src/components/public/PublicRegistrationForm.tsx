@@ -1,4 +1,6 @@
 'use client';
+import RegisteredSummary from '@/components/public/RegisteredSummary';
+import type { PublicRegistrationSummary } from '@/utils/publicRegistrationSummary';
 
 import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
@@ -44,6 +46,8 @@ interface PublicRegistrationFormProps {
 export default function PublicRegistrationForm({ event, slug, onSelectedSchedulesChange, preview = false }: PublicRegistrationFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+  const [alreadyRegistered, setAlreadyRegistered] = useState(false);
+  const [registrationSummary, setRegistrationSummary] = useState<PublicRegistrationSummary | null>(null);
   // Invitados que el servidor no pudo guardar por falta de cupo: se enseñan en pantalla
   // en lugar de descartarlos tras un 201 mudo (D1.3).
   const [guestsSkipped, setGuestsSkipped] = useState(0);
@@ -189,6 +193,7 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
     // poder diseñar el resto de la landing aunque el evento sea de preinscripción (RUT).
     if (preview) { setRutPassed(true); return; }
     setLookupError('');
+    setRegistrationSummary(null);
     // No exigimos validez matemática del RUT: la reja solo debe ENCONTRAR al precargado.
     // (Así funcionan RUT de personas mayores, documentos extranjeros o listas de empresas.)
     if (rutInput.replace(/[.\-\s]/g, '').trim().length < 2) { setLookupError('Ingresa tu RUT.'); return; }
@@ -221,6 +226,8 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
       // Fechas ya inscritas (bloqueadas) + sus invitados (solo lectura).
       setLockedIds(Array.isArray(data.registeredScheduleIds) ? data.registeredScheduleIds : []);
       setLockedGuests(data.registeredGuestsBySchedule || {});
+      setRegistrationSummary(data.registrationSummary || null);
+      setAlreadyRegistered((data.registeredScheduleIds || []).length > 0 && !data.allowMultiple);
       // Invitados en modos numéricos (count / companion).
       if (p.guestCount != null) setCountGuests(Number(p.guestCount) || 0);
       setAdultAnswers(data.adultCompanionsBySchedule || {});
@@ -348,6 +355,12 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
       const result = await response.json();
 
       if (!response.ok) {
+        if (result.code === 'ALREADY_REGISTERED' || result.code === 'ALREADY_REGISTERED_DATE') {
+          setRegistrationSummary(result.registrationSummary || null);
+          setLockedIds(result.registeredScheduleIds || []);
+          setAlreadyRegistered(true);
+          return;
+        }
         throw new Error(result.error || 'Error en el registro');
       }
       setGuestsSkipped(Number(result?.guestsSkipped) || 0);
@@ -429,7 +442,15 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
     }
   };
 
-  if (noneAvailable) {
+  if (alreadyRegistered) return <div className="bg-white p-6 sm:p-8 rounded-xl shadow-lg max-w-xl mx-auto">
+    <h2 className="text-2xl font-bold text-gray-900">Ya estás inscrito</h2>
+    <p className="mt-2 text-gray-600">Ya tienes una inscripción registrada en {event.name}.</p>
+    <RegisteredSummary summary={registrationSummary} />
+    <p className="mt-5 text-sm text-gray-600">Para modificar tu inscripción, escribe a <a href={'mailto:' + CONTACT_EMAIL} className="underline">{CONTACT_EMAIL}</a>.</p>
+    <button type="button" onClick={() => { setAlreadyRegistered(false); setRegistrationSummary(null); if (registrationMode === 'rut') setRutPassed(false); }} className="mt-4 font-semibold underline">Volver</button>
+  </div>;
+
+  if (noneAvailable && !(registrationMode === 'rut' && !rutPassed)) {
     return (
       <div className="bg-white p-8 rounded-xl shadow-lg text-center max-w-md mx-auto">
         <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-amber-100 mb-6">
@@ -886,6 +907,7 @@ export default function PublicRegistrationForm({ event, slug, onSelectedSchedule
         </div>
       )}
 
+      {lockedIds.length > 0 && <details className="rounded-xl border border-gray-200 p-3"><summary className="cursor-pointer font-semibold">Ver mi inscripción guardada</summary><RegisteredSummary summary={registrationSummary} /></details>}
       {/* Selección de fecha mediante modal (si hay una sola, se muestra fija). */}
       {allSchedules.length > 0 && (
         <div className="mt-6">

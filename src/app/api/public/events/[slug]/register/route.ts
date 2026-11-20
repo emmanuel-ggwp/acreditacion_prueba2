@@ -1,3 +1,4 @@
+import { loadPublicRegistrationSummary } from '@/services/publicRegistrationSummaryService';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { Event, Participant, EventSchedule, Guest, GuestSchedule } from '@/models/index';
@@ -235,11 +236,13 @@ export async function POST(
     const effectiveMulti = !!(event as any).allowMultipleSchedules || !!(participant as any).allowMultipleSchedules;
     if (existingScheduleIds.length > 0) {
       if (!effectiveMulti) {
+        const registrationSummary = await loadPublicRegistrationSummary(event, participant, t);
         await t.rollback();
         return NextResponse.json(
           {
             error: 'Ya estás inscrito en este evento.',
             code: 'ALREADY_REGISTERED',
+            registrationSummary,
             registeredScheduleIds: existingScheduleIds,
             // Quien ya está inscrito no puede modificar sus datos por su cuenta:
             // el camino es escribir a esta dirección.
@@ -250,11 +253,13 @@ export async function POST(
       }
       const dup = scheduleIds.some((id) => existingScheduleIds.includes(id));
       if (dup) {
+        const registrationSummary = await loadPublicRegistrationSummary(event, participant, t);
         await t.rollback();
         return NextResponse.json(
           {
             error: 'Ya estás inscrito para esa fecha. Elige otra.',
             code: 'ALREADY_REGISTERED_DATE',
+            registrationSummary,
             registeredScheduleIds: existingScheduleIds,
             contactEmail: CONTACT_EMAIL,
           },

@@ -1,4 +1,6 @@
 'use client';
+import RegisteredSummary from '@/components/public/RegisteredSummary';
+import type { PublicRegistrationSummary } from '@/utils/publicRegistrationSummary';
 
 import React, { useState } from 'react';
 import { Calendar, MapPin, ArrowRight, CheckCircle2, Clock, Loader2, Info, Mail, ChevronDown } from 'lucide-react';
@@ -128,6 +130,7 @@ export default function GalaTemplate({ event, slug, preview = false }: TemplateP
     return found ? found.label : val;
   };
 
+  const [registrationSummary, setRegistrationSummary] = useState<PublicRegistrationSummary | null>(null);
   const [step, setStep] = useState<'welcome' | 'rut' | 'fecha' | 'form' | 'already'>('welcome');
   const [allowMultiple, setAllowMultiple] = useState<boolean>(!!event.allowMultipleSchedules);
   const [registeredScheduleIds, setRegisteredScheduleIds] = useState<string[]>([]);
@@ -252,6 +255,7 @@ export default function GalaTemplate({ event, slug, preview = false }: TemplateP
     // diseñar el resto de la landing aunque el evento sea de preinscripción (RUT).
     if (preview) { setStep(schedules.length ? 'fecha' : 'form'); return; }
     setLookupError('');
+    setRegistrationSummary(null);
     // No exigimos validez matemática del RUT: la reja solo debe ENCONTRAR al precargado.
     if (rutInput.replace(/[.\-\s]/g, '').trim().length < 2) { setLookupError('Ingresa tu RUT.'); return; }
     setLookupLoading(true);
@@ -276,6 +280,7 @@ export default function GalaTemplate({ event, slug, preview = false }: TemplateP
       setAllowMultiple(!!data.allowMultiple);
       setRegisteredScheduleIds(regIds);
       setLockedGuests(data.registeredGuestsBySchedule || {});
+      setRegistrationSummary(data.registrationSummary || null);
       // Ya inscrito y NO puede varias fechas → pantalla informativa.
       if (regIds.length > 0 && !data.allowMultiple) { setStep('already'); return; }
       // Si puede varias fechas, no preseleccionar ninguna en la que ya está inscrito.
@@ -444,11 +449,13 @@ export default function GalaTemplate({ event, slug, preview = false }: TemplateP
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         if (data.code === 'ALREADY_REGISTERED') {
+          setRegistrationSummary(data.registrationSummary || null);
           setRegisteredScheduleIds(data.registeredScheduleIds || []);
           setStep('already');
           return;
         }
         if (data.code === 'ALREADY_REGISTERED_DATE') {
+          setRegistrationSummary(data.registrationSummary || null);
           const regIds: string[] = data.registeredScheduleIds || [];
           setRegisteredScheduleIds(regIds);
           // Quita de la selección las fechas en las que ya estaba inscrito y deja elegir otras.
@@ -810,7 +817,6 @@ export default function GalaTemplate({ event, slug, preview = false }: TemplateP
 
   // ---- Ya inscrito (no puede modificar) ----
   if (step === 'already') {
-    const regs = schedules.filter((s) => registeredScheduleIds.includes(s.id));
     return (
       <div className="relative min-h-screen flex items-center justify-center px-4 py-12 md:bg-fixed" style={pageStyle}>
         {overlayNode}
@@ -823,46 +829,9 @@ export default function GalaTemplate({ event, slug, preview = false }: TemplateP
           <h1 className="text-2xl font-bold text-white mb-2">Ya estás inscrito</h1>
           <p className="text-white/80">Ya tienes una inscripción registrada en <b>{event.name}</b>.</p>
 
-          {/* Datos del participante */}
-          {(form.firstName || form.lastName) && (
-            <div className="mt-5 text-left rounded-2xl p-4" style={{ backgroundColor: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)' }}>
-              <p className="text-white font-semibold text-lg">{`${form.firstName} ${form.lastName}`.trim()}</p>
-              <div className="mt-1 space-y-0.5 text-white/75 text-sm">
-                {form.documentNumber && <p>RUT: {form.documentNumber}</p>}
-                {form.email && <p>Correo: {form.email}</p>}
-                {form.phone && <p>Teléfono: {form.phone}</p>}
-              </div>
-            </div>
-          )}
+          <RegisteredSummary summary={registrationSummary} dark />
 
-          {/* Cargas / invitados registrados */}
-          {cargas.length > 0 && (
-            <div className="mt-3 text-left rounded-2xl p-4" style={{ backgroundColor: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)' }}>
-              <p className="text-white/90 text-sm font-semibold mb-2">{guestTermPlural}:</p>
-              <ul className="space-y-1">
-                {cargas.map((c) => (
-                  <li key={c.id} className="text-white/85 text-sm">• {c.firstName} {c.lastName || ''}{c.guestType ? ` (${guestTypeLabel(c.guestType)})` : ''}</li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {regs.length > 0 && (
-            <div className="mt-3 text-left rounded-2xl p-4" style={{ backgroundColor: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.15)' }}>
-              <p className="text-white/90 text-sm font-semibold mb-2">Te inscribiste para:</p>
-              <ul className="space-y-2">
-                {regs.map((s) => (
-                  <li key={s.id} className="text-white/85 text-sm flex items-start gap-2">
-                    <Calendar className="h-4 w-4 mt-0.5 flex-shrink-0" />
-                    <span className="capitalize">
-                      {(s.label || s.scheduleName)} · {fmtDate(s.startDateTime)} · {fmtTime(s.startDateTime)}{s.location ? ` · ${s.location}` : ''}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
+          <button type="button" onClick={() => { setRegistrationSummary(null); setStep(mode === 'rut' ? 'rut' : 'form'); }} className="mt-5 text-white underline font-semibold">Volver a consultar</button>
           {CONTACT_EMAIL && (
             <p className="mt-6 text-white/80 text-sm flex items-center justify-center gap-2">
               <Mail className="h-4 w-4" />
@@ -970,6 +939,7 @@ export default function GalaTemplate({ event, slug, preview = false }: TemplateP
             {error && <p className="mt-3 text-sm text-red-300">{error}</p>}
           </header>
 
+          {registeredScheduleIds.length > 0 && <details className="mb-6 text-white rounded-xl border border-white/20 p-4"><summary className="cursor-pointer font-semibold">Ver mi inscripción guardada</summary><RegisteredSummary summary={registrationSummary} dark /></details>}
           <div className={`flex flex-wrap justify-center gap-4 mx-auto ${
             schedules.length === 1 ? 'max-w-[20rem]'
             : (schedules.length === 2 || schedules.length === 4) ? 'max-w-[40rem]'
@@ -1063,6 +1033,7 @@ export default function GalaTemplate({ event, slug, preview = false }: TemplateP
                 )}
               </div>
 
+              {registeredScheduleIds.length > 0 && <details className="mt-4 text-white rounded-xl border border-white/20 p-3"><summary className="cursor-pointer font-semibold">Ver mi inscripción guardada</summary><RegisteredSummary summary={registrationSummary} dark /></details>}
               {customQuestions.length > 0 && (
                 <div className="mb-5 mt-4">
                   <CustomQuestionFields questions={customQuestions} answers={customAnswers} onChange={setCustomAnswers} tone="dark" accent={buttonColor} />
