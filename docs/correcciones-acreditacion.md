@@ -91,3 +91,9 @@ El resumen se devuelve en el lookup por RUT y en las respuestas ALREADY_REGISTER
 Si el titular está inscrito en otras fechas del mismo evento pero no en la fecha de ingreso, la búsqueda ofrece los invitados inscritos en esas fechas originales, conservando fuera las cargas precargadas sin confirmar. La ficha informa las fechas de origen y no marca llegadas automáticamente. El adulto nativo puede marcarse como 0/1 si fue declarado en alguna fecha inscrita.
 
 El servidor permite esa excepción solo cuando el invitado pertenece al mismo evento, el titular no está inscrito en la fecha actual y el invitado está ligado a alguna fecha inscrita del titular. Si el titular sí está inscrito aquí, se mantiene el filtro y la validación habituales. Se conserva la protección frente a duplicados por fecha. Se crea la acreditación real en la fecha de llegada y se registra la excepción en auditoría; no se crean ni se mueven ParticipantSchedule o GuestSchedule. Los inscritos y sus resúmenes de landing conservan sus fechas originales; los reportes de ingresos incluyen la asistencia real fuera de inscripción.
+
+## Correcciones de asistencia: punto 4
+
+Desmarcar un invitado y corregir la cantidad de invitados usan ahora una transacción gestionada. Las escrituras y las lecturas del titular/invitado/horario necesarias para completar la operación participan en la misma transacción. Un fallo posterior a la escritura, antes del commit, revierte el cambio. La edición de cantidad bloquea la fila para mantener correcto el valor anterior cuando hay ediciones simultáneas. La auditoría conserva su política best-effort y se llama después de confirmar, sin nuevas lecturas críticas posteriores.
+
+No se modificaron el valor inicial del selector de adultos, los estados de horarios ni el manejo de errores de verificación (puntos 1–3 de la revisión). Requiere build y despliegue, sin SQL ni migraciones.

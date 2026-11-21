@@ -324,7 +324,7 @@ describe('AccreditationService', () => {
 
       await accreditationService.setAccreditationGuestCount('p1', 's1', 5, 'user-1');
 
-      expect(acc.update).toHaveBeenCalledWith({ guestCount: 5 });
+      expect(acc.update).toHaveBeenCalledWith({ guestCount: 5 }, { transaction: expect.anything() });
       const log: any = (AuditLogMock.create as jest.Mock).mock.calls[0][0];
       expect(log.details.changes.invitados).toEqual({ from: 2, to: 5 });
       expect(log.details.name).toBe('Juan Pérez');

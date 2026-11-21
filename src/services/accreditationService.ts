@@ -303,10 +303,14 @@ export class AccreditationService {
    * @returns Objeto `{ removed }` con el número de acreditaciones eliminadas.
    */
   async unaccreditGuest(guestId: string, eventScheduleId: string, accreditedBy: string) {
-    const removed = await Accreditation.destroy({ where: { guestId, eventScheduleId } });
-    // Log legible: qué invitado se des-acreditó, en qué FECHA y de qué titular es.
-    const guest = await Guest.findByPk(guestId, { include: [{ model: Participant, as: 'participant', attributes: ['firstName', 'lastName'] }] });
-    const schedule = await EventSchedule.findByPk(eventScheduleId);
+    const { removed, guest, schedule } = await sequelize.transaction(async (transaction) => {
+      const removed = await Accreditation.destroy({ where: { guestId, eventScheduleId }, transaction });
+      // Estas lecturas también participan en la transacción: un fallo revierte la eliminación.
+      const guest = await Guest.findByPk(guestId, { include: [{ model: Participant, as: 'participant', attributes: ['firstName', 'lastName'] }], transaction });
+      const schedule = await EventSchedule.findByPk(eventScheduleId, { transaction });
+      return { removed, guest, schedule };
+    });
+    // La auditoría conserva su política best-effort y se registra después del commit.
     const guestParticipant = (guest as any)?.participant;
     await auditLogService.log({
       userId: accreditedBy, action: 'DELETE', entity: 'Accreditation', entityId: guestId,
@@ -335,14 +339,17 @@ export class AccreditationService {
    * @throws {Error} `'El participante no está acreditado en este horario.'` si no existe la acreditación.
    */
   async setAccreditationGuestCount(participantId: string, eventScheduleId: string, guestCount: number, accreditedBy: string) {
-    const acc = await Accreditation.findOne({ where: { participantId, eventScheduleId } });
-    if (!acc) throw new Error('El participante no está acreditado en este horario.');
-    const prev = Math.max(0, Number((acc as any).guestCount) || 0);
-    const next = Math.max(0, Number(guestCount) || 0);
-    await acc.update({ guestCount: next });
-    // Log legible: quién, en qué FECHA y el cambio de invitados (antes → ahora).
-    const participant = await Participant.findByPk(participantId);
-    const schedule = await EventSchedule.findByPk(eventScheduleId);
+    const { acc, prev, next, participant, schedule } = await sequelize.transaction(async (transaction) => {
+      const acc = await Accreditation.findOne({ where: { participantId, eventScheduleId }, transaction, lock: transaction.LOCK.UPDATE });
+      if (!acc) throw new Error('El participante no está acreditado en este horario.');
+      const prev = Math.max(0, Number((acc as any).guestCount) || 0);
+      const next = Math.max(0, Number(guestCount) || 0);
+      await acc.update({ guestCount: next }, { transaction });
+      const participant = await Participant.findByPk(participantId, { transaction });
+      const schedule = await EventSchedule.findByPk(eventScheduleId, { transaction });
+      return { acc, prev, next, participant, schedule };
+    });
+    // Registrar antes/después solo cuando la corrección ya quedó confirmada.
     await auditLogService.log({
       userId: accreditedBy, action: 'UPDATE', entity: 'Accreditation', entityId: (acc as any).id,
       eventId: (schedule as any)?.eventId,
